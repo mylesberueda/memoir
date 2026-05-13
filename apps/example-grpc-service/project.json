@@ -50,7 +50,7 @@
 				"cwd": "{projectRoot}",
 				"commands": ["cargo test --release --features integration"],
 				"env": {
-					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/example_grpc_service_test"
+					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_server_test"
 				}
 			},
 			"cache": true,

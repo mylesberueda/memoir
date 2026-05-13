@@ -8,14 +8,14 @@
 # - GCP Secret Manager secrets
 # - External Secrets Operator
 # - ArgoCD for GitOps
-# - Zitadel (in-cluster)
-# - Stripe configuration
+#
+# Auth (Zitadel) and billing (Stripe) were removed in epic 0002. The future
+# memoir-server epic will introduce the production auth replacement.
+# Service-specific blocks are intentionally empty until the memoir-server
+# epic populates them.
 
 locals {
   environment = "staging"
-
-  # Services that need Workload Identity
-  services = ["api-service", "rig-service", "chat-service", "notification-service", "web"]
 }
 
 # ============================================================================
@@ -66,7 +66,10 @@ module "cloud_sql" {
   tier         = "db-custom-2-4096" # 2 vCPU, 4GB RAM
   disk_size_gb = 20
 
-  databases = ["zitadel", "api", "chat", "notification", "rig"]
+  # Databases are populated by the memoir-server epic. The template's
+  # ["zitadel", "api", "chat", "notification", "rig"] list was deleted with
+  # the corresponding services in epic 0002.
+  databases = []
 
   depends_on = [module.networking]
 }
@@ -123,45 +126,13 @@ module "workload_identity" {
   project_id  = var.gcp_project_id
   environment = local.environment
 
+  # Application service accounts are populated by the memoir-server epic.
+  # Only infrastructure SAs remain here.
   service_accounts = {
-    # Application services
-    "api-service" = {
-      k8s_namespace         = local.environment
-      k8s_service_account   = "api-service"
-      secret_manager_access = true
-    }
-    "rig-service" = {
-      k8s_namespace         = local.environment
-      k8s_service_account   = "rig-service"
-      secret_manager_access = true
-    }
-    "chat-service" = {
-      k8s_namespace         = local.environment
-      k8s_service_account   = "chat-service"
-      secret_manager_access = true
-    }
-    "notification-service" = {
-      k8s_namespace         = local.environment
-      k8s_service_account   = "notification-service"
-      secret_manager_access = true
-    }
-    "web" = {
-      k8s_namespace         = local.environment
-      k8s_service_account   = "web"
-      secret_manager_access = true
-    }
-
-    # Infrastructure services
     "external-secrets" = {
       k8s_namespace         = "external-secrets"
       k8s_service_account   = "external-secrets"
       secret_manager_access = true
-    }
-    "zitadel" = {
-      k8s_namespace         = "zitadel"
-      k8s_service_account   = "zitadel"
-      secret_manager_access = true
-      cloud_sql_client      = true
     }
   }
 
@@ -180,39 +151,9 @@ module "secrets" {
 
   eso_service_account_email = module.workload_identity.service_account_emails["external-secrets"]
 
-  # Create secrets for each service
-  # Initial values include database and Redis connection strings
+  # Per-service secrets are populated by the memoir-server epic.
+  # Only the terraform-outputs placeholder remains.
   secrets = {
-    "staging/api-service" = {
-      initial_value = jsonencode({
-        DATABASE_URL = module.cloud_sql.connection_strings["api"]
-        REDIS_URL    = module.memorystore.connection_string
-      })
-    }
-    "staging/rig-service" = {
-      initial_value = jsonencode({
-        DATABASE_URL = module.cloud_sql.connection_strings["rig"]
-        REDIS_URL    = module.memorystore.connection_string
-      })
-    }
-    "staging/chat-service" = {
-      initial_value = jsonencode({
-        DATABASE_URL = module.cloud_sql.connection_strings["chat"]
-        REDIS_URL    = module.memorystore.connection_string
-      })
-    }
-    "staging/notification-service" = {
-      initial_value = jsonencode({
-        DATABASE_URL = module.cloud_sql.connection_strings["notification"]
-        REDIS_URL    = module.memorystore.connection_string
-      })
-    }
-    "staging/web" = {
-      initial_value = null # Web doesn't need DB or Redis
-    }
-    "staging/zitadel" = {
-      initial_value = null
-    }
     "staging/terraform-outputs" = {
       initial_value = null
     }
@@ -306,77 +247,6 @@ resource "kubernetes_deployment" "cloudflared" {
 }
 
 # ============================================================================
-# Zitadel (In-Cluster)
-# ============================================================================
-
-resource "random_password" "zitadel_master_key" {
-  length  = 32
-  special = false
-}
-
-module "zitadel_gke" {
-  source = "../../modules/zitadel-gke"
-
-  environment               = local.environment
-  gcp_service_account_email = module.workload_identity.service_account_emails["zitadel"]
-
-  database_host     = module.cloud_sql.private_ip
-  database_name     = "zitadel"
-  database_user     = module.cloud_sql.users["zitadel"].name
-  database_password = module.cloud_sql.users["zitadel"].password
-
-  external_domain = "auth.${local.environment}.${var.domain}"
-  static_ip_name  = "zitadel-${local.environment}-ip"
-  master_key      = base64encode(random_password.zitadel_master_key.result)
-
-  depends_on = [module.gke, module.cloud_sql, module.workload_identity]
-}
-
-# ============================================================================
-# Zitadel Configuration (uses existing module after Zitadel is running)
-# ============================================================================
-
-# Note: The existing zitadel module requires Zitadel to be running first.
-# For initial bootstrap, you may need to apply in stages or use
-# a separate bootstrap process.
-
-# module "zitadel_config" {
-#   source = "../../modules/zitadel"
-#
-#   environment              = local.environment
-#   zitadel_domain           = "auth.${local.environment}.${var.domain}"
-#   zitadel_port             = "443"
-#   zitadel_insecure         = false
-#   zitadel_jwt_profile_file = var.zitadel_jwt_profile_file
-#   zitadel_org_name         = var.zitadel_org_name
-#   zitadel_redirect_uri     = "https://${local.environment}.${var.domain}/api/auth/callback"
-#   app_login_url            = "https://${local.environment}.${var.domain}"
-#   app_internal_url         = "http://web.${local.environment}.svc.cluster.local:3000"
-#
-#   discord_client_id     = var.discord_client_id
-#   discord_client_secret = var.discord_client_secret
-#   github_client_id      = var.github_client_id
-#   github_client_secret  = var.github_client_secret
-#
-#   depends_on = [module.zitadel_gke]
-# }
-
-# ============================================================================
-# Stripe
-# ============================================================================
-
-module "stripe" {
-  source = "../../modules/stripe"
-
-  environment                   = local.environment
-  stripe_price_plus_cents       = var.stripe_price_plus_cents
-  stripe_price_pro_cents        = var.stripe_price_pro_cents
-  stripe_price_enterprise_cents = var.stripe_price_enterprise_cents
-  stripe_webhook_url            = "https://${local.environment}.${var.domain}"
-  app_login_url                 = "https://${local.environment}.${var.domain}"
-}
-
-# ============================================================================
 # Store Terraform Outputs in Secret Manager
 # ============================================================================
 
@@ -395,31 +265,23 @@ resource "google_secret_manager_secret_version" "terraform_outputs" {
     }
 
     urls = {
-      argocd  = "https://argocd.${local.environment}.${var.domain}"
-      zitadel = module.zitadel_gke.external_url
-      app     = "https://${local.environment}.${var.domain}"
-      api     = "https://api.${local.environment}.${var.domain}"
+      argocd = "https://argocd.${local.environment}.${var.domain}"
+      app    = "https://${local.environment}.${var.domain}"
+      api    = "https://api.${local.environment}.${var.domain}"
     }
 
     static_ips = {
       ingress = module.gke.ingress_ip
       argocd  = module.gke.argocd_ip
-      zitadel = module.gke.zitadel_ip
     }
 
     artifact_registry = {
       url = module.artifact_registry.repository_url
     }
 
-    stripe = {
-      prices           = module.stripe.prices
-      webhook_secret   = module.stripe.webhook_secret
-      portal_config_id = module.stripe.portal_configuration_id
-    }
-
     redis = {
-      host             = module.memorystore.host
-      port             = module.memorystore.port
+      host              = module.memorystore.host
+      port              = module.memorystore.port
       connection_string = module.memorystore.connection_string
     }
 

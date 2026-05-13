@@ -22,13 +22,5 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
-    zitadel = {
-      source  = "zitadel/zitadel"
-      version = "~> 2.7.0"
-    }
-    stripe = {
-      source  = "lukasaron/stripe"
-      version = "~> 3.4"
-    }
   }
 }

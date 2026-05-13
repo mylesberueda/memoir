@@ -18,12 +18,10 @@ infrastructure/
 │   │   ├── gcp-secrets/            # GCP Secret Manager
 │   │   ├── gcp-workload-identity/  # GCP Workload Identity for K8s
 │   │   ├── gke-cluster/            # GKE cluster with private networking
-│   │   ├── stripe/                 # Stripe products, prices, webhooks
-│   │   ├── zitadel/                # Zitadel (local Docker Compose)
-│   │   └── zitadel-gke/            # Zitadel Helm deployment (GCP)
+│   │   └── memorystore/            # GCP Memorystore (Redis)
 │   │
 │   └── stacks/                     # Deployable root modules
-│       ├── local/                  # Local dev (Zitadel + Stripe only)
+│       ├── local/                  # Local dev (Postgres + Redis bridge to Kind)
 │       ├── staging/                # GCP staging environment
 │       ├── production/             # GCP production environment
 │       └── github-runners/         # GitHub Actions self-hosted runners
@@ -37,12 +35,14 @@ infrastructure/
         ├── local/
         │   ├── kind-config.yaml    # Kind cluster configuration
         │   ├── configmaps/         # Generated from .env files (gitignored)
-        │   └── values/             # Helm value overrides
+        │   └── values/             # Helm value overrides (empty post-cleanup)
         ├── staging/
         │   └── values/
         └── production/
             └── values/
 ```
+
+Auth (Zitadel) and billing (Stripe) modules were removed by epic 0002. The memoir-server epic will introduce the production auth replacement.
 
 ## Quick Reference
 
@@ -80,9 +80,9 @@ pnpm nx run-many -t k8s:configmap
 # Apply ConfigMaps
 kubectl apply -k infrastructure/kubernetes/environments/local
 
-# Deploy a service
-helm install api-service infrastructure/kubernetes/helm/charts/service \
-  -f infrastructure/kubernetes/environments/local/values/api-service.yaml
+# Deploy a service (post memoir-server epic)
+# helm install memoir-server infrastructure/kubernetes/helm/charts/service \
+#   -f infrastructure/kubernetes/environments/local/values/memoir-server.yaml
 ```
 
 ## Design Principles
@@ -101,26 +101,6 @@ helm install api-service infrastructure/kubernetes/helm/charts/service \
 | Local | `stacks/local/` | Kind (Docker) | `.env` files → ConfigMaps |
 | Staging | `stacks/staging/` | GKE (GCP) | GCP Secret Manager → ExternalSecret |
 | Production | `stacks/production/` | GKE (GCP) | GCP Secret Manager → ExternalSecret |
-
-## Zitadel (Authentication)
-
-Zitadel starts automatically with `docker compose up -d`. The bootstrap process creates an admin service account with a JWT key at `.data/zitadel/zitadel-admin-sa.json`.
-
-```bash
-# After docker compose is up, run Terraform to configure Zitadel
-cd infrastructure/terraform/stacks/local
-terraform init
-terraform apply
-```
-
-This creates:
-
-- Project and machine users for each service
-- RSA key pairs for service-to-service auth
-- OAuth applications (web, CLI)
-- Optional social login providers (Discord, GitHub)
-
-Outputs are written to `.data/terraform/development.json` for CLI consumption.
 
 ## ArgoCD
 
@@ -154,13 +134,13 @@ argocd login localhost:8080 --insecure
 argocd app list
 
 # Change target revision for a specific app (useful for testing branches)
-argocd app set staging-rig-service --revision ci/test/my-feature
+argocd app set staging-memoir-server --revision ci/test/my-feature
 
 # Sync an app manually
-argocd app sync staging-rig-service
+argocd app sync staging-memoir-server
 
 # Revert to default branch
-argocd app set staging-rig-service --revision HEAD
+argocd app set staging-memoir-server --revision HEAD
 ```
 
 ### How Deployments Work
@@ -174,4 +154,3 @@ argocd app set staging-rig-service --revision HEAD
 
 - **Helm charts**: See [kubernetes/helm/README.md](./kubernetes/helm/README.md)
 - **GitHub runners**: See [terraform/stacks/github-runners/README.md](./terraform/stacks/github-runners/README.md)
-- **Architecture**: See [.agents/ARCHITECTURE.md](../.agents/ARCHITECTURE.md)

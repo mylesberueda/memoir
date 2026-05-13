@@ -45,11 +45,6 @@ output "argocd_ip" {
   value       = google_compute_global_address.argocd.address
 }
 
-output "zitadel_ip" {
-  description = "Static IP for Zitadel ingress"
-  value       = google_compute_global_address.zitadel.address
-}
-
 # For kubeconfig generation
 output "get_credentials_command" {
   description = "Command to get cluster credentials"

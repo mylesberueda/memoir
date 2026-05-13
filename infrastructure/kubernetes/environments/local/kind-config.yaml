@@ -5,11 +5,10 @@
 #   kind create cluster --config infrastructure/kubernetes/environments/local/kind-config.yaml --name memoir
 #
 # Kind automatically creates/uses the "kind" Docker network.
-# Docker Compose services (postgres, redis, zitadel) also join this network,
-# so pods can reach them by container name:
+# Docker Compose services (postgres, redis) also join this network, so pods
+# can reach them by container name:
 #   - memoir-postgres:5432
 #   - memoir-redis:6379
-#   - memoir-zitadel:8080
 #
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4

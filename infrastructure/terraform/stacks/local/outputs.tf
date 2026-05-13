@@ -15,35 +15,6 @@ output "argocd_port_forward_command" {
 }
 
 # ============================================================================
-# Zitadel Outputs
-# ============================================================================
-
-output "zitadel_url" {
-  value = module.zitadel.zitadel_url
-}
-
-output "project_id" {
-  value = module.zitadel.project_id
-}
-
-output "cli_pat" {
-  value     = module.zitadel.cli_pat
-  sensitive = true
-}
-
-# ============================================================================
-# Stripe Outputs
-# ============================================================================
-
-output "stripe_prices" {
-  value = module.stripe.prices
-}
-
-output "stripe_portal_config_id" {
-  value = module.stripe.portal_configuration_id
-}
-
-# ============================================================================
 # PostgreSQL Outputs
 # ============================================================================
 

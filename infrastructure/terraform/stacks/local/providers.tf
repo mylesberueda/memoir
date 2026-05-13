@@ -16,17 +16,6 @@ provider "kubernetes" {
   host           = var.enable_kubernetes ? null : "https://localhost:0"
 }
 
-# Zitadel provider
-provider "zitadel" {
-  domain           = var.zitadel_domain
-  port             = var.zitadel_port
-  insecure         = var.zitadel_insecure
-  jwt_profile_file = var.zitadel_jwt_profile_file
-}
-
-# Stripe provider (uses STRIPE_API_KEY env var)
-provider "stripe" {}
-
 # PostgreSQL provider for Docker Compose postgres
 provider "postgresql" {
   host     = var.postgres_host

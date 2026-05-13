@@ -1,6 +1,11 @@
 # Helm Charts
 
-Base Helm chart for deploying all memoir services to Kubernetes.
+Base Helm chart for deploying memoir services to Kubernetes.
+
+Pre-cleanup this README walked through deploying five template services
+(api-service, chat-service, notification-service, rig-service, web). Epic
+0002 deleted those services. The memoir-server scaffold + memoir-ui rename
+epics will repopulate the deployment examples below.
 
 ## Structure
 
@@ -11,7 +16,7 @@ infrastructure/
 │   └── environments/
 │       ├── local/
 │       │   ├── kind-config.yaml # Kind cluster configuration
-│       │   ├── values/*.yaml    # Service values (reference ConfigMaps)
+│       │   ├── values/*.yaml    # Service values (empty post-0002)
 │       │   └── configmaps/      # Generated from .env files (gitignored)
 │       ├── staging/values/      # Uses ExternalSecret → GCP Secret Manager
 │       └── production/values/   # Uses ExternalSecret → GCP Secret Manager
@@ -66,13 +71,8 @@ kind create cluster --config infrastructure/kubernetes/environments/local/kind-c
 
 ### Step 4: Load Images into Kind
 
-```bash
-kind load docker-image memoir/api-service:local --name memoir
-kind load docker-image memoir/rig-service:local --name memoir
-kind load docker-image memoir/chat-service:local --name memoir
-kind load docker-image memoir/notification-service:local --name memoir
-kind load docker-image memoir/web:local --name memoir
-```
+The memoir-server epic adds the concrete `kind load docker-image` invocation
+here.
 
 ### Step 5: Install nginx-ingress
 
@@ -92,29 +92,12 @@ kubectl apply -f infrastructure/kubernetes/environments/local/configmaps/
 
 ### Step 7: Deploy Services
 
-```bash
-helm install api-service infrastructure/kubernetes/helm/charts/service \
-  -f infrastructure/kubernetes/environments/local/values/api-service.yaml
-
-helm install rig-service infrastructure/kubernetes/helm/charts/service \
-  -f infrastructure/kubernetes/environments/local/values/rig-service.yaml
-
-helm install chat-service infrastructure/kubernetes/helm/charts/service \
-  -f infrastructure/kubernetes/environments/local/values/chat-service.yaml
-
-helm install notification-service infrastructure/kubernetes/helm/charts/service \
-  -f infrastructure/kubernetes/environments/local/values/notification-service.yaml
-
-helm install web infrastructure/kubernetes/helm/charts/service \
-  -f infrastructure/kubernetes/environments/local/values/web.yaml
-```
+The memoir-server epic adds concrete `helm install` invocations here.
 
 ### Step 8: Verify
 
 ```bash
 kubectl get pods
-kubectl port-forward svc/api-service 5154:5154
-curl http://localhost:5154/health
 ```
 
 ### Cleanup
@@ -130,25 +113,7 @@ kind delete cluster --name memoir
 ```bash
 # Lint
 helm lint infrastructure/kubernetes/helm/charts/service
-
-# Render templates
-helm template api-service infrastructure/kubernetes/helm/charts/service \
-  -f infrastructure/kubernetes/environments/local/values/api-service.yaml
-
-# Dry-run against K8s API
-helm template api-service infrastructure/kubernetes/helm/charts/service \
-  -f infrastructure/kubernetes/environments/local/values/api-service.yaml \
-  | kubectl apply --dry-run=client -f -
 ```
 
----
-
-## Service Ports
-
-| Service | Port |
-|---------|------|
-| api-service | 5154 |
-| rig-service | 5153 |
-| chat-service | 5155 |
-| notification-service | 5156 |
-| web | 3000 |
+The memoir-server epic adds concrete `helm template` validation invocations
+here.

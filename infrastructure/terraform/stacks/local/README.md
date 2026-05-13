@@ -1,7 +1,8 @@
 # Local Stack
 
-Provisions the local development environment on Kind: ArgoCD, Zitadel, and
-Stripe.
+Provisions the local development environment on Kind: ArgoCD, plus a docker
+bridge so Kind pods can reach the `docker compose` Postgres and Redis
+containers.
 
 ## Quick Start
 
