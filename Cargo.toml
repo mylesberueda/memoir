@@ -2,14 +2,6 @@
 resolver = "2"
 members = [
   "cli",
-  "apps/api-service",
-  "apps/api-service/migration",
-  "apps/rig-service",
-  "apps/rig-service/migration",
-  "apps/chat-service",
-  "apps/chat-service/migration",
-  "apps/notification-service",
-  "apps/notification-service/migration",
   "apps/example-grpc-service",
   "apps/example-grpc-service/migration",
   "packages/common-rs",
