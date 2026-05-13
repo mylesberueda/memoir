@@ -3,7 +3,7 @@ import {
 	MessagePartKind,
 	MessagePartSchema,
 	MessagePartStatus,
-} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AssistantChatProvider, hasThinkingParts, type Message, useAssistantChatState } from './chat-state';

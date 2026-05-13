@@ -2,7 +2,7 @@
 
 import type { Model } from '@actions/models';
 import type { Provider } from '@actions/providers';
-import { ProviderSource } from '@polypixel/proto-ts/rig-service/rig/v1/provider_pb';
+import { ProviderSource } from '@polypixel/memoir-sdk/rig-service/rig/v1/provider_pb';
 import cns from 'classnames';
 import { ChevronDown, Eye, FileJson, MessageSquare, Sparkles, Zap } from 'lucide-react';
 import { useCallback, useState } from 'react';

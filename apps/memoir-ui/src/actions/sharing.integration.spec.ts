@@ -6,7 +6,7 @@ import {
 	DeleteAccountRequestSchema,
 	MeRequestSchema,
 	UserService,
-} from '@polypixel/proto-ts/api-service/api/v1/users_pb';
+} from '@polypixel/memoir-sdk/api-service/api/v1/users_pb';
 import { createTestUser, deleteTestUser, generateTestEmail } from '@test-utils';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 

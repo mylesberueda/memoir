@@ -1,6 +1,6 @@
 import { create } from '@bufbuild/protobuf';
 import { type Message, MessagePartKind, MessagePartStatus } from '@lib/chat-state';
-import { MessagePartSchema } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
+import { MessagePartSchema } from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 

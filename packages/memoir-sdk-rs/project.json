@@ -1,8 +1,8 @@
 {
-	"name": "proto-rs",
+	"name": "memoir-sdk-rs",
 	"$schema": "../../node_modules/nx/schemas/project-schema.json",
 	"projectType": "library",
-	"sourceRoot": "packages/proto-rs/src",
+	"sourceRoot": "packages/memoir-sdk-rs/src",
 	"targets": {
 		"cargo": {
 			"command": "cargo",

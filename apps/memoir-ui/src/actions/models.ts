@@ -6,7 +6,7 @@ import {
 	ListModelsRequestSchema,
 	type ListModelsResponse as ProtoListModelsResponse,
 	type Model as ProtoModel,
-} from '@polypixel/proto-ts/rig-service/rig/v1/provider_pb';
+} from '@polypixel/memoir-sdk/rig-service/rig/v1/provider_pb';
 import type { ActionResult } from '.';
 
 type ModelIdentifier = ProtoModel['identifier'];

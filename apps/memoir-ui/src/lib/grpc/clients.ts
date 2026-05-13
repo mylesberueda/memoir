@@ -1,23 +1,23 @@
 'use server';
 
 import { type Client, createClient } from '@connectrpc/connect';
-import { AdminService } from '@polypixel/proto-ts/api-service/api/v1/admin_pb';
-import { BillingService } from '@polypixel/proto-ts/api-service/api/v1/billing_pb';
-import { OrganizationService } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
-import { UserService } from '@polypixel/proto-ts/api-service/api/v1/users_pb';
-import { ChannelService } from '@polypixel/proto-ts/chat-service/chat/v1/channel_pb';
-import { ChatService } from '@polypixel/proto-ts/chat-service/chat/v1/chat_pb';
-import { ModerationService } from '@polypixel/proto-ts/chat-service/chat/v1/moderation_pb';
-import { NotificationService } from '@polypixel/proto-ts/notification-service/notification/v1/notification_pb';
-import { AgentService } from '@polypixel/proto-ts/rig-service/rig/v1/agent_pb';
+import { AdminService } from '@polypixel/memoir-sdk/api-service/api/v1/admin_pb';
+import { BillingService } from '@polypixel/memoir-sdk/api-service/api/v1/billing_pb';
+import { OrganizationService } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
+import { UserService } from '@polypixel/memoir-sdk/api-service/api/v1/users_pb';
+import { ChannelService } from '@polypixel/memoir-sdk/chat-service/chat/v1/channel_pb';
+import { ChatService } from '@polypixel/memoir-sdk/chat-service/chat/v1/chat_pb';
+import { ModerationService } from '@polypixel/memoir-sdk/chat-service/chat/v1/moderation_pb';
+import { NotificationService } from '@polypixel/memoir-sdk/notification-service/notification/v1/notification_pb';
+import { AgentService } from '@polypixel/memoir-sdk/rig-service/rig/v1/agent_pb';
 import {
 	DocumentGroupService,
 	DocumentSearchService,
 	DocumentService,
-} from '@polypixel/proto-ts/rig-service/rig/v1/document_pb';
-import { InferenceService } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
-import { ModelService, ProviderService } from '@polypixel/proto-ts/rig-service/rig/v1/provider_pb';
-import { ToolService } from '@polypixel/proto-ts/rig-service/rig/v1/tool_pb';
+} from '@polypixel/memoir-sdk/rig-service/rig/v1/document_pb';
+import { InferenceService } from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
+import { ModelService, ProviderService } from '@polypixel/memoir-sdk/rig-service/rig/v1/provider_pb';
+import { ToolService } from '@polypixel/memoir-sdk/rig-service/rig/v1/tool_pb';
 import { createAuthenticatedTransport } from './transport';
 
 function requireEnv(name: string): string {

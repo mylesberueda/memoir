@@ -1,5 +1,5 @@
 import { create } from '@bufbuild/protobuf';
-import { type Organization, OrganizationSchema } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
+import { type Organization, OrganizationSchema } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
 import { describe, expect, it } from 'vitest';
 import { resolveOrgPid } from './resolve';
 

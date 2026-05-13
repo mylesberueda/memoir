@@ -255,9 +255,9 @@ importers:
       '@connectrpc/connect-node':
         specifier: ^2.1.1
         version: 2.1.1(@bufbuild/protobuf@2.10.1)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.10.1))
-      '@polypixel/proto-ts':
+      '@polypixel/memoir-sdk':
         specifier: workspace:*
-        version: link:../../packages/proto-ts
+        version: link:../../packages/memoir-sdk-ts
       ai:
         specifier: ^5.0.22
         version: 5.0.22(zod@3.25.56)
@@ -317,7 +317,7 @@ importers:
         specifier: ^15.5.13
         version: 15.5.13
 
-  packages/proto-ts:
+  packages/memoir-sdk-ts:
     dependencies:
       '@bufbuild/protobuf':
         specifier: ^2.10.1

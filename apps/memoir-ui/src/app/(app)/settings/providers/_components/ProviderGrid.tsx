@@ -2,7 +2,7 @@
 
 import type { ActionResult } from '@actions';
 import type { ListProvidersResponse, Provider } from '@actions/providers';
-import { ProviderSource } from '@polypixel/proto-ts/rig-service/rig/v1/provider_pb';
+import { ProviderSource } from '@polypixel/memoir-sdk/rig-service/rig/v1/provider_pb';
 import cns from 'classnames';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';

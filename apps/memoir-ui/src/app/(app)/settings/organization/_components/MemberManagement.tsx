@@ -2,7 +2,7 @@
 
 import { addOrgMemberByEmail, getOrgMembers, removeOrgMember, updateOrgMemberRole } from '@actions/organizations';
 import { Select } from '@components';
-import type { Organization, OrganizationMember } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
+import type { Organization, OrganizationMember } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
 import { Mail, Trash2, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';

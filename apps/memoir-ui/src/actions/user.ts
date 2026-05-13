@@ -1,7 +1,7 @@
 'use server';
 
 import { create } from '@bufbuild/protobuf';
-import { MeRequestSchema, type User } from '@polypixel/proto-ts/api-service/api/v1/users_pb';
+import { MeRequestSchema, type User } from '@polypixel/memoir-sdk/api-service/api/v1/users_pb';
 import { getAuthProvider } from '@/lib/auth';
 import { userServiceClient } from '@/lib/grpc/clients';
 import { deleteAllUserSessions, getSession } from '@/lib/session';

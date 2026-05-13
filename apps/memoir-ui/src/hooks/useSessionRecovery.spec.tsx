@@ -5,7 +5,7 @@ import {
 	MessagePartKind,
 	MessagePartSchema,
 	MessagePartStatus,
-} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useSessionRecovery from './useSessionRecovery';

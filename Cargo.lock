@@ -1286,7 +1286,7 @@ dependencies = [
  "example-grpc-service-migration",
  "http",
  "pbjson-types",
- "proto-rs",
+ "polypixel-memoir-sdk",
  "reqwest",
  "sea-orm",
  "serde",
@@ -2768,6 +2768,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypixel-memoir-sdk"
+version = "0.1.0"
+dependencies = [
+ "pbjson",
+ "pbjson-types",
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "tonic",
+ "tonic-prost",
+]
+
+[[package]]
 name = "polyval"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2914,20 +2928,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8991c4cbdb8bc5b11f0b074ffe286c30e523de90fee5ba8132f1399f23cb3dd7"
 dependencies = [
  "prost",
-]
-
-[[package]]
-name = "proto-rs"
-version = "0.1.0"
-dependencies = [
- "pbjson",
- "pbjson-types",
- "prost",
- "prost-types",
- "serde",
- "serde_json",
- "tonic",
- "tonic-prost",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { create } from '@bufbuild/protobuf';
 import { createClient } from '@connectrpc/connect';
 import { createGrpcTransport } from '@connectrpc/connect-node';
-import { DeleteAccountRequestSchema, UserService } from '@polypixel/proto-ts/api-service/api/v1/users_pb';
+import { DeleteAccountRequestSchema, UserService } from '@polypixel/memoir-sdk/api-service/api/v1/users_pb';
 import { createTestUser, deleteTestUser, generateTestEmail } from '@test-utils';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 

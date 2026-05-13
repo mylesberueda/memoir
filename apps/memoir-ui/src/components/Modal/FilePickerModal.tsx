@@ -2,8 +2,8 @@
 
 import { attachDocuments, fetchDocuments } from '@actions/documents';
 import { Button, Modal } from '@components';
-import type { Document } from '@polypixel/proto-ts/rig-service/rig/v1/document_pb';
-import { DocumentStatus } from '@polypixel/proto-ts/rig-service/rig/v1/document_pb';
+import type { Document } from '@polypixel/memoir-sdk/rig-service/rig/v1/document_pb';
+import { DocumentStatus } from '@polypixel/memoir-sdk/rig-service/rig/v1/document_pb';
 import { CheckCircle2, FileIcon, FileText, Image, Loader2, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 

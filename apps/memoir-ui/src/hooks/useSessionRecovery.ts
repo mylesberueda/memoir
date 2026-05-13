@@ -1,7 +1,7 @@
 import { fetchConversationMessages } from '@actions/infer';
 import type { ChatStateActions, Message } from '@lib/chat-state';
-import type { Message as ProtoMessage } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
-import { MessagePartKind, MessageStatus } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
+import type { Message as ProtoMessage } from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
+import { MessagePartKind, MessageStatus } from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
 import { useEffect, useRef, useState } from 'react';
 
 function mapProtoStatus(status: MessageStatus): Message['status'] {

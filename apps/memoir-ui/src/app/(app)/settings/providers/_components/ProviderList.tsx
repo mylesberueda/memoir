@@ -3,7 +3,7 @@
 import type { ActionResult } from '@actions';
 import type { ListProvidersResponse, Provider } from '@actions/providers';
 import { Button } from '@components';
-import { ProviderSource } from '@polypixel/proto-ts/rig-service/rig/v1/provider_pb';
+import { ProviderSource } from '@polypixel/memoir-sdk/rig-service/rig/v1/provider_pb';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ProviderRow from './ProviderRow';

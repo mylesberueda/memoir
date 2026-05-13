@@ -6,7 +6,7 @@ import type { ListModelsResponse } from '@actions/models';
 import type { ListProvidersResponse } from '@actions/providers';
 import type { ListToolsResponse } from '@actions/tools';
 import { Button, Modal, Select } from '@components';
-import { ProviderSource } from '@polypixel/proto-ts/rig-service/rig/v1/provider_pb';
+import { ProviderSource } from '@polypixel/memoir-sdk/rig-service/rig/v1/provider_pb';
 import { X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';

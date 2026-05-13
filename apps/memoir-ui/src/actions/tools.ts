@@ -7,7 +7,7 @@ import {
 	ListToolsRequestSchema,
 	type ListToolsResponse as ProtoListToolsResponse,
 	type Tool as ProtoTool,
-} from '@polypixel/proto-ts/rig-service/rig/v1/tool_pb';
+} from '@polypixel/memoir-sdk/rig-service/rig/v1/tool_pb';
 
 import type { ActionResult } from '.';
 

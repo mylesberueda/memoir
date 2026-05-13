@@ -13,7 +13,7 @@ import {
 	ToolCallSchema,
 	ToolExecutionStatus,
 	ToolResultSchema,
-} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
 import { useCallback, useRef, useState } from 'react';
 
 type MessageStatus = 'sending' | 'sent' | 'failed' | 'processing' | 'complete' | 'cancelled';

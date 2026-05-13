@@ -2,7 +2,7 @@
 
 import { getOrganizationByPid } from '@actions/organizations';
 import { setOrganizationContext } from '@lib/grpc/transport';
-import type { Organization, ResourcePermission } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
+import type { Organization, ResourcePermission } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
 import { useRouter } from 'next/navigation';
 import {
 	createContext,

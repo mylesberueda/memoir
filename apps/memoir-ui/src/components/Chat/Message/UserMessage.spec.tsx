@@ -1,6 +1,6 @@
 import { create } from '@bufbuild/protobuf';
 import { type MessagePart, MessagePartKind, MessagePartStatus } from '@lib/chat-state';
-import { MessagePartSchema } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
+import { MessagePartSchema } from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import UserMessage from './UserMessage';

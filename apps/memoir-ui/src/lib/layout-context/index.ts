@@ -10,7 +10,7 @@ import {
 	type Organization,
 	OrganizationService,
 	type ResourcePermission,
-} from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
+} from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
 import { resolveOrgPid } from './resolve';
 
 const log = createChildLogger({ module: 'layout-context' });

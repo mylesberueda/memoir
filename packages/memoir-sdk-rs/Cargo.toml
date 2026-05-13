@@ -1,5 +1,5 @@
 [package]
-name = "proto-rs"
+name = "polypixel-memoir-sdk"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -9,7 +9,7 @@ publish = false
 all = "allow"
 
 [lib]
-name = "proto_rs"
+name = "memoir_sdk"
 path = "src/lib.rs"
 
 [dependencies]

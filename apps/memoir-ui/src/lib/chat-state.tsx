@@ -1,11 +1,11 @@
 'use client';
 
-import { DocumentStatus } from '@polypixel/proto-ts/rig-service/rig/v1/document_pb';
+import { DocumentStatus } from '@polypixel/memoir-sdk/rig-service/rig/v1/document_pb';
 import {
 	type MessagePart,
 	MessagePartKind,
 	MessagePartStatus,
-} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
 import { createContext, type ReactNode, useCallback, useContext, useReducer } from 'react';
 import { getTextContent, hasThinkingParts } from './message';
 

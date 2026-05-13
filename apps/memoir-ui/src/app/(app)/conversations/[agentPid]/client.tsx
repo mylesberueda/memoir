@@ -22,12 +22,12 @@ import useRetryMessage from '@hooks/useRetryMessage';
 import useToast from '@hooks/useToast';
 import { type ChatSession, getTextContent, type Message, MessagePartKind } from '@lib/chat-state';
 import { useOrganizations } from '@providers/OrganizationContextProvider';
-import type { OrganizationMember } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
+import type { OrganizationMember } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
 import {
 	type Conversation as ConversationProto,
 	MessageStatus,
 	type Message as ProtoMessage,
-} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 function mapProtoStatus(status: MessageStatus): Message['status'] {

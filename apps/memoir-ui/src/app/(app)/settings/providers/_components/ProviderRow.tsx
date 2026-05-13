@@ -2,7 +2,7 @@
 
 import type { Provider } from '@actions/providers';
 import { Button } from '@components';
-import { ProviderSource } from '@polypixel/proto-ts/rig-service/rig/v1/provider_pb';
+import { ProviderSource } from '@polypixel/memoir-sdk/rig-service/rig/v1/provider_pb';
 import cns from 'classnames';
 import { Box, ExternalLink, Pencil, Server, Trash2 } from 'lucide-react';
 import Link from 'next/link';

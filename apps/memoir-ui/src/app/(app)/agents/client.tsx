@@ -12,7 +12,7 @@ import AgentModal, { type AgentFormData } from '@components/Modal/AgentModal';
 import ShareModal from '@components/Modal/ShareModal/ShareModal';
 import useToast from '@hooks/useToast';
 import { useOrganizations } from '@providers/OrganizationContextProvider';
-import type { OrganizationMember } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
+import type { OrganizationMember } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
 import { Plus } from 'lucide-react';
 import { useState, useTransition } from 'react';
 import AgentGrid from './_components/AgentGrid';

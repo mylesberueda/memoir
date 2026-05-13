@@ -15,7 +15,7 @@ dashmap = "6.1"
 example-grpc-service-migration = { path = "./migration" }
 http = { version = "1.4" }
 pbjson-types = "0.9.0"
-proto-rs = { path = "../../packages/proto-rs" }
+memoir-sdk = { package = "polypixel-memoir-sdk", path = "../../packages/memoir-sdk-rs" }
 reqwest = { version = "0.12", features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

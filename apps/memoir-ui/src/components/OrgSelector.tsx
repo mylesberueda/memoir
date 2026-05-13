@@ -1,6 +1,6 @@
 'use client';
 
-import type { Organization } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
+import type { Organization } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
 import { Building2, Check, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Dropdown } from 'rsc-daisyui';

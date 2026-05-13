@@ -1,6 +1,6 @@
 import { create } from '@bufbuild/protobuf';
 import { type MessagePart, MessagePartKind, MessagePartStatus } from '@lib/chat-state';
-import { MessagePartSchema, ToolCallSchema, ToolResultSchema } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
+import { MessagePartSchema, ToolCallSchema, ToolResultSchema } from '@polypixel/memoir-sdk/rig-service/rig/v1/inference_pb';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';

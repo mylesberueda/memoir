@@ -1,7 +1,7 @@
 {
-	"name": "proto-ts",
+	"name": "memoir-sdk-ts",
 	"$schema": "../../node_modules/nx/schemas/project-schema.json",
-	"sourceRoot": "packages/proto-ts",
+	"sourceRoot": "packages/memoir-sdk-ts",
 	"projectType": "library",
 	"tags": ["scope:shared", "type:proto", "lang:typescript"],
 	"targets": {
@@ -9,7 +9,7 @@
 			"executor": "nx:run-commands",
 			"options": {
 				"command": "tsc --build",
-				"cwd": "packages/proto-ts"
+				"cwd": "packages/memoir-sdk-ts"
 			},
 			"cache": true,
 			"inputs": [

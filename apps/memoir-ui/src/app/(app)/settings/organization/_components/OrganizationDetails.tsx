@@ -1,7 +1,7 @@
 'use client';
 
 import { deleteOrg, updateOrg } from '@actions/organizations';
-import type { Organization } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
+import type { Organization } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
 import { Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
