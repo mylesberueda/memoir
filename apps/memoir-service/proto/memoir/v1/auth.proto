@@ -1,0 +1,181 @@
+syntax = "proto3";
+
+package memoir.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// AuthService manages the credentials that gate every other Memoir RPC.
+//
+// Two principal types:
+//   - User: an operator with username + password. Bootstrap creates the first
+//     admin; subsequent users are created by existing admins.
+//   - ApiKey: a bearer token (string of shape `mk_<key_id>_<secret>`) presented
+//     in request metadata to authenticate calls. Keys have a role
+//     (admin | integration) and optionally bind to an org_id scope.
+//
+// Bootstrap exception:
+//   ConsumeBootstrapToken runs pre-auth — it consumes the one-time token that
+//   memoir-server logs to stdout on first start when no admin exists. The
+//   gRPC interceptor exempts this RPC from key validation.
+service AuthService {
+  // ── Bootstrap ────────────────────────────────────────────────────────────
+
+  // Consume a one-time bootstrap token to create the first admin user.
+  // The token is single-use and is invalidated once an admin exists.
+  rpc ConsumeBootstrapToken(ConsumeBootstrapTokenRequest) returns (ConsumeBootstrapTokenResponse);
+
+  // ── Users ────────────────────────────────────────────────────────────────
+
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+
+  // ── API keys ─────────────────────────────────────────────────────────────
+
+  // Create returns the plaintext key exactly once in the response.
+  // Subsequent Get/List calls return only metadata.
+  rpc CreateApiKey(CreateApiKeyRequest) returns (CreateApiKeyResponse);
+  rpc GetApiKey(GetApiKeyRequest) returns (GetApiKeyResponse);
+  rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse);
+
+  // Rotate generates a new secret for an existing key, returning the new
+  // plaintext exactly once. The old secret is invalidated. The key's role,
+  // scope, and key_id are preserved so consumer apps update only the secret.
+  rpc RotateApiKey(RotateApiKeyRequest) returns (RotateApiKeyResponse);
+
+  // Revoke marks the key inactive. The row is retained for audit; the
+  // interceptor rejects calls authenticated with revoked keys.
+  rpc RevokeApiKey(RevokeApiKeyRequest) returns (RevokeApiKeyResponse);
+}
+
+// ─── Core types ─────────────────────────────────────────────────────────────
+
+message User {
+  string pid = 1;
+  string username = 2;
+  bool is_admin = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+// ApiKey carries everything *except* the secret. The secret is returned only
+// in CreateApiKeyResponse and RotateApiKeyResponse; Get/List never include it.
+message ApiKey {
+  string pid = 1;
+  string key_id = 2; // The lookup half of `mk_<key_id>_<secret>`. Non-secret.
+  string name = 3; // Human-readable label set at creation, e.g. "ci-runner".
+  ApiKeyRole role = 4;
+  optional string org_id = 5; // When set, the key is scope-bound to this org.
+  ApiKeyStatus status = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  optional google.protobuf.Timestamp last_used_at = 9;
+}
+
+enum ApiKeyRole {
+  API_KEY_ROLE_UNSPECIFIED = 0;
+  API_KEY_ROLE_ADMIN = 1;
+  API_KEY_ROLE_INTEGRATION = 2;
+}
+
+enum ApiKeyStatus {
+  API_KEY_STATUS_UNSPECIFIED = 0;
+  API_KEY_STATUS_ACTIVE = 1;
+  API_KEY_STATUS_REVOKED = 2;
+}
+
+// ─── Bootstrap RPC ──────────────────────────────────────────────────────────
+
+message ConsumeBootstrapTokenRequest {
+  string token = 1; // The plaintext token logged to stdout on first start.
+  string username = 2;
+  string password = 3;
+}
+
+message ConsumeBootstrapTokenResponse {
+  User user = 1;
+}
+
+// ─── User RPCs ──────────────────────────────────────────────────────────────
+
+message CreateUserRequest {
+  string username = 1;
+  string password = 2;
+  bool is_admin = 3;
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message GetUserRequest {
+  string pid = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message ListUsersRequest {
+  int32 limit = 1;
+  optional string cursor = 2;
+}
+
+message ListUsersResponse {
+  repeated User users = 1;
+  optional string next_cursor = 2;
+}
+
+message DeleteUserRequest {
+  string pid = 1;
+}
+
+message DeleteUserResponse {}
+
+// ─── API key RPCs ───────────────────────────────────────────────────────────
+
+message CreateApiKeyRequest {
+  string name = 1;
+  ApiKeyRole role = 2;
+  optional string org_id = 3;
+}
+
+message CreateApiKeyResponse {
+  ApiKey key = 1;
+  string plaintext = 2; // The full `mk_<key_id>_<secret>` string. Shown ONCE.
+}
+
+message GetApiKeyRequest {
+  string pid = 1;
+}
+
+message GetApiKeyResponse {
+  ApiKey key = 1;
+}
+
+message ListApiKeysRequest {
+  int32 limit = 1;
+  optional string cursor = 2;
+  optional ApiKeyStatus status = 3;
+}
+
+message ListApiKeysResponse {
+  repeated ApiKey keys = 1;
+  optional string next_cursor = 2;
+}
+
+message RotateApiKeyRequest {
+  string pid = 1;
+}
+
+message RotateApiKeyResponse {
+  ApiKey key = 1;
+  string plaintext = 2; // The new `mk_<key_id>_<secret>` string. Shown ONCE.
+}
+
+message RevokeApiKeyRequest {
+  string pid = 1;
+}
+
+message RevokeApiKeyResponse {}
