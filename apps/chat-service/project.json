@@ -167,14 +167,14 @@
 		"docker:build": {
 			"executor": "nx:run-commands",
 			"options": {
-				"command": "docker build -f apps/chat-service/Dockerfile -t {args.repo:-startup-ai}/chat-service:{args.tag:-local} .",
+				"command": "docker build -f apps/chat-service/Dockerfile -t {args.repo:-memoir}/chat-service:{args.tag:-local} .",
 				"cwd": "{workspaceRoot}"
 			}
 		},
 		"docker:push": {
 			"executor": "nx:run-commands",
 			"options": {
-				"command": "docker push {args.repo:-startup-ai}/chat-service:{args.tag:-local}",
+				"command": "docker push {args.repo:-memoir}/chat-service:{args.tag:-local}",
 				"cwd": "{workspaceRoot}"
 			},
 			"dependsOn": ["docker:build"]

@@ -2,7 +2,7 @@ import type { UserAssistantResponse } from '@actions/agents';
 import type { ListModelsResponse } from '@actions/models';
 import { create } from '@bufbuild/protobuf';
 import { type MessagePart, MessagePartKind, MessagePartStatus } from '@lib/chat-state';
-import { MessagePartSchema } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+import { MessagePartSchema } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

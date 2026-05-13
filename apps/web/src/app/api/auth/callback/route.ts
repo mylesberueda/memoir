@@ -7,7 +7,7 @@ import { createSession } from '@lib/session';
 import {
 	ListOrganizationsRequestSchema,
 	OrganizationService,
-} from '@startup/proto-ts/api-service/api/v1/organizations_pb';
+} from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
 import { cookies } from 'next/headers';
 import { type NextRequest, NextResponse } from 'next/server';
 

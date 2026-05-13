@@ -1,6 +1,6 @@
 import { create } from '@bufbuild/protobuf';
 import { AssistantChatProvider, MessagePartKind, MessagePartStatus } from '@lib/chat-state';
-import { MessagePartSchema } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+import { MessagePartSchema } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import { sub } from 'date-fns';
 import { useCallback, useState } from 'react';

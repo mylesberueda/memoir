@@ -38,14 +38,14 @@ locals {
   }
 
   # Build DATABASE_URL for each service as a list
-  # For Kind pods: use container hostname (startupai-postgres:5432)
+  # For Kind pods: use container hostname (memoir-postgres:5432)
   # For local dev: use localhost:54321
   database_urls = [
     for db in var.postgres_databases : {
       service  = lookup(local.db_to_service, db, db)
       database = db
       # URL for Kind pods (via Docker network)
-      cluster = "postgres://${var.postgres_user}:${var.postgres_password}@startupai-postgres:5432/${db}"
+      cluster = "postgres://${var.postgres_user}:${var.postgres_password}@memoir-postgres:5432/${db}"
       # URL for local development (via port mapping)
       local = "postgres://${var.postgres_user}:${var.postgres_password}@localhost:${var.postgres_port}/${db}"
     }
@@ -55,13 +55,13 @@ locals {
   redis_services = ["api-service", "rig-service", "chat-service", "notification-service", "web"]
 
   # Build REDIS_URL for each service as a list (same structure as database_urls)
-  # For Kind pods: use container hostname (startupai-redis:6379)
+  # For Kind pods: use container hostname (memoir-redis:6379)
   # For local dev: use localhost:63791
   redis_urls = [
     for service in local.redis_services : {
       service = service
       # URL for Kind pods (via Docker network)
-      cluster = "redis://startupai-redis:6379"
+      cluster = "redis://memoir-redis:6379"
       # URL for local development (via port mapping)
       local = "redis://localhost:${var.redis_port}"
     }

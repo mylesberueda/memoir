@@ -15,7 +15,7 @@ import {
 	UpdateAgentRequestSchema,
 	type UpdateAgentToolRequest,
 	UpdateAgentToolRequestSchema,
-} from '@startup/proto-ts/rig-service/rig/v1/agent_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/agent_pb';
 import { revalidatePath } from 'next/cache';
 
 import type { ActionResult } from '.';

@@ -3,7 +3,7 @@
 
 nameOverride: web
 image:
-  repository: ghcr.io/mylesberueda/startup-ai/web
+  repository: ghcr.io/mylesberueda/memoir/web
   tag: ab22d39285e8b5419e29a26dcbbe48e15cd28801
   pullPolicy: IfNotPresent
 imagePullSecrets:

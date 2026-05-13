@@ -3,7 +3,7 @@
 import type { ActionResult } from '@actions';
 import type { ListProvidersResponse } from '@actions/providers';
 import { Button } from '@components';
-import { ProviderSource } from '@startup/proto-ts/rig-service/rig/v1/provider_pb';
+import { ProviderSource } from '@polypixel/proto-ts/rig-service/rig/v1/provider_pb';
 import cns from 'classnames';
 import { AlertTriangle, Eye, FileJson, Search, Sparkles, X, Zap } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';

@@ -1,6 +1,6 @@
 # Web Application
 
-The primary user-facing frontend for Startup.ai, built with Next.js 14, TypeScript, and Tailwind CSS.
+The primary user-facing frontend for Memoir, built with Next.js 14, TypeScript, and Tailwind CSS.
 
 ## Overview
 
@@ -13,7 +13,7 @@ The web application serves as the main interface for founders to interact with t
 - **Dashboard**: A central hub for viewing agent performance, recent conversations, and API usage.
 - **Agent Chat**: A real-time chat interface for interacting with AI agents.
 - **Responsive Design**: A mobile-first approach with Tailwind CSS and DaisyUI.
-- **Component Library**: Integration with the shared `@startup/ui` component library for a consistent look and feel.
+- **Component Library**: Integration with the shared `@polypixel/ui` component library for a consistent look and feel.
 
 ## Architecture
 
@@ -91,7 +91,7 @@ The web application uses generated TypeScript clients for API communication:
 
 ```bash
 # Generate API clients from OpenAPI specs
-pnpm nx run @startup/clients:generate
+pnpm nx run @polypixel/clients:generate
 ```
 
 ## Testing

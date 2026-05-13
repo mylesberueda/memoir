@@ -14,7 +14,7 @@ import {
 	type InferResponse,
 	ListConversationsRequestSchema,
 	type Message,
-} from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import type { ActionResult } from '.';
 
 const log = createChildLogger({ action: 'infer' });

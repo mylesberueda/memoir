@@ -6,7 +6,7 @@
 		"@bufbuild/protobuf": "^2.10.1",
 		"@connectrpc/connect": "^2.1.1",
 		"@connectrpc/connect-node": "^2.1.1",
-		"@startup/proto-ts": "workspace:*",
+		"@polypixel/proto-ts": "workspace:*",
 		"ai": "^5.0.22",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",

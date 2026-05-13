@@ -111,7 +111,7 @@ export default function LoginClient({ authRequest, initialMode, verified, error:
 						{isRegistrationMode ? 'Create Account' : 'Welcome Back'}
 					</h1>
 					<p className="text-base-content/70 mt-2 transition-all duration-300">
-						{isRegistrationMode ? 'Sign up to get started with startup.ai' : 'Sign in to your startup.ai account'}
+						{isRegistrationMode ? 'Sign up to get started with Memoir' : 'Sign in to your Memoir account'}
 					</p>
 				</div>
 

@@ -10,7 +10,7 @@ import {
 	type ShareAgentResponse,
 	UnshareAgentRequestSchema,
 	type UnshareAgentResponse,
-} from '@startup/proto-ts/rig-service/rig/v1/agent_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/agent_pb';
 import {
 	ListConversationSharesRequestSchema,
 	type ListConversationSharesResponse,
@@ -18,7 +18,7 @@ import {
 	type ShareConversationResponse,
 	UnshareConversationRequestSchema,
 	type UnshareConversationResponse,
-} from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 
 import type { ActionResult } from '.';
 

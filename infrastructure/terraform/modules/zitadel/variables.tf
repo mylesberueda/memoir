@@ -29,13 +29,13 @@ variable "zitadel_jwt_profile_file" {
 variable "zitadel_org_name" {
   description = "Zitadel organization name"
   type        = string
-  default     = "startup.ai"
+  default     = "memoir"
 }
 
 variable "project_name" {
   description = "Name of the Zitadel project"
   type        = string
-  default     = "startup-ai"
+  default     = "memoir"
 }
 
 variable "zitadel_redirect_uri" {
@@ -60,13 +60,13 @@ variable "app_internal_url" {
 variable "zitadel_smtp_sender_address" {
   description = "Email address used as sender"
   type        = string
-  default     = "noreply@startup.local"
+  default     = "noreply@memoir.local"
 }
 
 variable "zitadel_smtp_sender_name" {
   description = "Display name used as sender"
   type        = string
-  default     = "Startup AI"
+  default     = "Memoir"
 }
 
 variable "zitadel_smtp_host" {

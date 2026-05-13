@@ -10,9 +10,9 @@ import {
 } from '@actions/sharing';
 import { Modal } from '@components';
 import useAuth from '@hooks/useAuth';
-import type { OrganizationMember } from '@startup/proto-ts/api-service/api/v1/organizations_pb';
-import type { AgentShare } from '@startup/proto-ts/rig-service/rig/v1/agent_pb';
-import type { ConversationShare } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+import type { OrganizationMember } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
+import type { AgentShare } from '@polypixel/proto-ts/rig-service/rig/v1/agent_pb';
+import type { ConversationShare } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import { Loader2, Share2, Trash2, UserPlus, X } from 'lucide-react';
 import { useCallback, useEffect, useState, useTransition } from 'react';
 import PermissionSelector, { PERM_EXECUTE, PERM_READ, PermissionBadges } from './PermissionSelector';

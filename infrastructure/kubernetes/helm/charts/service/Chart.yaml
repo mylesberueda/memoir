@@ -2,7 +2,7 @@
 # This is a reusable template chart - each service provides its own values
 apiVersion: v2
 name: service
-description: Base chart for startup-ai services
+description: Base chart for memoir services
 type: application
 version: 0.1.0
 appVersion: "1.0.0"

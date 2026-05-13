@@ -7,10 +7,10 @@ use commands::*;
 type Result<T> = color_eyre::Result<T>;
 
 #[derive(clap::Parser)]
-#[clap(name = "startup-cli")]
-#[clap(author = "Startup.ai Team")]
+#[clap(name = "memoir-cli")]
+#[clap(author = "Memoir Team")]
 #[clap(version = "0.1.0")]
-#[clap(about = "A CLI tool for startup.ai maintenance and setup tasks")]
+#[clap(about = "A CLI tool for memoir maintenance and setup tasks")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,

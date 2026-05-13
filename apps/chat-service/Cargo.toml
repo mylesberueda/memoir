@@ -1,7 +1,7 @@
 [package]
 name = "chat-service"
 version = "0.1.0"
-description = "Chat service (gRPC microservice) for startup.ai"
+description = "Chat service (gRPC microservice) for memoir"
 authors = ["Myles Berueda <myles@polypixel.io>"]
 edition = "2024"
 

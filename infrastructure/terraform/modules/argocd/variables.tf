@@ -11,7 +11,7 @@ variable "environment" {
 variable "github_repo_url" {
   description = "GitHub repository URL for ArgoCD to watch"
   type        = string
-  default     = "https://github.com/mylesberueda/startup-ai"
+  default     = "https://github.com/mylesberueda/memoir"
 }
 
 variable "github_repo_owner" {
@@ -23,7 +23,7 @@ variable "github_repo_owner" {
 variable "github_repo_name" {
   description = "GitHub repository name for OIDC RBAC"
   type        = string
-  default     = "startup-ai"
+  default     = "memoir"
 }
 
 variable "github_argocd_token" {

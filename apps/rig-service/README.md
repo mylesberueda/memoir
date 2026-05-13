@@ -10,7 +10,7 @@
 <h3 align="center">Rig Service</h3>
 
   <p align="center">
-    The agentic service for Startup.ai
+    The agentic service for Memoir
     <br />
     <a href="https://github.com/MylesWritesCode/rust-cli-starter">
       <strong>Explore the docs »</strong>
@@ -55,7 +55,7 @@
 
 ## About The Project
 
-This is the agent service for Startup.ai. Rig service contains all the agentic
+This is the agent service for Memoir. Rig service contains all the agentic
 and llm code. It's used by the UI to facilitate the user's assistant and agent
 chats.
 

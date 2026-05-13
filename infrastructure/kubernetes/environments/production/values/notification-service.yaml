@@ -3,7 +3,7 @@
 nameOverride: notification-service
 
 image:
-  repository: us-central1-docker.pkg.dev/PROJECT_ID/startup-ai/notification-service
+  repository: us-central1-docker.pkg.dev/PROJECT_ID/memoir/notification-service
   tag: latest
   pullPolicy: Always
 

@@ -3,7 +3,7 @@
 
 nameOverride: rig-service
 image:
-  repository: ghcr.io/mylesberueda/startup-ai/rig-service
+  repository: ghcr.io/mylesberueda/memoir/rig-service
   tag: ab22d39285e8b5419e29a26dcbbe48e15cd28801
   pullPolicy: IfNotPresent
 imagePullSecrets:

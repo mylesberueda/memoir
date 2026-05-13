@@ -67,13 +67,13 @@ describe('RootLayout', () => {
 describe('metadata', () => {
 	it('has correct title configuration', () => {
 		expect(metadata.title).toEqual({
-			template: '%s | Startup AI',
-			default: 'Startup AI',
+			template: '%s | Memoir',
+			default: 'Memoir',
 		});
 	});
 
 	it('has correct description', () => {
-		expect(metadata.description).toBe('Your next startup team');
+		expect(metadata.description).toBe('A self-hosted memory service for AI agents');
 	});
 
 	it('exports metadata object with required properties', () => {

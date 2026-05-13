@@ -13,12 +13,12 @@ import {
 	ListDocumentsRequestSchema,
 	ListGroupsRequestSchema,
 	UploadDocumentRequestSchema,
-} from '@startup/proto-ts/rig-service/rig/v1/document_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/document_pb';
 import {
 	AttachDocumentsRequestSchema,
 	DetachDocumentsRequestSchema,
 	ListConversationDocumentsRequestSchema,
-} from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import type { ActionResult } from '.';
 
 const log = createChildLogger({ action: 'documents' });

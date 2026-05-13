@@ -34,13 +34,13 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const mockUser = {
-	email: 'john.doe@startup.ai',
+	email: 'john.doe@memoir.local',
 	name: 'John Doe',
 	pid: 'user-123',
 };
 
 const mockAdmin = {
-	email: 'admin@startup.ai',
+	email: 'admin@memoir.local',
 	name: 'Admin User',
 	pid: 'admin-456',
 };
@@ -65,7 +65,7 @@ export const LongUserName: Story = {
 		user: {
 			...mockUser,
 			name: 'John Alexander Maximilian Doe',
-			email: 'john.alexander.maximilian.doe@verylongdomainname.startup.ai',
+			email: 'john.alexander.maximilian.doe@verylongdomainname.memoir.local',
 		},
 	},
 };
@@ -104,7 +104,7 @@ export const BreadcrumbDisplay: Story = {
 		const canvas = within(canvasElement);
 
 		// Verify breadcrumb elements are present
-		await expect(canvas.getByText('startup.ai')).toBeInTheDocument();
+		await expect(canvas.getByText('memoir')).toBeInTheDocument();
 		await expect(canvas.getByText('dashboard')).toBeInTheDocument();
 	},
 };

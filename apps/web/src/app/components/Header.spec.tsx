@@ -85,7 +85,7 @@ describe('Header Component', () => {
 	it('displays breadcrumb navigation', () => {
 		renderWithLayoutProvider(<Header />);
 
-		expect(screen.getByText('startup.ai')).toBeInTheDocument();
+		expect(screen.getByText('memoir')).toBeInTheDocument();
 		expect(screen.getByText('dashboard')).toBeInTheDocument();
 	});
 
@@ -243,7 +243,7 @@ describe('Header Component', () => {
 		const TestComponent = () => {
 			// Mock the Header component internals but override breadcrumbs
 			const breadcrumbs = [
-				{ label: 'startup.ai', href: '#' },
+				{ label: 'memoir', href: '#' },
 				{ label: 'current-page' }, // No href to test line 52
 			];
 
@@ -280,7 +280,7 @@ describe('Header Component', () => {
 		renderWithLayoutProvider(<Header />);
 
 		// Default Header has breadcrumbs with hrefs
-		const startupLink = screen.getByText('startup.ai').closest('a');
+		const startupLink = screen.getByText('memoir').closest('a');
 		const dashboardLink = screen.getByText('dashboard').closest('a');
 
 		expect(startupLink).toBeInTheDocument();
@@ -346,7 +346,7 @@ describe('Header Component', () => {
 			renderWithLayoutProvider(<Header />);
 
 			// Still should show breadcrumbs
-			expect(screen.getByText('startup.ai')).toBeInTheDocument();
+			expect(screen.getByText('memoir')).toBeInTheDocument();
 			expect(screen.getByText('dashboard')).toBeInTheDocument();
 
 			// Still should show other UI elements

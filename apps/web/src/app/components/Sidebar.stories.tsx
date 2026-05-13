@@ -34,13 +34,13 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const mockUser = {
-	email: 'john.doe@startup.ai',
+	email: 'john.doe@memoir.local',
 	name: 'John Doe',
 	pid: 'user-123',
 };
 
 const mockAdmin = {
-	email: 'admin@startup.ai',
+	email: 'admin@memoir.local',
 	name: 'Admin User',
 	pid: 'admin-456',
 };
@@ -68,7 +68,7 @@ export const NavigationInteraction: Story = {
 		const canvas = within(canvasElement);
 
 		// Verify main navigation sections
-		await expect(canvas.getByText('STARTUP')).toBeInTheDocument();
+		await expect(canvas.getByText('MEMOIR')).toBeInTheDocument();
 		await expect(canvas.getByText('.ai')).toBeInTheDocument();
 		await expect(canvas.getByText('Assistant')).toBeInTheDocument();
 		await expect(canvas.getByText('Dashboard')).toBeInTheDocument();
@@ -90,7 +90,7 @@ export const LongUserName: Story = {
 		user: {
 			...mockUser,
 			name: 'John Alexander Maximilian Doe',
-			email: 'john.alexander.maximilian.doe@verylongdomainname.startup.ai',
+			email: 'john.alexander.maximilian.doe@verylongdomainname.memoir.local',
 		},
 	},
 };

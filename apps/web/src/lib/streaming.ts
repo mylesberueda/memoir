@@ -1,5 +1,5 @@
 import { fromJson } from '@bufbuild/protobuf';
-import { type InferResponse, InferResponseSchema } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+import { type InferResponse, InferResponseSchema } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 
 export interface StreamInferenceInput {
 	agentPid: string;

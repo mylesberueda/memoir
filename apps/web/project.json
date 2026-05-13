@@ -133,7 +133,7 @@
 		"docker:build": {
 			"executor": "nx:run-commands",
 			"options": {
-				"command": "docker build -f apps/web/Dockerfile -t {args.repo:-startup-ai}/web:{args.tag:-local} .",
+				"command": "docker build -f apps/web/Dockerfile -t {args.repo:-memoir}/web:{args.tag:-local} .",
 				"cwd": "{workspaceRoot}"
 			},
 			"cache": true,
@@ -142,7 +142,7 @@
 		"docker:push": {
 			"executor": "nx:run-commands",
 			"options": {
-				"command": "docker push {args.repo:-startup-ai}/web:{args.tag:-local}",
+				"command": "docker push {args.repo:-memoir}/web:{args.tag:-local}",
 				"cwd": "{workspaceRoot}"
 			},
 			"dependsOn": ["docker:build"]

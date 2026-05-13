@@ -1,5 +1,5 @@
 import { getTextContent, type Message } from '@lib/chat-state';
-import { MessagePartKind } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+import { MessagePartKind } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 
 export interface ExportedConversation {
 	version: '1.0';

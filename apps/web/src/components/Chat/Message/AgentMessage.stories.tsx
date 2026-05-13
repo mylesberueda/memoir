@@ -3,7 +3,7 @@ import {
 	MessagePartKind,
 	MessagePartSchema,
 	MessagePartStatus,
-} from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import AgentMessage from './AgentMessage';
 

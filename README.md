@@ -3,25 +3,25 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/polypixel-labs/pixel-dashboard">
-    <img src=".meta/startup.ai.gif" alt="STARTUP.ai Logo">
+  <a href="https://github.com/mylesberueda/memoir">
+    <img src=".meta/startup.ai.gif" alt="Memoir Logo">
   </a>
 
-<h3 align="center">committee.ai</h3>
+<h3 align="center">Memoir</h3>
 
   <p align="center">
     A starter template for multi-service apps
     <br />
-    <a href="https://github.com/polypixel-labs/pixel-dashboard">
+    <a href="https://github.com/mylesberueda/memoir">
       <strong>Explore the docs »</strong>
     </a>
     <br />
     <br />
-    <a href="https://github.com/polypixel-labs/pixel-dashboard">View Demo</a>
+    <a href="https://github.com/mylesberueda/memoir">View Demo</a>
     ·
-    <a href="https://github.com/polypixel-labs/pixel-dashboard/issues">Report Bug</a>
+    <a href="https://github.com/mylesberueda/memoir/issues">Report Bug</a>
     ·
-    <a href="https://github.com/polypixel-labs/pixel-dashboard/issues">Request Feature</a>
+    <a href="https://github.com/mylesberueda/memoir/issues">Request Feature</a>
   </p>
 </div>
 
@@ -103,17 +103,17 @@ installation steps below.
 
 ```sh
 # with https
-git clone https://github.com/polypixel-labs/pixel-dash.git
+git clone https://github.com/mylesberueda/memoir.git
 
 # or ssh
-git clone git@github.com:polypixel-labs/pixel-dash.git
+git clone git@github.com:mylesberueda/memoir.git
 ```
 
 1. Remove the `.git` directory
 
 ```sh
 # cd into the cloned directory
-cd pixel-dash
+cd memoir
 
 # delete `.git`
 rm -rf .git
@@ -263,8 +263,8 @@ issues).
 
 [![Contributors][c-shield]][contributors]
 
-[c-shield]: https://img.shields.io/github/contributors/mylesberueda/committee-ai.svg?style=for-the-badge
-[contributors]: https://github.com/mylesberueda/committee-ai/graphs/contributors
+[c-shield]: https://img.shields.io/github/contributors/mylesberueda/memoir.svg?style=for-the-badge
+[contributors]: https://github.com/mylesberueda/memoir/graphs/contributors
 
 Contributions are what make the open source community such an amazing place to
 learn, inspire, and create. Any contributions you make are
@@ -284,28 +284,27 @@ create a pull request. You can also simply open an issue with the tag
 
 While possible, it's probable that you'll run into merge conflicts that will
 need to be resolved. In the examples below, we'll take this repo and a
-fictional committee-ai repo, which was created via template from startup-ai.
+fictional downstream repo, which was created via template from memoir.
 
 ```sh
 # If you didn't add upstream already:
-jj git remote add upstream git@github.com:mylesberueda/startup-ai.git
+jj git remote add upstream git@github.com:mylesberueda/memoir.git
 jj git fetch --remote upstream
 ```
 
 You can do all your feature work on a branch connected to your repo (i.e.
-committee-ai, the repo that was spawned from startup-ai). **Once you've merged
-into your repo's main (in this example, committee-ai's main), you can use that
-same branch and rebase over upstream.**
+the downstream repo that was spawned from memoir). **Once you've merged
+into your repo's main, you can use that same branch and rebase over upstream.**
 
 ```sh
-# Rebase over startup-ai's main to isolate the feature
-jj rebase -s feat/committee-ai-feature -d main@upstream
+# Rebase over memoir's main to isolate the feature
+jj rebase -s feat/downstream-feature -d main@upstream
 
 # Create a bookmark for the PR
-jj bookmark create chore/upstream-to-startup-ai -r feat/committee-ai-feature
+jj bookmark create chore/upstream-to-memoir -r feat/downstream-feature
 
 # Push to upstream
-jj git push --remote upstream --bookmark chore/upstream-to-startup-ai
+jj git push --remote upstream --bookmark chore/upstream-to-memoir
 ```
 
 <p align="right">(<a href="#top">back to top</a>)</p>
@@ -314,7 +313,7 @@ jj git push --remote upstream --bookmark chore/upstream-to-startup-ai
 
 <!-- ## License -->
 <!---->
-<!-- [![LICENSE](https://img.shields.io/github/license/polypixel-labs/pixel-dashboard.svg?style=for-the-badge)](https://github.com/MylesWritesCode/rust-wasm/blob/master/LICENSE) -->
+<!-- [![LICENSE](https://img.shields.io/github/license/mylesberueda/memoir.svg?style=for-the-badge)](https://github.com/MylesWritesCode/rust-wasm/blob/master/LICENSE) -->
 <!---->
 <!-- Distributed under the {placeholder}. See `LICENSE` for more information. -->
 

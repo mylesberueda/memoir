@@ -81,7 +81,7 @@ vi.mock('@providers', async () => {
 
 const mockUser: User = {
 	id: 'test-pid-123',
-	email: 'test@startup.ai',
+	email: 'test@memoir.local',
 	name: 'Test User',
 };
 
@@ -110,7 +110,7 @@ describe('Sidebar Component', () => {
 		renderWithLayoutProvider(<Sidebar />);
 
 		// Verify branding is displayed
-		expect(screen.getByText('STARTUP')).toBeInTheDocument();
+		expect(screen.getByText('MEMOIR')).toBeInTheDocument();
 		expect(screen.getByText('.ai')).toBeInTheDocument();
 	});
 
@@ -228,7 +228,7 @@ describe('Sidebar Component', () => {
 	it('handles different user types', () => {
 		const adminUser: User = {
 			id: 'admin-456',
-			email: 'admin@startup.ai',
+			email: 'admin@memoir.local',
 			name: 'Admin User',
 		};
 
@@ -242,7 +242,7 @@ describe('Sidebar Component', () => {
 		renderWithLayoutProvider(<Sidebar />);
 
 		// Sidebar should render the same regardless of user type (for now)
-		expect(screen.getByText('STARTUP')).toBeInTheDocument();
+		expect(screen.getByText('MEMOIR')).toBeInTheDocument();
 		expect(screen.getByText('Assistant')).toBeInTheDocument();
 		expect(screen.getByText('Dashboard')).toBeInTheDocument();
 	});
@@ -263,7 +263,7 @@ describe('Sidebar Component', () => {
 		expect(nav).toBeInTheDocument();
 
 		// Verify brand link
-		const brandLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('STARTUP'));
+		const brandLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('MEMOIR'));
 		expect(brandLink).toHaveAttribute('href', '/');
 		expect(brandLink).toHaveAttribute('target', '_blank');
 		expect(brandLink).toHaveAttribute('rel', 'noopener noreferrer');
@@ -323,7 +323,7 @@ describe('Sidebar Component', () => {
 			renderWithLayoutProvider(<Sidebar />);
 
 			// Should still show branding
-			expect(screen.getByText('STARTUP')).toBeInTheDocument();
+			expect(screen.getByText('MEMOIR')).toBeInTheDocument();
 			expect(screen.getByText('.ai')).toBeInTheDocument();
 
 			// Should still show navigation sections

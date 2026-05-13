@@ -2,7 +2,7 @@
 
 import { getOrganizationByPid } from '@actions/organizations';
 import { useOrganizations } from '@providers/OrganizationContextProvider';
-import type { Organization } from '@startup/proto-ts/api-service/api/v1/organizations_pb';
+import type { Organization } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
 import { Users2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import MemberManagement from '../../settings/organization/_components/MemberManagement';

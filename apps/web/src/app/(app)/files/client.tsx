@@ -3,8 +3,8 @@
 import { deleteDocument, fetchDocuments, getDownloadUrl, uploadDocument } from '@actions/documents';
 import FileUpload, { type FileUploadRef } from '@components/Chat/FileUpload';
 import { ACCEPTED_MIME_TYPES, MAX_FILE_SIZE_MB, MAX_FILES_PER_UPLOAD } from '@lib/documents';
-import type { Document } from '@startup/proto-ts/rig-service/rig/v1/document_pb';
-import { DocumentStatus } from '@startup/proto-ts/rig-service/rig/v1/document_pb';
+import type { Document } from '@polypixel/proto-ts/rig-service/rig/v1/document_pb';
+import { DocumentStatus } from '@polypixel/proto-ts/rig-service/rig/v1/document_pb';
 import { AlertCircle, CheckCircle2, Download, FileIcon, FileText, Image, Loader2, Trash2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

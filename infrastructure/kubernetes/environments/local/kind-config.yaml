@@ -2,18 +2,18 @@
 # Creates a cluster suitable for testing Helm charts and ArgoCD deployments
 #
 # Usage:
-#   kind create cluster --config infrastructure/kubernetes/environments/local/kind-config.yaml --name startup-ai
+#   kind create cluster --config infrastructure/kubernetes/environments/local/kind-config.yaml --name memoir
 #
 # Kind automatically creates/uses the "kind" Docker network.
 # Docker Compose services (postgres, redis, zitadel) also join this network,
 # so pods can reach them by container name:
-#   - startupai-postgres:5432
-#   - startupai-redis:6379
-#   - startupai-zitadel:8080
+#   - memoir-postgres:5432
+#   - memoir-redis:6379
+#   - memoir-zitadel:8080
 #
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-name: startup-ai
+name: memoir
 
 nodes:
   - role: control-plane

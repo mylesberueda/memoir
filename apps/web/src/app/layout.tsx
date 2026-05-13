@@ -4,10 +4,10 @@ import './global.css';
 
 export const metadata: Metadata = {
 	title: {
-		template: '%s | Startup AI',
-		default: 'Startup AI',
+		template: '%s | Memoir',
+		default: 'Memoir',
 	},
-	description: 'Your next startup team',
+	description: 'A self-hosted memory service for AI agents',
 };
 
 interface RootLayoutProps {

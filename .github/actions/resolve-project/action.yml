@@ -6,7 +6,7 @@ description: >
 
 inputs:
   project-name:
-    description: "Name of the GitHub Project (e.g. 'startup.ai')"
+    description: "Name of the GitHub Project (e.g. 'memoir')"
     required: true
   project-owner:
     description: "GitHub username that owns the project"

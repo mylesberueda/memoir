@@ -16,7 +16,7 @@ variable "environment" {
 variable "repository_name" {
   description = "Name of the Artifact Registry repository"
   type        = string
-  default     = "startup-ai"
+  default     = "memoir"
 }
 
 variable "gke_service_account_email" {

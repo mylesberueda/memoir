@@ -2,8 +2,8 @@
 
 import { detachDocuments, fetchConversationDocuments } from '@actions/documents';
 import { FilePickerModal } from '@components/Modal';
-import type { Document } from '@startup/proto-ts/rig-service/rig/v1/document_pb';
-import { DocumentStatus } from '@startup/proto-ts/rig-service/rig/v1/document_pb';
+import type { Document } from '@polypixel/proto-ts/rig-service/rig/v1/document_pb';
+import { DocumentStatus } from '@polypixel/proto-ts/rig-service/rig/v1/document_pb';
 import { AlertCircle, CheckCircle2, File, FileText, Image, Loader2, Paperclip, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components';

@@ -17,7 +17,7 @@ variable "kubeconfig_path" {
 variable "kubeconfig_context" {
   description = "Kubeconfig context for Kind cluster"
   type        = string
-  default     = "kind-startup-ai"
+  default     = "kind-memoir"
 }
 
 # ============================================================================
@@ -27,7 +27,7 @@ variable "kubeconfig_context" {
 variable "github_repo_url" {
   description = "GitHub repository URL for ArgoCD"
   type        = string
-  default     = "https://github.com/mylesberueda/startup-ai"
+  default     = "https://github.com/mylesberueda/memoir"
 }
 
 variable "github_argocd_token" {
@@ -119,7 +119,7 @@ variable "zitadel_jwt_profile_file" {
 variable "zitadel_org_name" {
   description = "Zitadel organization name"
   type        = string
-  default     = "startup.ai"
+  default     = "memoir"
 }
 
 variable "zitadel_redirect_uri" {

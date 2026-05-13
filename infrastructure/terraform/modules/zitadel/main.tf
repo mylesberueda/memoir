@@ -457,12 +457,12 @@ resource "zitadel_default_verify_email_message_text" "default" {
   language = "en"
 
   title       = "Verify Your Email"
-  pre_header  = "Please verify your email address for Startup AI"
-  subject     = "Verify your email for Startup AI"
+  pre_header  = "Please verify your email address for Memoir"
+  subject     = "Verify your email for Memoir"
   greeting    = "Hello {{.DisplayName}},"
-  text        = "We received a request to verify this email address for your Startup AI account. Please click the button below to confirm your email."
+  text        = "We received a request to verify this email address for your Memoir account. Please click the button below to confirm your email."
   button_text = "Verify Email"
-  footer_text = "If you didn't create an account with Startup AI, you can safely ignore this email."
+  footer_text = "If you didn't create an account with Memoir, you can safely ignore this email."
 }
 
 resource "zitadel_login_policy" "default" {

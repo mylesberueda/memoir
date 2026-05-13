@@ -1,16 +1,16 @@
-name: "startup-ai"
+name: "memoir"
 
 volumes:
-  startupai-postgres: {}
-  startupai-qdrant: {}
-  startupai-rustfs: {}
+  memoir-postgres: {}
+  memoir-qdrant: {}
+  memoir-rustfs: {}
 
 services:
   # To run all services, use `docker compose --profile dev up -d`
   ### Databases ###
   # You can run these services by themselves with `docker compose --profile dbs up`
   postgres:
-    container_name: startupai-postgres
+    container_name: memoir-postgres
     image: pgvector/pgvector:pg17
     ports:
       - $DB_PORT:5432
@@ -20,7 +20,7 @@ services:
       - POSTGRES_DB=$DB_NAME
     restart: unless-stopped
     volumes:
-      - startupai-postgres:/var/lib/postgresql/data
+      - memoir-postgres:/var/lib/postgresql/data
     deploy:
       resources:
         limits:
@@ -37,7 +37,7 @@ services:
       - kind
 
   redis:
-    container_name: startupai-redis
+    container_name: memoir-redis
     image: redis:alpine
     ports:
       - $RD_PORT:6379
@@ -51,14 +51,14 @@ services:
       - kind
 
   maildev:
-    container_name: startupai-maildev
+    container_name: memoir-maildev
     image: maildev/maildev
     ports:
       - "1080:1080"
       - "1025:1025"
 
   zitadel:
-    container_name: startupai-zitadel
+    container_name: memoir-zitadel
     image: ghcr.io/zitadel/zitadel:latest
     command: 'start-from-init --masterkey "$ZITADEL_MASTER_KEY" --tlsMode disabled'
     environment:
@@ -120,7 +120,7 @@ services:
       - kind
 
   zitadel-login:
-    container_name: startupai-zitadel-login
+    container_name: memoir-zitadel-login
     image: ghcr.io/zitadel/zitadel-login:latest
     environment:
       - ZITADEL_API_URL=${ZITADEL_API_URL}
@@ -136,7 +136,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: startupai-ollama
+    container_name: memoir-ollama
     profiles:
       - "ai"
     ports:
@@ -157,7 +157,7 @@ services:
     restart: unless-stopped
 
   rustfs:
-    container_name: startupai-rustfs
+    container_name: memoir-rustfs
     image: rustfs/rustfs:latest
     ports:
       - "$S3_PORT:9000"
@@ -169,7 +169,7 @@ services:
       - RUSTFS_ACCESS_KEY=$S3_ROOT_USER
       - RUSTFS_SECRET_KEY=$S3_ROOT_PASSWORD
     volumes:
-      - startupai-rustfs:/data
+      - memoir-rustfs:/data
     deploy:
       resources:
         limits:
@@ -185,13 +185,13 @@ services:
       - kind
 
   qdrant:
-    container_name: startupai-qdrant
+    container_name: memoir-qdrant
     image: qdrant/qdrant:latest # Currently @ 1.17
     ports:
       - "$QDRANT_REST_PORT:6333"
       - "$QDRANT_GRPC_PORT:6334"
     volumes:
-      - startupai-qdrant:/qdrant/storage
+      - memoir-qdrant:/qdrant/storage
     deploy:
       resources:
         limits:
@@ -215,7 +215,7 @@ services:
   # View webhook logs: docker compose logs -f stripe-cli
   stripe-cli:
     image: stripe/stripe-cli:latest
-    container_name: startupai-stripe-cli
+    container_name: memoir-stripe-cli
     command: listen --api-key ${STRIPE_SECRET_KEY} --forward-to host.docker.internal:5154/v1/webhooks/stripe
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"
@@ -226,7 +226,7 @@ networks:
   # Kind cluster network - allows pods to reach Compose services by container name
   # Kind automatically creates this network, or you can pre-create it:
   #   docker network create kind
-  # After both are running, pods can reach: startupai-postgres:5432, startupai-redis:6379, etc.
+  # After both are running, pods can reach: memoir-postgres:5432, memoir-redis:6379, etc.
   kind:
     external: true
     name: kind

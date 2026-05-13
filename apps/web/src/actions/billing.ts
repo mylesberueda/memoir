@@ -14,7 +14,7 @@ import {
 	GetPricingRequestSchema,
 	type GetPricingResponse,
 	type Tier,
-} from '@startup/proto-ts/api-service/api/v1/billing_pb';
+} from '@polypixel/proto-ts/api-service/api/v1/billing_pb';
 
 import type { ActionResult } from '.';
 

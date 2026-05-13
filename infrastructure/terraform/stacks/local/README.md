@@ -13,7 +13,7 @@ docker compose up -d
 kind create cluster --config ../../../kubernetes/environments/local/kind-config.yaml
 
 # 3. Set context (if needed)
-kubectl config use-context kind-startup-ai
+kubectl config use-context kind-memoir
 
 # 4. Set environment variables
 export TF_VAR_github_argocd_token="ghp_xxx"

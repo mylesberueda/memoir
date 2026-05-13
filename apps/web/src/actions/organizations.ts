@@ -20,7 +20,7 @@ import {
 	type UpdateMemberResponse,
 	UpdateOrganizationRequestSchema,
 	type UpdateOrganizationResponse,
-} from '@startup/proto-ts/api-service/api/v1/organizations_pb';
+} from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
 import { revalidatePath } from 'next/cache';
 import type { ActionResult } from '.';
 

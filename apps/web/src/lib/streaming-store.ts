@@ -2,7 +2,7 @@ import {
 	type MessagePart,
 	MessagePartKind,
 	type MessagePartStatus,
-} from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 
 type Listener = () => void;
 

@@ -9,7 +9,7 @@ export default function AuthPage() {
 		<div className="flex items-center justify-center min-h-full p-4">
 			<div className="w-full max-w-md">
 				<div className="text-center mb-8">
-					<h1 className="text-3xl font-bold">Welcome to startup.ai</h1>
+					<h1 className="text-3xl font-bold">Welcome to Memoir</h1>
 					<p className="text-base-content/70 mt-2">Your agents, cooperating</p>
 				</div>
 
@@ -31,7 +31,7 @@ export default function AuthPage() {
 					<Card
 						icon={UserPlus}
 						title="Create Account"
-						description="New to Startup AI? Create your account to get started."
+						description="New to Memoir? Create your account to get started."
 						action={
 							<Link href="/auth/registration" className="w-full">
 								<Button color="secondary" className="btn-block">

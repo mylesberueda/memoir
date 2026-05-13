@@ -54,8 +54,8 @@ on:
 
 env:
   # Registry configuration
-  GHCR_REGISTRY: ghcr.io/${{ github.repository_owner }}/startup-ai
-  GAR_REGISTRY: ${{ inputs.gar-region }}-docker.pkg.dev/${{ inputs.gar-project-id }}/startup-ai
+  GHCR_REGISTRY: ghcr.io/${{ github.repository_owner }}/memoir
+  GAR_REGISTRY: ${{ inputs.gar-region }}-docker.pkg.dev/${{ inputs.gar-project-id }}/memoir
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -307,7 +307,7 @@ jobs:
           # human authors so `git log deploy/<env>` reads as machine-only.
           # Adopters forking this template can override via repo vars
           # DEPLOY_BOT_NAME / DEPLOY_BOT_EMAIL if they want their own.
-          BOT_NAME="${{ vars.DEPLOY_BOT_NAME || 'startup-ai-deploy-bot' }}"
+          BOT_NAME="${{ vars.DEPLOY_BOT_NAME || 'memoir-deploy-bot' }}"
           BOT_EMAIL="${{ vars.DEPLOY_BOT_EMAIL || 'deploy-bot@users.noreply.github.com' }}"
           git config user.name "$BOT_NAME"
           git config user.email "$BOT_EMAIL"

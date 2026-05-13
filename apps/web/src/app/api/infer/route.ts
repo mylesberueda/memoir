@@ -1,7 +1,7 @@
 import { create, toJson } from '@bufbuild/protobuf';
 import { inferenceServiceClient } from '@lib/grpc/clients';
 import { createChildLogger } from '@lib/logger';
-import { InferRequestSchema, InferResponseSchema } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+import { InferRequestSchema, InferResponseSchema } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import { type NextRequest, NextResponse } from 'next/server';
 
 const log = createChildLogger({ route: 'api/infer' });

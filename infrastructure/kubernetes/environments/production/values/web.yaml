@@ -3,7 +3,7 @@
 nameOverride: web
 
 image:
-  repository: us-central1-docker.pkg.dev/PROJECT_ID/startup-ai/web
+  repository: us-central1-docker.pkg.dev/PROJECT_ID/memoir/web
   tag: latest
   pullPolicy: Always
 

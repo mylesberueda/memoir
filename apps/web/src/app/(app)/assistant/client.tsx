@@ -26,7 +26,7 @@ import {
 	type Conversation as ConversationProto,
 	MessageStatus,
 	type Message as ProtoMessage,
-} from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 function mapProtoStatus(status: MessageStatus): Message['status'] {

@@ -1,6 +1,6 @@
-# Startup CLI
+# Memoir CLI
 
-A Rust CLI tool for startup.ai maintenance and setup tasks, replacing Python scripts with faster, more robust implementations.
+A Rust CLI tool for memoir maintenance and setup tasks, replacing Python scripts with faster, more robust implementations.
 
 ## Features
 
@@ -16,7 +16,7 @@ A Rust CLI tool for startup.ai maintenance and setup tasks, replacing Python scr
 # Build the CLI
 cargo build --release
 
-# The binary will be available at target/release/startup-cli
+# The binary will be available at target/release/memoir-cli
 ```
 
 ## Usage
@@ -25,37 +25,37 @@ cargo build --release
 
 ```bash
 # Create main database schema
-startup-cli database create-schema --host localhost --port 5432 --database mydb --user postgres --password secret
+memoir-cli database create-schema --host localhost --port 5432 --database mydb --user postgres --password secret
 
 # Create test database with verification
-startup-cli db create-test-db --host localhost --database test_db --verify
+memoir-cli db create-test-db --host localhost --database test_db --verify
 
 # Use environment variables (POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
-POSTGRES_DB=myapp startup-cli db create-schema
+POSTGRES_DB=myapp memoir-cli db create-schema
 ```
 
 ### API Key Commands
 
 ```bash
 # Generate new API key
-startup-cli api-keys generate --agent-db-url "postgresql://postgres:postgres@localhost:5432/agent_service"
+memoir-cli api-keys generate --agent-db-url "postgresql://postgres:postgres@localhost:5432/agent_service"
 
 # Generate with custom name and save to file
-startup-cli keys generate \
+memoir-cli keys generate \
   --agent-db-url "postgresql://postgres:postgres@localhost:5432/agent_service" \
   --key-name "production-api-key" \
   --output-file .env.local
 
 # List existing API keys
-startup-cli api-keys list --agent-db-url "postgresql://postgres:postgres@localhost:5432/agent_service"
+memoir-cli api-keys list --agent-db-url "postgresql://postgres:postgres@localhost:5432/agent_service"
 
 # Validate an API key
-startup-cli keys validate \
+memoir-cli keys validate \
   --agent-db-url "postgresql://postgres:postgres@localhost:5432/agent_service" \
   --api-key "svc_main_abc123..."
 
 # Rotate existing key
-startup-cli api-keys generate --rotate --key-name "main-api-service" \
+memoir-cli api-keys generate --rotate --key-name "main-api-service" \
   --agent-db-url "postgresql://postgres:postgres@localhost:5432/agent_service"
 ```
 
@@ -69,7 +69,7 @@ Before using provider commands, ensure you have initialized Zitadel service acco
 
 ```bash
 # Initialize Zitadel service accounts (required for API authentication)
-startup-cli zitadel init --services api
+memoir-cli zitadel init --services api
 ```
 
 This creates the necessary authentication credentials in `.data/zitadel/keys/` that the providers command uses to authenticate with the API.
@@ -78,16 +78,16 @@ This creates the necessary authentication credentials in `.data/zitadel/keys/` t
 
 ```bash
 # Initialize all providers using environment variables
-startup-cli providers init
+memoir-cli providers init
 
 # Initialize specific providers with CLI flags
-startup-cli providers init --openai-key sk-... --anthropic-key sk-ant-...
+memoir-cli providers init --openai-key sk-... --anthropic-key sk-ant-...
 
 # Preview what would be created (dry run)
-startup-cli providers init --dry-run --openai-key sk-...
+memoir-cli providers init --dry-run --openai-key sk-...
 
 # Initialize specific provider types only
-startup-cli providers init --providers openai,anthropic --openai-key sk-... --anthropic-key sk-ant-...
+memoir-cli providers init --providers openai,anthropic --openai-key sk-... --anthropic-key sk-ant-...
 ```
 
 #### Environment Variable Configuration
@@ -112,7 +112,7 @@ export SYSTEM_PROVIDER_AZURE_DEPLOYMENT="gpt-4"
 export SYSTEM_PROVIDER_OPENAI_MAX_DAILY_REQUESTS="1000"
 
 # Initialize providers from environment variables
-startup-cli providers init
+memoir-cli providers init
 ```
 
 #### CLI Flag Configuration
@@ -121,12 +121,12 @@ Override or provide credentials directly via command-line flags:
 
 ```bash
 # OpenAI provider
-startup-cli providers init \
+memoir-cli providers init \
   --openai-key "sk-..." \
   --openai-base-url "https://api.openai.com/v1"
 
 # Multiple providers
-startup-cli providers init \
+memoir-cli providers init \
   --openai-key "sk-..." \
   --anthropic-key "sk-ant-..." \
   --azure-key "..." \
@@ -134,7 +134,7 @@ startup-cli providers init \
   --azure-deployment "gpt-4"
 
 # Specific providers only
-startup-cli providers init \
+memoir-cli providers init \
   --providers "openai,anthropic" \
   --openai-key "sk-..." \
   --anthropic-key "sk-ant-..."
@@ -161,7 +161,7 @@ Settings are applied in the following order (later values override earlier ones)
 ```bash
 # Quick setup with just OpenAI
 export SYSTEM_PROVIDER_OPENAI_API_KEY="sk-..."
-startup-cli providers init
+memoir-cli providers init
 
 # Production setup with multiple providers
 export SYSTEM_PROVIDER_OPENAI_API_KEY="sk-..."
@@ -169,21 +169,21 @@ export SYSTEM_PROVIDER_ANTHROPIC_API_KEY="sk-ant-..."
 export SYSTEM_PROVIDER_AZURE_API_KEY="..."
 export SYSTEM_PROVIDER_AZURE_ENDPOINT="https://company.openai.azure.com"
 export SYSTEM_PROVIDER_AZURE_DEPLOYMENT="gpt-4"
-startup-cli providers init
+memoir-cli providers init
 
 # One-time setup with CLI flags
-startup-cli providers init \
+memoir-cli providers init \
   --openai-key "sk-..." \
   --anthropic-key "sk-ant-..." \
   --dry-run  # Preview first
 
 # After reviewing, run for real
-startup-cli providers init \
+memoir-cli providers init \
   --openai-key "sk-..." \
   --anthropic-key "sk-ant-..."
 
 # Test connectivity before creating
-startup-cli providers init --dry-run --openai-key "sk-..."
+memoir-cli providers init --dry-run --openai-key "sk-..."
 ```
 
 #### Custom Providers (LM Studio, Ollama, etc.)
@@ -208,7 +208,7 @@ export SYSTEM_PROVIDER_MYAPI_PROVIDER_TYPE="openai"
 export SYSTEM_PROVIDER_MYAPI_MAX_DAILY_REQUESTS="500"
 
 # Initialize custom providers
-startup-cli providers init
+memoir-cli providers init
 ```
 
 **Environment Variables:**
@@ -241,10 +241,10 @@ startup-cli providers init
    export SYSTEM_PROVIDER_LMSTUDIO_PROVIDER_TYPE="openai"
    
    # Test the configuration first
-   startup-cli providers init --dry-run
+   memoir-cli providers init --dry-run
    
    # Create the provider
-   startup-cli providers init
+   memoir-cli providers init
    ```
 
 **Example: Ollama Setup**
@@ -261,7 +261,7 @@ startup-cli providers init
    export SYSTEM_PROVIDER_OLLAMA_BASE_URL="http://localhost:11434/v1"
    export SYSTEM_PROVIDER_OLLAMA_PROVIDER_TYPE="openai"
    
-   startup-cli providers init
+   memoir-cli providers init
    ```
 
 #### Troubleshooting
@@ -269,7 +269,7 @@ startup-cli providers init
 **Authentication Error**: "No Zitadel service account credentials found"
 ```bash
 # Solution: Initialize Zitadel service accounts first
-startup-cli zitadel init --services api
+memoir-cli zitadel init --services api
 ```
 
 **No Providers Found**: "No provider configurations found"
@@ -277,23 +277,23 @@ startup-cli zitadel init --services api
 # Solution: Set environment variables or use CLI flags
 export SYSTEM_PROVIDER_OPENAI_API_KEY="sk-..."
 # OR
-startup-cli providers init --openai-key "sk-..."
+memoir-cli providers init --openai-key "sk-..."
 ```
 
 **Connectivity Test Failed**: Check your API keys and network connectivity
 ```bash
 # Test with dry-run first to validate configuration
-startup-cli providers init --dry-run --openai-key "sk-..."
+memoir-cli providers init --dry-run --openai-key "sk-..."
 ```
 
 #### Getting Help
 
 ```bash
 # See all available provider commands
-startup-cli providers --help
+memoir-cli providers --help
 
 # Get detailed help for the init command
-startup-cli providers init --help
+memoir-cli providers init --help
 ```
 
 ## Logging
@@ -302,13 +302,13 @@ Control log verbosity with the `RUST_LOG` environment variable:
 
 ```bash
 # Show all logs
-RUST_LOG=debug startup-cli database create-schema
+RUST_LOG=debug memoir-cli database create-schema
 
 # Show only info and above
-RUST_LOG=info startup-cli api-keys generate ...
+RUST_LOG=info memoir-cli api-keys generate ...
 
 # Show only warnings and errors
-RUST_LOG=warn startup-cli db create-test-db
+RUST_LOG=warn memoir-cli db create-test-db
 ```
 
 ## Command Aliases
@@ -329,9 +329,9 @@ RUST_LOG=warn startup-cli db create-test-db
 
 This CLI replaces the following Python maintenance scripts:
 
-1. **`apps/agent-api/scripts/create-schema.py`** → `startup-cli db create-schema`
-2. **`apps/agent-api/scripts/create-test-db.py`** → `startup-cli db create-test-db`
-3. **`infrastructure/api-keys/scripts/setup_api_keys.py`** → `startup-cli keys generate`
+1. **`apps/agent-api/scripts/create-schema.py`** → `memoir-cli db create-schema`
+2. **`apps/agent-api/scripts/create-test-db.py`** → `memoir-cli db create-test-db`
+3. **`infrastructure/api-keys/scripts/setup_api_keys.py`** → `memoir-cli keys generate`
 
 ## Benefits over Python Scripts
 

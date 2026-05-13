@@ -1,6 +1,6 @@
 # Infrastructure
 
-All infrastructure configuration for the startup-ai platform: Terraform modules/stacks, Helm charts, and environment-specific Kubernetes manifests.
+All infrastructure configuration for the memoir platform: Terraform modules/stacks, Helm charts, and environment-specific Kubernetes manifests.
 
 ## Directory Structure
 
@@ -72,7 +72,7 @@ terraform apply -var-file=terraform.tfvars
 
 ```bash
 # Create Kind cluster for local development
-kind create cluster --config infrastructure/kubernetes/environments/local/kind-config.yaml --name startup-ai
+kind create cluster --config infrastructure/kubernetes/environments/local/kind-config.yaml --name memoir
 
 # Generate ConfigMaps from .env files
 pnpm nx run-many -t k8s:configmap

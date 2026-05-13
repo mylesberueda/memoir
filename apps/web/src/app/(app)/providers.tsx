@@ -4,7 +4,7 @@ import { AssistantChatProvider } from '@lib/chat-state';
 import { AssistantChatProvider as AssistantChatUIProvider, LayoutProvider } from '@providers';
 import { AuthContextProvider, type User } from '@providers/AuthContextProvider';
 import { OrganizationContextProvider } from '@providers/OrganizationContextProvider';
-import type { Organization, ResourcePermission } from '@startup/proto-ts/api-service/api/v1/organizations_pb';
+import type { Organization, ResourcePermission } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
 import { AssistantChat } from '../components';
 
 interface AppProvidersProps {

@@ -1,4 +1,4 @@
-//! Logging and tracing utilities for startup.ai services
+//! Logging and tracing utilities for memoir services
 //!
 //! This module provides centralized logging/tracing configuration.
 //!
@@ -51,7 +51,7 @@ pub struct LoggingConfig {
 impl Default for LoggingConfig {
     fn default() -> Self {
         Self {
-            service_name: "startup-ai-service".to_string(),
+            service_name: "memoir-service".to_string(),
             format: None,
             default_level: "info".to_string(),
         }
@@ -78,7 +78,7 @@ impl Default for LoggingConfig {
 /// ```
 pub fn init_with_defaults() -> crate::Result<()> {
     let config = LoggingConfig {
-        service_name: std::env::var("SERVICE_NAME").unwrap_or_else(|_| "startup-ai-service".to_string()),
+        service_name: std::env::var("SERVICE_NAME").unwrap_or_else(|_| "memoir-service".to_string()),
         format: None,
         default_level: "info,sqlx=warn,sea_orm=warn,hyper=warn,h2=warn,tower=warn".to_string(),
     };
@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn test_logging_config_default() {
         let config = LoggingConfig::default();
-        assert_eq!(config.service_name, "startup-ai-service");
+        assert_eq!(config.service_name, "memoir-service");
         assert_eq!(config.format, None);
         assert_eq!(config.default_level, "info");
     }

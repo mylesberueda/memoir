@@ -3,7 +3,7 @@
 
 nameOverride: api-service
 image:
-  repository: us-central1-docker.pkg.dev/PROJECT_ID/startup-ai/api-service
+  repository: us-central1-docker.pkg.dev/PROJECT_ID/memoir/api-service
   tag: bc5b2ba9b0de9a6d1256fd05dcc0ceaae37ec261 # Updated by ArgoCD Image Updater
   pullPolicy: Always
 replicaCount: 2

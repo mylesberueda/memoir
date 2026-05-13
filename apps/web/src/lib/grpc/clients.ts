@@ -1,23 +1,23 @@
 'use server';
 
 import { type Client, createClient } from '@connectrpc/connect';
-import { AdminService } from '@startup/proto-ts/api-service/api/v1/admin_pb';
-import { BillingService } from '@startup/proto-ts/api-service/api/v1/billing_pb';
-import { OrganizationService } from '@startup/proto-ts/api-service/api/v1/organizations_pb';
-import { UserService } from '@startup/proto-ts/api-service/api/v1/users_pb';
-import { ChannelService } from '@startup/proto-ts/chat-service/chat/v1/channel_pb';
-import { ChatService } from '@startup/proto-ts/chat-service/chat/v1/chat_pb';
-import { ModerationService } from '@startup/proto-ts/chat-service/chat/v1/moderation_pb';
-import { NotificationService } from '@startup/proto-ts/notification-service/notification/v1/notification_pb';
-import { AgentService } from '@startup/proto-ts/rig-service/rig/v1/agent_pb';
+import { AdminService } from '@polypixel/proto-ts/api-service/api/v1/admin_pb';
+import { BillingService } from '@polypixel/proto-ts/api-service/api/v1/billing_pb';
+import { OrganizationService } from '@polypixel/proto-ts/api-service/api/v1/organizations_pb';
+import { UserService } from '@polypixel/proto-ts/api-service/api/v1/users_pb';
+import { ChannelService } from '@polypixel/proto-ts/chat-service/chat/v1/channel_pb';
+import { ChatService } from '@polypixel/proto-ts/chat-service/chat/v1/chat_pb';
+import { ModerationService } from '@polypixel/proto-ts/chat-service/chat/v1/moderation_pb';
+import { NotificationService } from '@polypixel/proto-ts/notification-service/notification/v1/notification_pb';
+import { AgentService } from '@polypixel/proto-ts/rig-service/rig/v1/agent_pb';
 import {
 	DocumentGroupService,
 	DocumentSearchService,
 	DocumentService,
-} from '@startup/proto-ts/rig-service/rig/v1/document_pb';
-import { InferenceService } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
-import { ModelService, ProviderService } from '@startup/proto-ts/rig-service/rig/v1/provider_pb';
-import { ToolService } from '@startup/proto-ts/rig-service/rig/v1/tool_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/document_pb';
+import { InferenceService } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
+import { ModelService, ProviderService } from '@polypixel/proto-ts/rig-service/rig/v1/provider_pb';
+import { ToolService } from '@polypixel/proto-ts/rig-service/rig/v1/tool_pb';
 import { createAuthenticatedTransport } from './transport';
 
 function requireEnv(name: string): string {

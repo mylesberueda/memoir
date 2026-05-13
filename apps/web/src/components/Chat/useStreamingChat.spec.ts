@@ -1,6 +1,6 @@
 import { DocumentStatus, type MessageAttachment } from '@lib/chat-state';
 import { streamingStore } from '@lib/streaming-store';
-import { MessagePartKind } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+import { MessagePartKind } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { type StreamingChatOptions, useStreamingChat } from './useStreamingChat';

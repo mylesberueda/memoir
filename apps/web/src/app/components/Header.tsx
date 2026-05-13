@@ -20,7 +20,7 @@ export default function Header() {
 	const [isPending, startTransition] = useTransition();
 
 	const breadcrumbs: BreadcrumbItem[] = [
-		{ label: 'startup.ai', href: '#' },
+		{ label: 'memoir', href: '#' },
 		{ label: 'dashboard', href: '#' },
 	];
 

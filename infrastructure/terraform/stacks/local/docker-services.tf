@@ -1,7 +1,7 @@
 # Docker Compose Services → Kubernetes DNS Bridge
 #
 # Creates Kubernetes Services + Endpoints for Docker Compose containers,
-# allowing pods to resolve container names (e.g., startupai-postgres:5432).
+# allowing pods to resolve container names (e.g., memoir-postgres:5432).
 #
 # This bridges the gap between Docker's DNS (which knows container names)
 # and Kubernetes CoreDNS (which only knows K8s Services).
@@ -20,7 +20,7 @@
 # - Containers must be running on the "kind" network
 
 data "external" "container_ip" {
-  for_each = var.enable_kubernetes ? toset(["startupai-postgres", "startupai-redis", "startupai-zitadel"]) : toset([])
+  for_each = var.enable_kubernetes ? toset(["memoir-postgres", "memoir-redis", "memoir-zitadel"]) : toset([])
 
   program = ["bash", "-c", <<-EOF
     IP=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{if eq .NetworkID "'$(docker network inspect kind --format '{{.Id}}')'"}}{{.IPAddress}}{{end}}{{end}}' ${each.value} 2>/dev/null)
@@ -42,16 +42,16 @@ locals {
   # Each entry creates a K8s Service + Endpoints pair
   # Only populated when enable_kubernetes is true (requires Kind cluster)
   docker_services = var.enable_kubernetes ? {
-    "startupai-postgres" = {
-      ip   = data.external.container_ip["startupai-postgres"].result.ip
+    "memoir-postgres" = {
+      ip   = data.external.container_ip["memoir-postgres"].result.ip
       port = 5432
     }
-    "startupai-redis" = {
-      ip   = data.external.container_ip["startupai-redis"].result.ip
+    "memoir-redis" = {
+      ip   = data.external.container_ip["memoir-redis"].result.ip
       port = 6379
     }
-    "startupai-zitadel" = {
-      ip   = data.external.container_ip["startupai-zitadel"].result.ip
+    "memoir-zitadel" = {
+      ip   = data.external.container_ip["memoir-zitadel"].result.ip
       port = 8080
     }
   } : {}

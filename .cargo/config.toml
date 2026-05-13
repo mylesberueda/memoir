@@ -1,2 +1,2 @@
 [alias]
-cmd = "run --package startup-cli --release --"
+cmd = "run --package memoir-cli --release --"

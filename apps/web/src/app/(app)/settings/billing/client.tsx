@@ -6,7 +6,7 @@ import {
 	BillingInterval,
 	type PricingTier as ProtoPricingTier,
 	Tier,
-} from '@startup/proto-ts/api-service/api/v1/billing_pb';
+} from '@polypixel/proto-ts/api-service/api/v1/billing_pb';
 import cns from 'classnames';
 import { Check, ExternalLink, Loader2, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';

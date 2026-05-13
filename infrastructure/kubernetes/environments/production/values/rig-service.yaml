@@ -3,7 +3,7 @@
 nameOverride: rig-service
 
 image:
-  repository: us-central1-docker.pkg.dev/PROJECT_ID/startup-ai/rig-service
+  repository: us-central1-docker.pkg.dev/PROJECT_ID/memoir/rig-service
   tag: latest
   pullPolicy: Always
 

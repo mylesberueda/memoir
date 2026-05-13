@@ -1,5 +1,5 @@
 import { getCurrentPlan, getPricing } from '@actions/billing';
-import { Tier } from '@startup/proto-ts/api-service/api/v1/billing_pb';
+import { Tier } from '@polypixel/proto-ts/api-service/api/v1/billing_pb';
 import BillingClient from '../../settings/billing/client';
 
 export const metadata = {

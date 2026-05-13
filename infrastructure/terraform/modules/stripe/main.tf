@@ -162,7 +162,7 @@ resource "stripe_webhook_endpoint" "api" {
 
 resource "stripe_portal_configuration" "default" {
   business_profile {
-    headline = "Manage your Startup AI subscription"
+    headline = "Manage your Memoir subscription"
   }
 
   features {

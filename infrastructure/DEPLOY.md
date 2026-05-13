@@ -55,7 +55,7 @@ argocd app sync <project>-<env>
 
 ## Forking the template — bot identity
 
-The CI workflow commits to `deploy/<source-branch>` as `startup-ai-deploy-bot <deploy-bot@users.noreply.github.com>` by default. To use your own bot identity, set repo variables:
+The CI workflow commits to `deploy/<source-branch>` as `memoir-deploy-bot <deploy-bot@users.noreply.github.com>` by default. To use your own bot identity, set repo variables:
 
 ```sh
 gh variable set DEPLOY_BOT_NAME --body "myproject-deploy-bot"

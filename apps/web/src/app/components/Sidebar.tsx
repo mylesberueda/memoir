@@ -77,8 +77,7 @@ export default function Sidebar() {
 						<div className="flex items-center gap-3">
 							<BrainCircuit />
 							<div className="font-semibold text-base-content text-lg hover:cursor-pointer">
-								<span className="[font-variant:unicase]">STARTUP</span>
-								<span>.ai</span>
+								<span className="[font-variant:unicase]">MEMOIR</span>
 							</div>
 						</div>
 					</Link>

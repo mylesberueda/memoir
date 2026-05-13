@@ -6,7 +6,7 @@ import { Chat } from '@components';
 import type { ChatProps } from '@components/Chat';
 import type { PromptBoxForm } from '@components/Chat/PromptInput';
 import { MessagePartKind, MessagePartStatus } from '@lib/chat-state';
-import { MessagePartSchema } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+import { MessagePartSchema } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import { sub } from 'date-fns';
 import { useCallback } from 'react';
 

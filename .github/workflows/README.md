@@ -128,7 +128,7 @@ Name: PROJECT_NAME
 Value: Your Project Name
 ```
 
-**Example**: `"Startup.ai Development"`
+**Example**: `"Memoir Development"`
 
 **Used in**: `set-end-date-on-close.yml`
 

@@ -1,7 +1,7 @@
 'use client';
 
 import type { Provider } from '@actions/providers';
-import { ProviderSource } from '@startup/proto-ts/rig-service/rig/v1/provider_pb';
+import { ProviderSource } from '@polypixel/proto-ts/rig-service/rig/v1/provider_pb';
 import cns from 'classnames';
 import { Pencil, Server, Trash2 } from 'lucide-react';
 

@@ -1,4 +1,4 @@
-import { type MessagePart, MessagePartKind } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+import { type MessagePart, MessagePartKind } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 
 /**
  * Check if any parts are thinking parts

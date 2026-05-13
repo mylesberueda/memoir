@@ -15,8 +15,8 @@ export TF_VAR_github_argocd_token="ghp_xxx"  # For private repo access
 
 ```bash
 # One-time: create state bucket (shared with production)
-gsutil mb -p $TF_VAR_gcp_project_id -l us-central1 gs://startup-ai-terraform-state
-gsutil versioning set on gs://startup-ai-terraform-state
+gsutil mb -p $TF_VAR_gcp_project_id -l us-central1 gs://memoir-terraform-state
+gsutil versioning set on gs://memoir-terraform-state
 
 # Apply
 terraform init

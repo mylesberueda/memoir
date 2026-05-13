@@ -3,7 +3,7 @@ import {
 	MessagePartKind,
 	MessagePartSchema,
 	MessagePartStatus,
-} from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+} from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { streamingStore } from './streaming-store';
 

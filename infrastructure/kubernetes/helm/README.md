@@ -1,6 +1,6 @@
 # Helm Charts
 
-Base Helm chart for deploying all startup-ai services to Kubernetes.
+Base Helm chart for deploying all memoir services to Kubernetes.
 
 ## Structure
 
@@ -61,17 +61,17 @@ This reads each `apps/<service>/.env` and generates Kubernetes ConfigMap YAML fi
 ### Step 3: Create Kind Cluster
 
 ```bash
-kind create cluster --config infrastructure/kubernetes/environments/local/kind-config.yaml --name startup-ai
+kind create cluster --config infrastructure/kubernetes/environments/local/kind-config.yaml --name memoir
 ```
 
 ### Step 4: Load Images into Kind
 
 ```bash
-kind load docker-image startup-ai/api-service:local --name startup-ai
-kind load docker-image startup-ai/rig-service:local --name startup-ai
-kind load docker-image startup-ai/chat-service:local --name startup-ai
-kind load docker-image startup-ai/notification-service:local --name startup-ai
-kind load docker-image startup-ai/web:local --name startup-ai
+kind load docker-image memoir/api-service:local --name memoir
+kind load docker-image memoir/rig-service:local --name memoir
+kind load docker-image memoir/chat-service:local --name memoir
+kind load docker-image memoir/notification-service:local --name memoir
+kind load docker-image memoir/web:local --name memoir
 ```
 
 ### Step 5: Install nginx-ingress
@@ -120,7 +120,7 @@ curl http://localhost:5154/health
 ### Cleanup
 
 ```bash
-kind delete cluster --name startup-ai
+kind delete cluster --name memoir
 ```
 
 ---

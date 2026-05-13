@@ -1,5 +1,5 @@
 import { create } from '@bufbuild/protobuf';
-import { MessagePartSchema } from '@startup/proto-ts/rig-service/rig/v1/inference_pb';
+import { MessagePartSchema } from '@polypixel/proto-ts/rig-service/rig/v1/inference_pb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { downloadFile, exportToJSON, exportToMarkdown, generateFilename, importFromJSON } from './chat-export';
 import { type Message, MessagePartKind, MessagePartStatus } from './chat-state';

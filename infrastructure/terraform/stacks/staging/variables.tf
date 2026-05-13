@@ -47,7 +47,7 @@ variable "gke_max_nodes" {
 variable "github_repo_url" {
   description = "GitHub repository URL for ArgoCD"
   type        = string
-  default     = "https://github.com/mylesberueda/startup-ai"
+  default     = "https://github.com/mylesberueda/memoir"
 }
 
 variable "github_argocd_token" {
@@ -85,7 +85,7 @@ variable "zitadel_jwt_profile_file" {
 variable "zitadel_org_name" {
   description = "Zitadel organization name"
   type        = string
-  default     = "startupai"
+  default     = "memoir"
 }
 
 # ============================================================================

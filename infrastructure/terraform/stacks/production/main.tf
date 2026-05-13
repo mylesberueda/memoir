@@ -44,7 +44,7 @@ module "artifact_registry" {
   project_id      = var.gcp_project_id
   region          = var.gcp_region
   environment     = local.environment
-  repository_name = "startup-ai"
+  repository_name = "memoir"
 
   # GKE nodes can pull images after cluster is created
   gke_service_account_email = ""

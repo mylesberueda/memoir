@@ -2,7 +2,7 @@
 variable "cluster_name" {
   description = "Name of the Kind cluster"
   type        = string
-  default     = "startup-ai-github-runners"
+  default     = "memoir-github-runners"
 }
 
 variable "kubeconfig_path" {
@@ -15,7 +15,7 @@ variable "kubeconfig_path" {
 variable "github_config_url" {
   description = "GitHub repository or organization URL"
   type        = string
-  default     = "https://github.com/mylesberueda/startup-ai"
+  default     = "https://github.com/mylesberueda/memoir"
 }
 
 variable "github_runner_token" {

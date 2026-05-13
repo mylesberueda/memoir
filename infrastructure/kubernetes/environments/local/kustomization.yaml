@@ -33,11 +33,11 @@ patches:
       metadata:
         name: api-service-env
       data:
-        DATABASE_URL: "postgres://postgres:postgres@startupai-postgres:5432/api_service"
-        REDIS_URL: "redis://startupai-redis:6379"
-        ZITADEL_URL: "http://startupai-zitadel:8080"
-        ZITADEL_JWKS_URL: "http://startupai-zitadel:8080/oauth/v2/keys"
-        ZITADEL_ISSUER: "http://startupai-zitadel:8080"
+        DATABASE_URL: "postgres://postgres:postgres@memoir-postgres:5432/api_service"
+        REDIS_URL: "redis://memoir-redis:6379"
+        ZITADEL_URL: "http://memoir-zitadel:8080"
+        ZITADEL_JWKS_URL: "http://memoir-zitadel:8080/oauth/v2/keys"
+        ZITADEL_ISSUER: "http://memoir-zitadel:8080"
         UI_URL: "http://web:3000"
 
   # Chat Service
@@ -50,11 +50,11 @@ patches:
       metadata:
         name: chat-service-env
       data:
-        DATABASE_URL: "postgres://postgres:postgres@startupai-postgres:5432/chat_service"
-        REDIS_URL: "redis://startupai-redis:6379"
-        ZITADEL_URL: "http://startupai-zitadel:8080"
-        ZITADEL_JWKS_URL: "http://startupai-zitadel:8080/oauth/v2/keys"
-        ZITADEL_ISSUER: "http://startupai-zitadel:8080"
+        DATABASE_URL: "postgres://postgres:postgres@memoir-postgres:5432/chat_service"
+        REDIS_URL: "redis://memoir-redis:6379"
+        ZITADEL_URL: "http://memoir-zitadel:8080"
+        ZITADEL_JWKS_URL: "http://memoir-zitadel:8080/oauth/v2/keys"
+        ZITADEL_ISSUER: "http://memoir-zitadel:8080"
 
   # Notification Service
   - target:
@@ -66,10 +66,10 @@ patches:
       metadata:
         name: notification-service-env
       data:
-        DATABASE_URL: "postgres://postgres:postgres@startupai-postgres:5432/notification_service"
-        ZITADEL_URL: "http://startupai-zitadel:8080"
-        ZITADEL_JWKS_URL: "http://startupai-zitadel:8080/oauth/v2/keys"
-        ZITADEL_ISSUER: "http://startupai-zitadel:8080"
+        DATABASE_URL: "postgres://postgres:postgres@memoir-postgres:5432/notification_service"
+        ZITADEL_URL: "http://memoir-zitadel:8080"
+        ZITADEL_JWKS_URL: "http://memoir-zitadel:8080/oauth/v2/keys"
+        ZITADEL_ISSUER: "http://memoir-zitadel:8080"
 
   # Rig Service
   - target:
@@ -81,11 +81,11 @@ patches:
       metadata:
         name: rig-service-env
       data:
-        DATABASE_URL: "postgres://postgres:postgres@startupai-postgres:5432/rig_service"
-        REDIS_URL: "redis://startupai-redis:6379"
-        ZITADEL_URL: "http://startupai-zitadel:8080"
-        ZITADEL_JWKS_URL: "http://startupai-zitadel:8080/oauth/v2/keys"
-        ZITADEL_ISSUER: "http://startupai-zitadel:8080"
+        DATABASE_URL: "postgres://postgres:postgres@memoir-postgres:5432/rig_service"
+        REDIS_URL: "redis://memoir-redis:6379"
+        ZITADEL_URL: "http://memoir-zitadel:8080"
+        ZITADEL_JWKS_URL: "http://memoir-zitadel:8080/oauth/v2/keys"
+        ZITADEL_ISSUER: "http://memoir-zitadel:8080"
 
   # Web
   - target:
@@ -97,10 +97,10 @@ patches:
       metadata:
         name: web-env
       data:
-        REDIS_URL: "redis://startupai-redis:6379"
-        ZITADEL_URL: "http://startupai-zitadel:8080"
-        ZITADEL_JWKS_URL: "http://startupai-zitadel:8080/oauth/v2/keys"
-        ZITADEL_ISSUER: "http://startupai-zitadel:8080"
+        REDIS_URL: "redis://memoir-redis:6379"
+        ZITADEL_URL: "http://memoir-zitadel:8080"
+        ZITADEL_JWKS_URL: "http://memoir-zitadel:8080/oauth/v2/keys"
+        ZITADEL_ISSUER: "http://memoir-zitadel:8080"
         RIG_SERVICE_URL: "http://rig-service:5153"
         API_SERVICE_URL: "http://api-service:5154"
         CHAT_SERVICE_URL: "http://chat-service:5155"

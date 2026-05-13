@@ -2,7 +2,7 @@
 # Uses Kubernetes container mode (not Docker-in-Docker)
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-name: startup-ai-github-runners
+name: memoir-github-runners
 nodes:
   - role: control-plane
     image: kindest/node:v1.31.4
