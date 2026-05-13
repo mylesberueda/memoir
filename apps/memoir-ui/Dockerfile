@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
-# Web App Dockerfile
+# Memoir UI Dockerfile
 # =============================================================================
 # Multi-stage build with test and runtime targets for CI integration.
 #
 # Usage:
-#   Test:  docker build --target test -f apps/web/Dockerfile .
-#   Build: docker build --target runtime -t web:local -f apps/web/Dockerfile .
-#   Run:   docker run --rm -p 3000:3000 web:local
+#   Test:  docker build --target test -f apps/memoir-ui/Dockerfile .
+#   Build: docker build --target runtime -t memoir-ui:local -f apps/memoir-ui/Dockerfile .
+#   Run:   docker run --rm -p 3000:3000 memoir-ui:local
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -32,7 +32,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=shared \
 FROM deps AS test
 
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm nx run web:test && \
+RUN pnpm nx run memoir-ui:test && \
   rm -rf /app/.nx/workspace-data/d/daemon.log
 
 # -----------------------------------------------------------------------------
@@ -41,8 +41,8 @@ RUN pnpm nx run web:test && \
 FROM deps AS build
 
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN --mount=type=cache,target=/app/apps/web/.next/cache,sharing=shared \
-  pnpm nx run web:build && \
+RUN --mount=type=cache,target=/app/apps/memoir-ui/.next/cache,sharing=shared \
+  pnpm nx run memoir-ui:build && \
   rm -rf /app/.nx/workspace-data/d/daemon.log
 
 # -----------------------------------------------------------------------------
@@ -56,11 +56,11 @@ RUN addgroup --system --gid 1001 nodejs && \
   adduser --system --uid 1001 nextjs
 
 # Copy public assets
-COPY --from=build /app/apps/web/public ./public
+COPY --from=build /app/apps/memoir-ui/public ./public
 
 # Copy standalone build output
-COPY --from=build --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=build --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build --chown=nextjs:nodejs /app/apps/memoir-ui/.next/standalone ./
+COPY --from=build --chown=nextjs:nodejs /app/apps/memoir-ui/.next/static ./apps/memoir-ui/.next/static
 
 USER nextjs
 
@@ -71,4 +71,4 @@ ENV HOSTNAME="0.0.0.0"
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-CMD ["node", "apps/web/server.js"]
+CMD ["node", "apps/memoir-ui/server.js"]

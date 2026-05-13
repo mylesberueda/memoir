@@ -1,6 +1,12 @@
-# Web Application
+# Memoir UI
 
-The primary user-facing frontend for Memoir, built with Next.js 14, TypeScript, and Tailwind CSS.
+The admin console for Memoir, built with Next.js 14, TypeScript, and Tailwind CSS.
+
+> **Note (post-2026-05 cleanup):** The README body below still describes the
+> template's original SaaS shape (founder/agent/chat product). The future
+> memoir-admin-ui rewrite epic replaces this content with Memoir's actual
+> admin surface (memories, scopes, write queue, API keys). For now, the only
+> changes here are path identifiers — the product description is stale.
 
 ## Overview
 
@@ -76,7 +82,7 @@ Login → JWT Token → HTTP-only Cookie → Server Validation → Protected Rou
 
 ```bash
 # Start the development server
-pnpm nx run web:dev
+pnpm nx run memoir-ui:dev
 
 # Or start all services
 docker compose --profile dev up -d
@@ -100,23 +106,23 @@ pnpm nx run @polypixel/clients:generate
 
 ```bash
 # All tests
-pnpm nx run web:test
+pnpm nx run memoir-ui:test
 
 # Unit tests
-pnpm nx run web:test:unit
+pnpm nx run memoir-ui:test:unit
 
 # Integration tests
-pnpm nx run web:test:integration
+pnpm nx run memoir-ui:test:integration
 
 # Watch mode for development
-pnpm nx run web:test --watch
+pnpm nx run memoir-ui:test --watch
 ```
 
 ## Deployment
 
-The application is built and deployed using Docker. The `Dockerfile` in the root of the `apps/web` directory contains the build instructions.
+The application is built and deployed using Docker. The `Dockerfile` in the root of the `apps/memoir-ui` directory contains the build instructions.
 
 ```bash
 # Build the Docker image
-pnpm nx run web:docker:build
+pnpm nx run memoir-ui:docker:build
 ```

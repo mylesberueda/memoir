@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig(async (_env) => {
 	return {
-		cacheDir: '../../node_modules/.vite/apps/web',
+		cacheDir: '../../node_modules/.vite/apps/memoir-ui',
 		plugins: [react(), tsconfigPaths()],
 	};
 });

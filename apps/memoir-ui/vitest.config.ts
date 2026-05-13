@@ -5,7 +5,7 @@ import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
 // Base configuration shared across all test environments
 export default defineConfig({
-	cacheDir: '../../node_modules/.vite/apps/web',
+	cacheDir: '../../node_modules/.vite/apps/memoir-ui',
 	plugins: [react(), tsconfigPaths()],
 	define: {
 		'process.env': JSON.stringify({}),

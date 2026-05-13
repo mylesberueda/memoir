@@ -1,9 +1,9 @@
 {
-	"name": "web-e2e",
+	"name": "memoir-ui-e2e",
 	"$schema": "../../node_modules/nx/schemas/project-schema.json",
-	"sourceRoot": "e2e/web",
-	"tags": ["scope:web", "type:e2e", "lang:node"],
-	"implicitDependencies": ["web"],
+	"sourceRoot": "e2e/memoir-ui",
+	"tags": ["scope:memoir-ui", "type:e2e", "lang:node"],
+	"implicitDependencies": ["memoir-ui"],
 	"targets": {
 		"test:e2e": {
 			"executor": "nx:run-commands",

@@ -43,19 +43,11 @@
     "@monodon/rust",
     {
       "plugin": "@nx/vite/plugin",
-      "exclude": [
-        "packages/openapi-node/*"
-      ],
       "options": {
         "testTargetName": "test"
       }
     },
-    {
-      "plugin": "@nx/js/typescript",
-      "exclude": [
-        "packages/openapi-node/*"
-      ]
-    },
+    "@nx/js/typescript",
     {
       "plugin": "@nx/eslint/plugin",
       "options": {
@@ -66,27 +58,6 @@
       "plugin": "@nx/jest/plugin",
       "options": {
         "targetName": "test"
-      }
-    },
-    {
-      "plugin": "@nxlv/python",
-      "options": {
-        "packageManager": "uv"
-      }
-    },
-    {
-      "plugin": "@nx/js/typescript",
-      "include": [
-        "packages/openapi-node/*"
-      ],
-      "options": {
-        "typecheck": {
-          "targetName": "typecheck"
-        },
-        "build": {
-          "targetName": "build",
-          "configName": "tsconfig.lib.json"
-        }
       }
     }
   ],

@@ -33,18 +33,18 @@
 		"tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
 	},
 	"include": [
-		"../../apps/web/.next/types/**/*.ts",
-		"../../apps/web/dist/.next/types/**/*.ts",
-		"../../apps/web/dist/app/.next/types/**/*.ts",
-		"../../apps/web/dist/build/.next/types/**/*.ts",
-		"../../dist/apps/web/.next/types/**/*.ts",
+		"../../apps/memoir-ui/.next/types/**/*.ts",
+		"../../apps/memoir-ui/dist/.next/types/**/*.ts",
+		"../../apps/memoir-ui/dist/app/.next/types/**/*.ts",
+		"../../apps/memoir-ui/dist/build/.next/types/**/*.ts",
+		"../../dist/apps/memoir-ui/.next/types/**/*.ts",
 		".next/types/**/*.ts",
 		"next-env.d.ts",
 		"src/**/*.js",
 		"src/**/*.jsx",
 		"src/**/*.ts",
 		"src/**/*.tsx",
-		"../../apps/web/.next/.next/types/**/*.ts"
+		"../../apps/memoir-ui/.next/.next/types/**/*.ts"
 	],
 	"exclude": ["out-tsc", "dist", "node_modules", "jest.config.ts", ".next", "**/*.stories.ts", "**/*.stories.js"],
 	"references": [

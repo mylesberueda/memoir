@@ -7,7 +7,6 @@ export const ROUTES = {
 	ASSISTANT: '/assistant',
 	AGENTS: '/agents',
 	CONVERSATIONS: '/conversations',
-	BILLING: '/settings/billing',
 };
 
 export const TIMEOUTS = {
@@ -15,7 +14,6 @@ export const TIMEOUTS = {
 	MEDIUM: 10000,
 	LONG: 30000,
 	LLM: 120000, // Extra time for LLM responses - some models are slow
-	PAYMENT: 60000, // Extra time for payment processing (Stripe redirect)
 };
 
 /**

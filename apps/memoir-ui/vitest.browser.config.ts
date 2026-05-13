@@ -8,13 +8,13 @@ import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-	cacheDir: '../../node_modules/.vite/apps/web',
+	cacheDir: '../../node_modules/.vite/apps/memoir-ui',
 	plugins: [
 		react(),
 		tsconfigPaths(),
 		storybookTest({
 			configDir: path.join(dirname, '.storybook'),
-			// storybookScript: "pnpm nx run web:storybook",
+			// storybookScript: "pnpm nx run memoir-ui:storybook",
 			// storybookUrl: "http://localhost:4400",
 		}),
 	],

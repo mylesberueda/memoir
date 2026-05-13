@@ -1,9 +1,9 @@
 {
-	"name": "web",
+	"name": "memoir-ui",
 	"$schema": "../../node_modules/nx/schemas/project-schema.json",
-	"sourceRoot": "apps/web",
+	"sourceRoot": "apps/memoir-ui",
 	"projectType": "application",
-	"tags": ["scope:web", "type:app", "lang:node"],
+	"tags": ["scope:memoir-ui", "type:app", "lang:node"],
 	"targets": {
 		"test": {
 			"executor": "@nx/vite:test",
@@ -133,7 +133,7 @@
 		"docker:build": {
 			"executor": "nx:run-commands",
 			"options": {
-				"command": "docker build -f apps/web/Dockerfile -t {args.repo:-memoir}/web:{args.tag:-local} .",
+				"command": "docker build -f apps/memoir-ui/Dockerfile -t {args.repo:-memoir}/memoir-ui:{args.tag:-local} .",
 				"cwd": "{workspaceRoot}"
 			},
 			"cache": true,
@@ -142,7 +142,7 @@
 		"docker:push": {
 			"executor": "nx:run-commands",
 			"options": {
-				"command": "docker push {args.repo:-memoir}/web:{args.tag:-local}",
+				"command": "docker push {args.repo:-memoir}/memoir-ui:{args.tag:-local}",
 				"cwd": "{workspaceRoot}"
 			},
 			"dependsOn": ["docker:build"]
@@ -152,13 +152,13 @@
 			"options": {
 				"commands": [
 					"mkdir -p infrastructure/kubernetes/environments/local/configmaps",
-					"kubectl create configmap web-env --from-env-file=apps/web/.env --dry-run=client -o yaml > infrastructure/kubernetes/environments/local/configmaps/web.yaml"
+					"kubectl create configmap memoir-ui-env --from-env-file=apps/memoir-ui/.env --dry-run=client -o yaml > infrastructure/kubernetes/environments/local/configmaps/memoir-ui.yaml"
 				],
 				"cwd": "{workspaceRoot}",
 				"parallel": false
 			},
 			"inputs": ["{projectRoot}/.env"],
-			"outputs": ["{workspaceRoot}/infrastructure/kubernetes/environments/local/configmaps/web.yaml"]
+			"outputs": ["{workspaceRoot}/infrastructure/kubernetes/environments/local/configmaps/memoir-ui.yaml"]
 		}
 	}
 }

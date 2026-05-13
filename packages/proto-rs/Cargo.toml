@@ -17,10 +17,7 @@ pbjson = "0.9.0"
 pbjson-types = "0.9.0"
 prost = "0.14.1"
 prost-types = "0.14.1"
-rig-core = { workspace = true }
-sea-orm = { version = "2.0.0-rc.20", features = ["macros"] }
-serde_json = { version = "1.0.145" }
+serde_json = { workspace = true }
 serde = { workspace = true }
-thiserror = { workspace = true }
 tonic = { workspace = true, features = ["gzip"] }
 tonic-prost = "0.14.2"
