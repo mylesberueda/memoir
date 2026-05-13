@@ -1,0 +1,29 @@
+[package]
+name = "common-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aes-gcm = { version = "0.11.0-rc.3", features = ["rand_core"] }
+argon2 = { version = "0.6.0-rc.7" }
+base64 = "0.22"
+color-eyre = { workspace = true }
+fred = { workspace = true, features = ["i-scripts"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+test-context = { version = "0.5", optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dependencies.tracing-subscriber]
+workspace = true
+features = ["fmt", "env-filter", "json"]
+
+[features]
+default = []
+integration = []
+test_utils = ["dep:test-context"]
+
+[dev-dependencies]
+test-context = "0.5"

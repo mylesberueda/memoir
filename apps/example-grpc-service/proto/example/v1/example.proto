@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package example.v1;
+
+import "google/protobuf/empty.proto";
+
+// ExampleService demonstrates a minimal gRPC service pattern.
+// Copy this file as a starting point for new microservices.
+service ExampleService {
+  // Simple unary RPC
+  rpc GetItem(GetItemRequest) returns (GetItemResponse);
+
+  // Create with idempotency
+  rpc CreateItem(CreateItemRequest) returns (CreateItemResponse);
+
+  // List with pagination
+  rpc ListItems(ListItemsRequest) returns (ListItemsResponse);
+
+  // Update (partial)
+  rpc UpdateItem(UpdateItemRequest) returns (UpdateItemResponse);
+
+  // Delete
+  rpc DeleteItem(DeleteItemRequest) returns (google.protobuf.Empty);
+
+  // Server streaming example
+  rpc WatchItems(WatchItemsRequest) returns (stream ItemEvent);
+}
+
+// ============================================================================
+// Core types
+// ============================================================================
+
+message Item {
+  string pid = 1;
+  string name = 2;
+  optional string description = 3;
+  ItemStatus status = 4;
+  string created_at = 5;
+  string updated_at = 6;
+}
+
+enum ItemStatus {
+  ITEM_STATUS_UNSPECIFIED = 0;
+  ITEM_STATUS_DRAFT = 1;
+  ITEM_STATUS_ACTIVE = 2;
+  ITEM_STATUS_ARCHIVED = 3;
+}
+
+// ============================================================================
+// Requests & Responses
+// ============================================================================
+
+message GetItemRequest {
+  string pid = 1;
+}
+
+message GetItemResponse {
+  Item item = 1;
+}
+
+message CreateItemRequest {
+  string name = 1;
+  optional string description = 2;
+  optional string idempotency_key = 3;
+}
+
+message CreateItemResponse {
+  Item item = 1;
+  bool deduplicated = 2;
+}
+
+message ListItemsRequest {
+  int32 limit = 1;
+  optional string cursor = 2;
+  optional ItemStatus status = 3;
+}
+
+message ListItemsResponse {
+  repeated Item items = 1;
+  optional string next_cursor = 2;
+  int32 total_count = 3;
+}
+
+message UpdateItemRequest {
+  string pid = 1;
+  optional string name = 2;
+  optional string description = 3;
+  optional ItemStatus status = 4;
+}
+
+message UpdateItemResponse {
+  Item item = 1;
+}
+
+message DeleteItemRequest {
+  string pid = 1;
+}
+
+// ============================================================================
+// Streaming
+// ============================================================================
+
+message WatchItemsRequest {
+  optional ItemStatus status = 1;
+}
+
+message ItemEvent {
+  oneof event {
+    Item created = 1;
+    Item updated = 2;
+    ItemDeleted deleted = 3;
+  }
+}
+
+message ItemDeleted {
+  string pid = 1;
+}

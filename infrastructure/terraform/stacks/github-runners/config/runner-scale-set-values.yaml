@@ -1,0 +1,99 @@
+# Local development values for GitHub Actions Runner Scale Set
+# Configuration with Kubernetes mode for local development
+
+# GitHub configuration
+# Note: githubConfigUrl and githubConfigSecret.github_token should be set via CLI
+
+# Runner configuration
+runnerGroup: "default"
+
+minRunners: 0
+# Scale set configuration - reduced for local development
+maxRunners: 5
+
+# Container mode configuration - Use Kubernetes mode
+containerMode:
+  type: "kubernetes"
+  kubernetesModeWorkVolumeClaim:
+    accessModes: ["ReadWriteOnce"]
+    storageClassName: "standard" # Use kind's default storage class
+    resources:
+      requests:
+        storage: 5Gi # Increased for build caches
+
+# Runner template configuration for local development
+template:
+  spec:
+    containers:
+      - name: runner
+        # image: ghcr.io/actions/actions-runner:latest
+        image: ghcr.io/mylesberueda/github-actions-runner-kubectl:3.1.0
+        command: ["/home/runner/run.sh"]
+
+        # Improved resource limits to prevent OOM kills
+        resources:
+          limits:
+            cpu: "4"
+            memory: "12Gi" # Increased for heavy workflows
+          requests:
+            cpu: "1" # Increased baseline CPU
+            memory: "4Gi"
+
+        # Environment variables
+        env:
+          - name: RUNNER_FEATURE_FLAG_ONCE
+            value: "true"
+          - name: RUNNER_FEATURE_FLAG_EPHEMERAL
+            value: "true"
+          - name: ACTIONS_RUNNER_PRINT_LOG_TO_STDOUT
+            value: "true"
+          # Environment variables for MinIO cache access
+          - name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER
+            value: "false"
+          - name: ENVIRONMENT
+            value: "local"
+          # MinIO credentials - set via Terraform (main.tf), not here
+          # See: TF_VAR_minio_access_key, TF_VAR_minio_secret_key
+          - name: MINIO_ENDPOINT
+            value: "http://minio.minio-system.svc.cluster.local:9000"
+          - name: ACTIONS_CACHE_URL
+            value: "http://minio.minio-system.svc.cluster.local:9000"
+          # Force IPv4 to avoid IPv6 issues
+          - name: CURL_IPRESOLVE
+            value: "4"
+
+    # Security context - no privileged containers needed in Kubernetes mode
+    securityContext:
+      fsGroup: 121
+      runAsNonRoot: true
+      runAsUser: 1001
+
+# Controller service account
+controllerServiceAccount:
+  namespace: arc-systems
+  name: arc-gha-rs-controller
+
+# Metrics configuration
+metrics:
+  enabled: true
+
+# Listener configuration for better health management
+listenerTemplate:
+  spec:
+    containers:
+      - name: listener
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+        resources:
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+        env:
+          - name: ACTIONS_RUNNER_CONTROLLER_IDLE_TIMEOUT
+            value: "1h"
+          - name: LOG_LEVEL
+            value: "debug"

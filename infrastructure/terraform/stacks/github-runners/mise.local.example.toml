@@ -1,0 +1,8 @@
+[env]
+TF_VAR_minio_access_key = "admin"
+TF_VAR_minio_secret_key = "minio123"
+TF_VAR_buildkit_aws_ec2_metadata_disabled = true
+
+# github.com/settings/personal-access-tokens -> generate new token
+# actions:rw, administration:rw, metadata:r
+TF_VAR_github_runner_token = "your-github-token"

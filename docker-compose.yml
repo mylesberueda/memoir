@@ -1,0 +1,232 @@
+name: "startup-ai"
+
+volumes:
+  startupai-postgres: {}
+  startupai-qdrant: {}
+  startupai-rustfs: {}
+
+services:
+  # To run all services, use `docker compose --profile dev up -d`
+  ### Databases ###
+  # You can run these services by themselves with `docker compose --profile dbs up`
+  postgres:
+    container_name: startupai-postgres
+    image: pgvector/pgvector:pg17
+    ports:
+      - $DB_PORT:5432
+    environment:
+      - POSTGRES_USER=$DB_USER
+      - POSTGRES_PASSWORD=$DB_PASS
+      - POSTGRES_DB=$DB_NAME
+    restart: unless-stopped
+    volumes:
+      - startupai-postgres:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    command: postgres -c listen_addresses='*'
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-d", "$DB_NAME", "-U", "$DB_USER"]
+      interval: "10s"
+      timeout: "30s"
+      retries: 5
+      start_period: "20s"
+    networks:
+      - default
+      - kind
+
+  redis:
+    container_name: startupai-redis
+    image: redis:alpine
+    ports:
+      - $RD_PORT:6379
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    command: redis-server --appendonly yes
+    networks:
+      - default
+      - kind
+
+  maildev:
+    container_name: startupai-maildev
+    image: maildev/maildev
+    ports:
+      - "1080:1080"
+      - "1025:1025"
+
+  zitadel:
+    container_name: startupai-zitadel
+    image: ghcr.io/zitadel/zitadel:latest
+    command: 'start-from-init --masterkey "$ZITADEL_MASTER_KEY" --tlsMode disabled'
+    environment:
+      - ZITADEL_DATABASE_POSTGRES_HOST=${ZITADEL_DATABASE_POSTGRES_HOST}
+      - ZITADEL_DATABASE_POSTGRES_PORT=${ZITADEL_DATABASE_POSTGRES_PORT}
+      - ZITADEL_DATABASE_POSTGRES_DATABASE=${ZITADEL_DATABASE_POSTGRES_DATABASE}
+      - ZITADEL_DATABASE_POSTGRES_USER_USERNAME=${ZITADEL_DATABASE_POSTGRES_USER_USERNAME}
+      - ZITADEL_DATABASE_POSTGRES_USER_PASSWORD=${ZITADEL_DATABASE_POSTGRES_USER_PASSWORD}
+      - ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE=${ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE} # default: disable
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME=${ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME}
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD=${ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD}
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE=${ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE} # default: disable
+      - ZITADEL_EXTERNALSECURE=${ZITADEL_EXTERNALSECURE} # default: false
+      - ZITADEL_EXTERNALPORT=${ZITADEL_EXTERNALPORT} #default: 8080
+      - ZITADEL_EXTERNALDOMAIN=${ZITADEL_EXTERNALDOMAIN} # default: localhost
+      - ZITADEL_MASTER_KEY=${ZITADEL_MASTER_KEY}
+      - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=${ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME}
+      - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD=${ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD}
+      - ZITADEL_FIRSTINSTANCE_ORG_NAME=${ZITADEL_FIRSTINSTANCE_ORG_NAME}
+
+      # Bootstrap admin service account for Terraform (DEVELOPMENT ONLY!)
+      # ⚠️  DO NOT USE IN STAGING/PRODUCTION - Creates IAM_OWNER service account in container
+      # For production: Manually create service account via console → Store in AWS Secrets Manager
+      #
+      # Creates a machine user with IAM_OWNER role and generates a JWT profile key
+      # Key can be read with: docker compose exec zitadel cat /machinekey/zitadel-admin-sa.json
+      - ZITADEL_FIRSTINSTANCE_MACHINEKEYPATH=/machinekey/zitadel-admin-sa.json
+      - ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME=terraform-admin
+      - ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME=Terraform Admin (IAM_OWNER)
+      - ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINEKEY_TYPE=1
+
+      # Enable token exchange for auth-service
+      - ZITADEL_EXPERIMENTAL_OIDCTOKENEXCHANGE=true
+
+      # Login V2 configuration
+      # Creates a login-client machine user with IAM_LOGIN_CLIENT role and PAT
+      # (needed for zitadel-login container used by console, and for web service session API)
+      - ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH=/machinekey/login-client.pat
+      - ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_USERNAME=login-client
+      - ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_NAME=Login Client (IAM_LOGIN_CLIENT)
+      - ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_PAT_EXPIRATIONDATE=2030-01-01T00:00:00Z
+      # IMPORTANT: Login V2 is DISABLED at instance level to allow per-app custom login URLs
+      # See: https://github.com/zitadel/zitadel/issues/10722
+      # The web app configures login_version.login_v2 per-application via Terraform
+      - ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED=false
+      - ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI=${ZITADEL_LOGIN_URL}
+      # Fallback OIDC URLs for apps without custom login_version configured
+      - ZITADEL_OIDC_DEFAULTLOGINURLV2=${ZITADEL_LOGIN_URL}/login?authRequest=
+      - ZITADEL_OIDC_DEFAULTLOGOUTURLV2=${ZITADEL_LOGIN_URL}/logout?post_logout_redirect=
+    ports:
+      - "5150:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./.data/zitadel:/machinekey
+    networks:
+      - default
+      - kind
+
+  zitadel-login:
+    container_name: startupai-zitadel-login
+    image: ghcr.io/zitadel/zitadel-login:latest
+    environment:
+      - ZITADEL_API_URL=${ZITADEL_API_URL}
+      - NEXT_PUBLIC_BASE_PATH=/ui/v2/login
+      - ZITADEL_SERVICE_USER_TOKEN_FILE=/machinekey/login-client.pat
+      - CUSTOM_REQUEST_HEADERS=Host:${ZITADEL_EXTERNALDOMAIN}
+    ports:
+      - "${ZITADEL_LOGIN_PORT}:3000"
+    depends_on:
+      - zitadel
+    volumes:
+      - ./.data/zitadel:/machinekey:ro
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: startupai-ollama
+    profiles:
+      - "ai"
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_GPU_COUNT=${OLLAMA_GPU_COUNT}
+      - OLLAMA_NEW_ENGINE=true
+    volumes:
+      - ${OLLAMA_STORAGE}:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${OLLAMA_GPU_COUNT:-0}
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  rustfs:
+    container_name: startupai-rustfs
+    image: rustfs/rustfs:latest
+    ports:
+      - "$S3_PORT:9000"
+      - "$S3_CONSOLE_PORT:9001"
+    environment:
+      - RUSTFS_ADDRESS=0.0.0.0:9000
+      - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_ACCESS_KEY=$S3_ROOT_USER
+      - RUSTFS_SECRET_KEY=$S3_ROOT_PASSWORD
+    volumes:
+      - startupai-rustfs:/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: "10s"
+      timeout: "5s"
+      retries: 5
+      start_period: "10s"
+    networks:
+      - default
+      - kind
+
+  qdrant:
+    container_name: startupai-qdrant
+    image: qdrant/qdrant:latest # Currently @ 1.17
+    ports:
+      - "$QDRANT_REST_PORT:6333"
+      - "$QDRANT_GRPC_PORT:6334"
+    volumes:
+      - startupai-qdrant:/qdrant/storage
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/6333'"]
+      interval: "10s"
+      timeout: "5s"
+      retries: 5
+      start_period: "10s"
+    networks:
+      - default
+      - kind
+
+  # Stripe CLI for forwarding webhooks to local development
+  # Requires STRIPE_SECRET_KEY in .env (use test mode secret key: sk_test_...)
+  #
+  # Setup: Create a webhook endpoint in Stripe Dashboard (test mode) with any URL (e.g., https://example.com/webhook)
+  # and subscribe to the events you need. The CLI will use that endpoint's signing secret.
+  #
+  # View webhook logs: docker compose logs -f stripe-cli
+  stripe-cli:
+    image: stripe/stripe-cli:latest
+    container_name: startupai-stripe-cli
+    command: listen --api-key ${STRIPE_SECRET_KEY} --forward-to host.docker.internal:5154/v1/webhooks/stripe
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    environment:
+      - STRIPE_API_KEY=${STRIPE_SECRET_KEY}
+
+networks:
+  # Kind cluster network - allows pods to reach Compose services by container name
+  # Kind automatically creates this network, or you can pre-create it:
+  #   docker network create kind
+  # After both are running, pods can reach: startupai-postgres:5432, startupai-redis:6379, etc.
+  kind:
+    external: true
+    name: kind

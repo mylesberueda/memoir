@@ -1,0 +1,26 @@
+# Kind cluster configuration for GitHub Actions Runner Controller
+# Uses Kubernetes container mode (not Docker-in-Docker)
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: startup-ai-github-runners
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.31.4
+    kubeadmConfigPatches:
+      - |
+        kind: ClusterConfiguration
+        apiServer:
+          extraArgs:
+            enable-admission-plugins: NodeRestriction
+        controllerManager:
+          extraArgs:
+            enable-hostpath-provisioner: "true"
+      - |
+        kind: KubeletConfiguration
+        failSwapOn: false
+        cgroupDriver: systemd
+    # Docker socket mount for local image builds (optional, security trade-off)
+    # Remove if not needed - runners use Kubernetes mode, not DinD
+    extraMounts:
+      - hostPath: /var/run/docker.sock
+        containerPath: /var/run/docker.sock

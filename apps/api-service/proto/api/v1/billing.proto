@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package api.v1;
+
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  TIER_FREE = 1;
+  TIER_PLUS = 2;
+  TIER_PRO = 3;
+  TIER_ENTERPRISE = 4;
+}
+
+enum RedirectType {
+  REDIRECT_TYPE_UNSPECIFIED = 0;
+  REDIRECT_TYPE_CHECKOUT = 1; // New subscription checkout
+  REDIRECT_TYPE_PORTAL = 2; // Existing customer portal (manage/upgrade/resubscribe)
+}
+
+service BillingService {
+  rpc GetCurrentPlan(GetCurrentPlanRequest) returns (GetCurrentPlanResponse);
+  rpc GetPricing(GetPricingRequest) returns (GetPricingResponse);
+  rpc CreateCheckoutSession(CreateCheckoutSessionRequest) returns (CreateCheckoutSessionResponse);
+  rpc CreatePortalSession(CreatePortalSessionRequest) returns (CreatePortalSessionResponse);
+}
+
+message GetCurrentPlanRequest {}
+
+message GetCurrentPlanResponse {
+  Tier tier = 1;
+  optional string expires_at = 2;
+}
+
+message GetPricingRequest {}
+
+message GetPricingResponse {
+  repeated PricingTier tiers = 1;
+}
+
+message PricingTier {
+  Tier tier = 1;
+  string name = 2;
+  int32 price_cents = 3;
+  int32 annual_price_cents = 4;
+  string currency = 5;
+  repeated string features = 6;
+}
+
+enum BillingInterval {
+  BILLING_INTERVAL_UNSPECIFIED = 0;
+  BILLING_INTERVAL_MONTHLY = 1;
+  BILLING_INTERVAL_ANNUAL = 2;
+}
+
+message CreateCheckoutSessionRequest {
+  Tier tier = 1;
+  BillingInterval interval = 2;
+}
+
+message CreateCheckoutSessionResponse {
+  string redirect_url = 1; // URL to redirect user to (checkout or portal)
+  RedirectType redirect_type = 2; // Indicates where user is being sent
+}
+
+message CreatePortalSessionRequest {}
+
+message CreatePortalSessionResponse {
+  string portal_url = 1;
+}

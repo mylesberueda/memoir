@@ -1,0 +1,90 @@
+name: "Cleanup Test Services"
+description: "Cleanup Redis and PostgreSQL services from Kubernetes"
+
+inputs:
+  namespace:
+    description: "Kubernetes namespace to cleanup"
+    required: false
+    default: "test-services"
+  force:
+    description: "Force cleanup even if namespace has other resources"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Cleanup test services
+      shell: bash
+      run: |
+        echo "🧹 Cleaning up test services in namespace ${{ inputs.namespace }}..."
+        
+        # Check if namespace exists
+        if kubectl get namespace ${{ inputs.namespace }} >/dev/null 2>&1; then
+          echo "Namespace ${{ inputs.namespace }} exists, proceeding with cleanup..."
+          
+          # Delete deployments
+          echo "Deleting deployments..."
+          kubectl delete deployment redis-test postgres-test -n ${{ inputs.namespace }} --ignore-not-found=true
+          
+          # Delete services
+          echo "Deleting services..."
+          kubectl delete service redis-test postgres-test -n ${{ inputs.namespace }} --ignore-not-found=true
+          
+          # Wait for pods to terminate
+          echo "Waiting for pods to terminate..."
+
+          # Check if Redis pods exist before waiting
+          if kubectl get pods -l app=redis-test -n ${{ inputs.namespace }} --no-headers 2>/dev/null | grep -q .; then
+            echo "Waiting for Redis pods to terminate..."
+            kubectl wait --for=delete pod -l app=redis-test -n ${{ inputs.namespace }} --timeout=60s || echo "Redis pods cleanup timeout"
+          else
+            echo "No Redis pods found to wait for"
+          fi
+
+          # Check if PostgreSQL pods exist before waiting
+          if kubectl get pods -l app=postgres-test -n ${{ inputs.namespace }} --no-headers 2>/dev/null | grep -q .; then
+            echo "Waiting for PostgreSQL pods to terminate..."
+            kubectl wait --for=delete pod -l app=postgres-test -n ${{ inputs.namespace }} --timeout=60s || echo "PostgreSQL pods cleanup timeout"
+          else
+            echo "No PostgreSQL pods found to wait for"
+          fi
+          
+          # If force cleanup or namespace only contains our resources, delete the namespace
+          if [ "${{ inputs.force }}" = "true" ]; then
+            echo "Force cleanup enabled, deleting namespace..."
+            kubectl delete namespace ${{ inputs.namespace }} --ignore-not-found=true
+          else
+            # Check if namespace has other resources (with proper error handling)
+            RESOURCE_COUNT=$(kubectl get all -n ${{ inputs.namespace }} --no-headers 2>/dev/null | wc -l || echo "0")
+            if [ "$RESOURCE_COUNT" -eq 0 ]; then
+              echo "Namespace is empty, deleting..."
+              kubectl delete namespace ${{ inputs.namespace }} --ignore-not-found=true
+            else
+              echo "Namespace has other resources ($RESOURCE_COUNT), keeping it..."
+            fi
+          fi
+          
+          echo "✅ Cleanup completed"
+        else
+          echo "Namespace ${{ inputs.namespace }} does not exist, nothing to cleanup"
+        fi
+
+    - name: Verify cleanup
+      shell: bash
+      run: |
+        echo "🔍 Verifying cleanup..."
+
+        # Check if any test services are still running (with proper error handling)
+        REDIS_PODS=$(kubectl get pods -l app=redis-test --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
+        POSTGRES_PODS=$(kubectl get pods -l app=postgres-test --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
+
+        if [ "$REDIS_PODS" -eq 0 ] && [ "$POSTGRES_PODS" -eq 0 ]; then
+          echo "✅ All test service pods have been cleaned up"
+        else
+          echo "⚠️  Some test service pods may still be running:"
+          echo "  Redis pods: $REDIS_PODS"
+          echo "  PostgreSQL pods: $POSTGRES_PODS"
+          kubectl get pods -l app=redis-test --all-namespaces 2>/dev/null || echo "No Redis pods found"
+          kubectl get pods -l app=postgres-test --all-namespaces 2>/dev/null || echo "No PostgreSQL pods found"
+        fi

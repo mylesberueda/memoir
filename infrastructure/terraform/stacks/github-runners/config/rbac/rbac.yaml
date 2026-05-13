@@ -1,0 +1,55 @@
+---
+# ClusterRole for GitHub Actions runners to manage test services
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: github-runner-test-services
+  labels:
+    app.kubernetes.io/name: github-runner-test-services
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/managed-by: github-runners-setup
+rules:
+# Namespace management permissions
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "create", "patch", "update"]
+
+# Permissions for test-services namespace specifically
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+  resourceNames: []
+
+# Deployment and ReplicaSet permissions for test services
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "create", "update", "patch", "delete"]
+
+# Pod execution permissions (for database setup commands)
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+
+# Events permissions (for debugging)
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding to bind the role to the runner service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: github-runner-test-services
+  labels:
+    app.kubernetes.io/name: github-runner-test-services
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/managed-by: github-runners-setup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: github-runner-test-services
+subjects:
+- kind: ServiceAccount
+  name: arc-runner-set-gha-rs-kube-mode
+  namespace: arc-runners

@@ -1,0 +1,216 @@
+name: "Resolve GitHub Project"
+description: >
+  Ensures GitHub Project V2 repo variables (PROJECT_ID, PROJECT_NUMBER, and
+  optionally a field ID) are set and valid. Discovers via GraphQL if missing,
+  verifies via GraphQL if present, and updates if stale.
+
+inputs:
+  project-name:
+    description: "Name of the GitHub Project (e.g. 'startup.ai')"
+    required: true
+  project-owner:
+    description: "GitHub username that owns the project"
+    required: true
+  repo-name:
+    description: "Repository name"
+    required: true
+  field-name:
+    description: "Name of the field to resolve (e.g. 'End Date'). Leave empty to skip."
+    required: false
+    default: ""
+
+outputs:
+  project-id:
+    description: "The project's global node ID"
+    value: ${{ steps.resolve.outputs.project-id }}
+  project-number:
+    description: "The project number"
+    value: ${{ steps.resolve.outputs.project-number }}
+  field-id:
+    description: "The resolved field's global node ID (empty if field-name not provided)"
+    value: ${{ steps.resolve.outputs.field-id }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Resolve and validate project identifiers
+      id: resolve
+      shell: bash
+      env:
+        INPUT_PROJECT_NAME: ${{ inputs.project-name }}
+        INPUT_PROJECT_OWNER: ${{ inputs.project-owner }}
+        INPUT_REPO_NAME: ${{ inputs.repo-name }}
+        INPUT_FIELD_NAME: ${{ inputs.field-name }}
+      run: |
+        set -euo pipefail
+
+        repo="$INPUT_PROJECT_OWNER/$INPUT_REPO_NAME"
+
+        # --- Read cached repo variables ---
+
+        read_var() {
+          gh variable get "$1" --repo "$repo" 2>/dev/null || echo ""
+        }
+
+        cached_project_id=$(read_var PROJECT_ID)
+        cached_project_number=$(read_var PROJECT_NUMBER)
+
+        cached_field_id=""
+        field_var_name=""
+        if [ -n "$INPUT_FIELD_NAME" ]; then
+          field_var_name=$(echo "${INPUT_FIELD_NAME}" | tr '[:lower:] ' '[:upper:]_')_FIELD_ID
+          cached_field_id=$(read_var "$field_var_name")
+        fi
+
+        # --- Discovery functions ---
+
+        discover_project() {
+          echo "Discovering project '$INPUT_PROJECT_NAME' for user $INPUT_PROJECT_OWNER"
+          local data
+          data=$(gh api graphql -f query="
+          {
+            user(login: \"$INPUT_PROJECT_OWNER\") {
+              projectsV2(first: 100) {
+                nodes { id number title }
+              }
+            }
+          }" | jq -r --arg name "$INPUT_PROJECT_NAME" \
+            '.data.user.projectsV2.nodes[] | select(.title == $name)')
+
+          project_id=$(echo "$data" | jq -r '.id')
+          project_number=$(echo "$data" | jq -r '.number')
+
+          if [ -z "$project_id" ] || [ "$project_id" = "null" ]; then
+            echo "::error::Project '$INPUT_PROJECT_NAME' not found for user $INPUT_PROJECT_OWNER"
+            exit 1
+          fi
+          echo "Discovered project: number=$project_number id=$project_id"
+        }
+
+        discover_field() {
+          echo "Discovering field '$INPUT_FIELD_NAME' in project $project_number"
+          field_id=$(gh api graphql -f query="
+          {
+            user(login: \"$INPUT_PROJECT_OWNER\") {
+              projectV2(number: $project_number) {
+                fields(first: 100) {
+                  nodes {
+                    ... on ProjectV2FieldCommon { id name }
+                  }
+                }
+              }
+            }
+          }" | jq -r --arg name "$INPUT_FIELD_NAME" \
+            '.data.user.projectV2.fields.nodes[] | select(.name == $name) | .id')
+
+          if [ -z "$field_id" ] || [ "$field_id" = "null" ]; then
+            echo "::error::Field '$INPUT_FIELD_NAME' not found in project $project_number"
+            exit 1
+          fi
+          echo "Discovered field: id=$field_id"
+        }
+
+        # --- Verify cached values against the API ---
+
+        verify() {
+          echo "Verifying cached values against API"
+          local data
+          data=$(gh api graphql -f query="
+          {
+            user(login: \"$INPUT_PROJECT_OWNER\") {
+              projectV2(number: $cached_project_number) {
+                id
+                title
+                fields(first: 100) {
+                  nodes {
+                    ... on ProjectV2FieldCommon { id name }
+                  }
+                }
+              }
+            }
+          }" 2>/dev/null) || return 1
+
+          # Check project ID matches
+          local actual_id
+          actual_id=$(echo "$data" | jq -r '.data.user.projectV2.id')
+          if [ "$actual_id" != "$cached_project_id" ]; then
+            echo "Cached PROJECT_ID is stale (expected $actual_id, got $cached_project_id)"
+            return 1
+          fi
+
+          # Check project title matches
+          local actual_title
+          actual_title=$(echo "$data" | jq -r '.data.user.projectV2.title')
+          if [ "$actual_title" != "$INPUT_PROJECT_NAME" ]; then
+            echo "Cached project number points to '$actual_title', not '$INPUT_PROJECT_NAME'"
+            return 1
+          fi
+
+          # Check field ID if needed
+          if [ -n "$INPUT_FIELD_NAME" ] && [ -n "$cached_field_id" ]; then
+            local actual_field_id
+            actual_field_id=$(echo "$data" | jq -r --arg name "$INPUT_FIELD_NAME" \
+              '.data.user.projectV2.fields.nodes[] | select(.name == $name) | .id')
+            if [ "$actual_field_id" != "$cached_field_id" ]; then
+              echo "Cached field ID is stale (expected $actual_field_id, got $cached_field_id)"
+              return 1
+            fi
+          fi
+
+          echo "Cached values verified"
+          return 0
+        }
+
+        # --- Save to repo variables ---
+
+        save_vars() {
+          echo "Saving values as repo variables"
+          gh variable set PROJECT_ID --body "$project_id" --repo "$repo" 2>/dev/null || true
+          gh variable set PROJECT_NUMBER --body "$project_number" --repo "$repo" 2>/dev/null || true
+          if [ -n "$field_var_name" ] && [ -n "${field_id:-}" ]; then
+            gh variable set "$field_var_name" --body "$field_id" --repo "$repo" 2>/dev/null || true
+          fi
+        }
+
+        # --- Main logic ---
+
+        project_id=""
+        project_number=""
+        field_id=""
+
+        has_cached_project=false
+        if [ -n "$cached_project_id" ] && [ -n "$cached_project_number" ]; then
+          has_cached_project=true
+        fi
+
+        has_cached_field=true
+        if [ -n "$INPUT_FIELD_NAME" ] && [ -z "$cached_field_id" ]; then
+          has_cached_field=false
+        fi
+
+        if [ "$has_cached_project" = true ] && [ "$has_cached_field" = true ]; then
+          # All cached — verify
+          if verify; then
+            project_id="$cached_project_id"
+            project_number="$cached_project_number"
+            field_id="$cached_field_id"
+          else
+            # Stale — rediscover and save
+            discover_project
+            if [ -n "$INPUT_FIELD_NAME" ]; then
+              discover_field
+            fi
+            save_vars
+          fi
+        else
+          # Missing — discover and save
+          discover_project
+          if [ -n "$INPUT_FIELD_NAME" ]; then
+            discover_field
+          fi
+          save_vars
+        fi
+
+        echo "project-id=$project_id" >> "$GITHUB_OUTPUT"
+        echo "project-number=$project_number" >> "$GITHUB_OUTPUT"
+        echo "field-id=${field_id:-}" >> "$GITHUB_OUTPUT"

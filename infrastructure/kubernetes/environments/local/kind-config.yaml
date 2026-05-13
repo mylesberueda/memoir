@@ -1,0 +1,35 @@
+# Kind cluster configuration for local GitOps testing
+# Creates a cluster suitable for testing Helm charts and ArgoCD deployments
+#
+# Usage:
+#   kind create cluster --config infrastructure/kubernetes/environments/local/kind-config.yaml --name startup-ai
+#
+# Kind automatically creates/uses the "kind" Docker network.
+# Docker Compose services (postgres, redis, zitadel) also join this network,
+# so pods can reach them by container name:
+#   - startupai-postgres:5432
+#   - startupai-redis:6379
+#   - startupai-zitadel:8080
+#
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: startup-ai
+
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.31.4
+    # Port mappings for nginx-ingress controller
+    # extraPortMappings:
+    #   - containerPort: 80
+    #     hostPort: 80
+    #     protocol: TCP
+    #   - containerPort: 443
+    #     hostPort: 443
+    #     protocol: TCP
+    # Label for ingress-nginx nodeSelector
+    labels:
+      ingress-ready: "true"
+
+  # Worker node for running services
+  - role: worker
+    image: kindest/node:v1.31.4

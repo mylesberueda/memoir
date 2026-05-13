@@ -1,0 +1,61 @@
+# Local environment values for web (Next.js)
+# GitOps-managed: CI pushes to GHCR, ArgoCD pulls from GHCR
+
+nameOverride: web
+image:
+  repository: ghcr.io/mylesberueda/startup-ai/web
+  tag: ab22d39285e8b5419e29a26dcbbe48e15cd28801
+  pullPolicy: IfNotPresent
+imagePullSecrets:
+  - name: ghcr-pull-secret
+service:
+  port: 3000
+  targetPort: 3000
+# Web service gets ingress in local environment
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: localhost
+      paths:
+        - path: /
+          pathType: Prefix
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+# Next.js health check
+healthCheck:
+  enabled: true
+  httpPath: /api/health
+  port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+readinessProbe:
+  enabled: true
+  httpPath: /api/health
+  port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+  successThreshold: 1
+autoscaling:
+  enabled: false
+# Next.js doesn't need read-only root (it writes to .next)
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+# Reference external ConfigMap generated from .env file
+envFrom:
+  - configMapRef:
+      name: web-env

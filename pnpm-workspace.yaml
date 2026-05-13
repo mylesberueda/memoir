@@ -1,0 +1,4 @@
+packages:
+  - "apps/agent-web"
+  - "apps/web"
+  - "packages/*"

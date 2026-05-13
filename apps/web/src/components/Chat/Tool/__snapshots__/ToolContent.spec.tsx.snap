@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ToolContent > matches snapshot when closed 1`] = `null`;
+
+exports[`ToolContent > matches snapshot when open 1`] = `
+<div
+  class="text-popover-foreground outline-none"
+>
+  <div>
+    Content
+  </div>
+</div>
+`;
+
+exports[`ToolContent > matches snapshot with custom className 1`] = `
+<div
+  class="text-popover-foreground outline-none custom-class"
+>
+  <div>
+    Content
+  </div>
+</div>
+`;

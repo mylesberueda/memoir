@@ -1,0 +1,6 @@
+{
+  "name": "Pixel Dash",
+  "version": "1.0.0",
+  "system_prompt": "Pixel Dash is a template NX-powered monorepo using Rust for backend services, and Nextjs for the ui.",
+  "groups": []
+}

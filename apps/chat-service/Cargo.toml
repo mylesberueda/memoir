@@ -1,0 +1,52 @@
+[package]
+name = "chat-service"
+version = "0.1.0"
+description = "Chat service (gRPC microservice) for startup.ai"
+authors = ["Myles Berueda <myles@polypixel.io>"]
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = { workspace = true }
+color-eyre = { workspace = true }
+common-rs = { path = "../../packages/common-rs" }
+dashmap = { workspace = true }
+platform-rs = { path = "../../packages/platform-rs" }
+fred = { workspace = true, features = ["subscriber-client"] }
+http = { workspace = true }
+jsonwebtoken = { version = "10.2", features = ["rust_crypto"] }
+kameo = { workspace = true }
+chat-service-migration = { path = "./migration" }
+nanoid = { workspace = true }
+pbjson-types = "0.9.0"
+prost = "0.14.1"
+proto-rs = { path = "../../packages/proto-rs" }
+reqwest = { workspace = true, features = ["json"] }
+sea-orm = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = "0.1.17"
+tonic = { workspace = true }
+tonic-health = { version = "0.14.2" }
+tower = { workspace = true }
+axum = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
+
+[dependencies.clap]
+git = "https://github.com/clap-rs/clap"
+branch = "master"
+features = ["derive"]
+
+[features]
+default = []
+integration = []
+unit = []
+
+[dev-dependencies]
+serial_test = "3.1.1"
+test-context = "0.5"

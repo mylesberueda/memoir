@@ -1,0 +1,52 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Modal > matches snapshot when closed 1`] = `
+<dialog
+  class="modal"
+>
+  <div>
+    Modal content
+  </div>
+</dialog>
+`;
+
+exports[`Modal > matches snapshot when open 1`] = `
+<dialog
+  class="modal modal-open"
+>
+  <div>
+    Modal content
+  </div>
+</dialog>
+`;
+
+exports[`Modal > matches snapshot with custom content 1`] = `
+<dialog
+  class="modal modal-open"
+>
+  <div
+    class="modal-box"
+  >
+    <h3
+      class="font-bold text-lg"
+    >
+      Custom Title
+    </h3>
+    <p
+      class="py-4"
+    >
+      Custom modal content with multiple elements
+    </p>
+    <div
+      class="modal-action"
+    >
+      <button
+        class="btn"
+        type="button"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+</dialog>
+`;

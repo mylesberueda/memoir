@@ -1,0 +1,134 @@
+name: CI
+
+# Simplified CI workflow:
+#   1. detect-changes: Find affected apps
+#   2. lint: Fast lint check (runs outside Docker)
+#   3. docker: Test + Build in Docker (uses --target test, then --target runtime)
+#
+# Docker handles test and build via multi-stage Dockerfiles:
+#   - --target test: Runs tests, exits 0/1
+#   - --target runtime: Builds production image, pushes to registry
+
+on:
+  pull_request:
+    branches: [dev, 'ci/test/*']
+  push:
+    branches: [dev, main, 'ci/test/*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+  pull-requests: read
+  packages: write
+  id-token: write # Required for GitHub OIDC → ArgoCD auth via Cloudflare Tunnel
+
+env:
+  NX_KEY: ${{ secrets.NX_KEY }}
+
+jobs:
+  # Skip CI if this commit was already tested via PR
+  check-skip:
+    runs-on: arc-runner-set
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - name: Check if CI should run
+        id: check
+        run: |
+          # Always run on PRs, workflow_dispatch, and main branch
+          if [ "${{ github.event_name }}" = "pull_request" ] || \
+             [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
+             [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "should-run=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # For dev branch pushes, check if CI already passed on this commit
+          if [ "${{ github.ref }}" = "refs/heads/dev" ]; then
+            CI_STATUS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&status=success&event=pull_request" | \
+              jq -r '.workflow_runs[] | select(.name == "CI") | .conclusion' | head -1)
+
+            if [ "$CI_STATUS" = "success" ]; then
+              echo "✅ CI already passed on this commit - skipping"
+              echo "should-run=false" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+
+          echo "should-run=true" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Detect which projects changed
+  detect-changes:
+    needs: [check-skip]
+    if: needs.check-skip.outputs.should-run == 'true'
+    uses: ./.github/workflows/detect-changes.yml
+    secrets: inherit
+
+  # Fast lint check (runs outside Docker for quick feedback)
+  lint:
+    needs: [check-skip, detect-changes]
+    if: needs.check-skip.outputs.should-run == 'true'
+    uses: ./.github/workflows/lint.yml
+    with:
+      node-projects: ${{ needs.detect-changes.outputs.node-lint }}
+      rust-projects: ${{ needs.detect-changes.outputs.rust-lint }}
+    secrets: inherit
+
+  # Docker test + build (runs after lint passes)
+  # Environment mapping:
+  #   - main branch → production
+  #   - dev branch → staging
+  #   - ci/test/* branches → local (for testing progressive deploy locally)
+  docker:
+    needs: [check-skip, detect-changes, lint]
+    if: |
+      needs.check-skip.outputs.should-run == 'true' &&
+      needs.lint.result == 'success' &&
+      needs.detect-changes.outputs.has-docker-builds == 'true'
+    uses: ./.github/workflows/docker.yml
+    with:
+      docker-matrix: ${{ needs.detect-changes.outputs.docker-matrix }}
+      push: ${{ github.event_name == 'push' }}
+      environment: ${{ github.ref == 'refs/heads/main' && 'production' || (startsWith(github.ref, 'refs/heads/ci/test/') && 'local' || 'staging') }}
+      registry: ${{ vars.CONTAINER_REGISTRY || 'ghcr' }}
+      gar-project-id: ${{ vars.GCP_PROJECT_ID || '' }}
+      gar-region: ${{ vars.GAR_REGION || 'us-central1' }}
+    secrets: inherit
+
+  # Summary
+  ci-summary:
+    runs-on: arc-runner-set
+    needs: [check-skip, detect-changes, lint, docker]
+    if: always()
+    steps:
+      - name: CI Summary
+        run: |
+          echo "## CI Summary"
+          echo ""
+
+          if [ "${{ needs.check-skip.outputs.should-run }}" = "false" ]; then
+            echo "⏭️ CI skipped - commit already tested via PR"
+            exit 0
+          fi
+
+          echo "| Job | Result |"
+          echo "|-----|--------|"
+          echo "| Detect Changes | ${{ needs.detect-changes.result }} |"
+          echo "| Lint | ${{ needs.lint.result }} |"
+          echo "| Docker | ${{ needs.docker.result }} |"
+
+          # Fail if any job failed
+          if [ "${{ needs.detect-changes.result }}" = "failure" ] || \
+             [ "${{ needs.lint.result }}" = "failure" ] || \
+             [ "${{ needs.docker.result }}" = "failure" ]; then
+            echo ""
+            echo "❌ CI Failed"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ CI Passed"

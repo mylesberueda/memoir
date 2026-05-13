@@ -1,0 +1,3 @@
+# Ignore generated OpenAPI client code
+packages/openapi-rust/src/api_client/src/
+packages/openapi-rust/src/agent_api_client/src/

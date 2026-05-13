@@ -1,0 +1,95 @@
+name: Set End Date When Issue is Done
+
+# This workflow triggers when an issue is closed.
+on:
+  issues:
+    types:
+      - closed
+
+jobs:
+  set_end_date_on_project:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - name: Update End Date for closed issue
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          PROJECT_NAME: ${{ vars.PROJECT_NAME }}
+          PROJECT_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          # Fail the step if any command in a pipeline fails (not just the last one).
+          # Without this, `gh ... | jq ...` silently swallows gh's exit code, masking auth/scope errors as "field not found".
+          set -o pipefail
+
+          # Get current date
+          current_date=$(date -u +'%Y-%m-%d')
+
+          # Query user projects using GraphQL API (avoids "unknown owner type" error)
+          project_data=$(gh api graphql -f query="
+          {
+            user(login: \"$PROJECT_OWNER\") {
+              projectsV2(first: 20) {
+                nodes {
+                  id
+                  number
+                  title
+                }
+              }
+            }
+          }" | jq -r --arg name "$PROJECT_NAME" '.data.user.projectsV2.nodes[] | select(.title == $name)')
+
+          project_id=$(echo "$project_data" | jq -r '.id')
+          project_number=$(echo "$project_data" | jq -r '.number')
+
+          if [ -z "$project_id" ]; then
+            echo "Project named '$PROJECT_NAME' not found for repo $PROJECT_OWNER/$REPO_NAME"
+            exit 1
+          fi
+          # Query project fields via GraphQL by node id (avoids "unknown owner type" from `gh project` subcommands)
+          field_id=$(gh api graphql -f query="
+          {
+            node(id: \"$project_id\") {
+              ... on ProjectV2 {
+                fields(first: 50) {
+                  nodes {
+                    ... on ProjectV2Field { id name }
+                    ... on ProjectV2IterationField { id name }
+                    ... on ProjectV2SingleSelectField { id name }
+                  }
+                }
+              }
+            }
+          }" | jq -r '.data.node.fields.nodes[] | select(.name == "End Date") | .id')
+          if [ -z "$field_id" ]; then
+            echo "End Date field not found"
+            exit 1
+          fi
+          issue_number="${{ github.event.issue.number }}"
+          echo "Looking for issue number: $issue_number"
+
+          # Query the issue directly to get its project item ID (more efficient than listing all items)
+          item_id=$(gh api graphql -f query="
+          {
+            repository(owner: \"$PROJECT_OWNER\", name: \"$REPO_NAME\") {
+              issue(number: $issue_number) {
+                projectItems(first: 10) {
+                  nodes {
+                    id
+                    project {
+                      title
+                      number
+                    }
+                  }
+                }
+              }
+            }
+          }" | jq -r --arg project_name "$PROJECT_NAME" '.data.repository.issue.projectItems.nodes[] | select(.project.title == $project_name) | .id')
+          if [ -z "$item_id" ]; then
+            echo "Item not found for issue node - skipping"
+            exit 0
+          fi
+          gh project item-edit --id "$item_id" --field-id "$field_id" --date "$current_date" --project-id "$project_id"

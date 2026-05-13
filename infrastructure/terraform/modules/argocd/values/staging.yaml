@@ -1,0 +1,72 @@
+# Staging environment - medium resources for GKE
+
+global:
+  domain: argocd.staging.example.com
+
+configs:
+  params:
+    server.insecure: false
+
+server:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  ingress:
+    enabled: true
+    ingressClassName: gce
+    annotations:
+      kubernetes.io/ingress.global-static-ip-name: argocd-staging-ip
+      networking.gke.io/managed-certificates: argocd-staging-cert
+    hosts:
+      - argocd.staging.example.com
+    tls:
+      - hosts:
+          - argocd.staging.example.com
+
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+repoServer:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+redis:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+applicationSet:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+notifications:
+  enabled: true

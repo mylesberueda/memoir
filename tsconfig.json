@@ -1,0 +1,18 @@
+{
+	"extends": "./tsconfig.base.json",
+	"files": [],
+	"references": [
+		{
+			"path": "./apps/web"
+		},
+		{
+			"path": "./e2e/web"
+		}
+	],
+	"ts-node": {
+		"compilerOptions": {
+			"module": "commonjs",
+			"moduleResolution": "node10"
+		}
+	}
+}

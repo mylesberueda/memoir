@@ -1,0 +1,503 @@
+name: Docker Build and Push
+
+# Reusable workflow for building and pushing Docker images
+# Uses BuildKit rootless for ARC runners (no Docker daemon required)
+# Supports both GHCR and GCP Artifact Registry
+#
+# BuildKit advantages over Kaniko:
+#   - Native support for RUN --mount=type=cache (speeds up cargo/npm builds)
+#   - Registry-based cache persistence across pods
+#   - Actively maintained (Kaniko archived June 2025)
+#
+# Flow:
+#   1. docker-test: Build --target test (runs tests, no image pushed)
+#   2. docker-build: Build --target runtime (only if tests pass, pushes image)
+
+on:
+  workflow_call:
+    inputs:
+      docker-matrix:
+        description: "Docker build matrix with project names"
+        required: true
+        type: string
+      environment:
+        description: "Target environment (local, staging, or production)"
+        required: true
+        type: string
+      push:
+        description: "Whether to push images to registry"
+        required: false
+        type: boolean
+        default: false
+      registry:
+        description: "Container registry to use (ghcr or gar)"
+        required: false
+        type: string
+        default: "ghcr"
+      gar-project-id:
+        description: "GCP project ID for Artifact Registry (required if registry=gar)"
+        required: false
+        type: string
+      gar-region:
+        description: "GCP region for Artifact Registry"
+        required: false
+        type: string
+        default: "us-central1"
+    outputs:
+      pushed-images:
+        description: "JSON array of pushed image references"
+        value: ${{ jobs.docker-build.outputs.pushed-images }}
+    secrets:
+      GCP_SA_KEY:
+        description: "GCP service account key for Artifact Registry auth"
+        required: false
+
+env:
+  # Registry configuration
+  GHCR_REGISTRY: ghcr.io/${{ github.repository_owner }}/startup-ai
+  GAR_REGISTRY: ${{ inputs.gar-region }}-docker.pkg.dev/${{ inputs.gar-project-id }}/startup-ai
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Run tests inside Docker (uses --target test)
+  # All Dockerfiles have a 'test' stage that runs tests
+  # ---------------------------------------------------------------------------
+  docker-test:
+    runs-on: arc-runner-set
+    if: inputs.docker-matrix != '{"include":[]}'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(inputs.docker-matrix) }}
+    name: test (${{ matrix.project }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up registry variables
+        id: registry
+        run: |
+          if [ "${{ inputs.registry }}" = "gar" ]; then
+            echo "url=${{ env.GAR_REGISTRY }}" >> $GITHUB_OUTPUT
+          else
+            echo "url=${{ env.GHCR_REGISTRY }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Docker credentials
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.docker"
+          if [ "${{ inputs.registry }}" = "gar" ]; then
+            cat > "$GITHUB_WORKSPACE/.docker/config.json" << EOF
+          {
+            "auths": {
+              "${{ inputs.gar-region }}-docker.pkg.dev": {
+                "auth": "$(echo -n "_json_key_base64:${{ secrets.GCP_SA_KEY }}" | base64 -w0)"
+              }
+            }
+          }
+          EOF
+          else
+            cat > "$GITHUB_WORKSPACE/.docker/config.json" << EOF
+          {
+            "auths": {
+              "ghcr.io": {
+                "auth": "$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64 -w0)"
+              }
+            }
+          }
+          EOF
+          fi
+
+      # BuildKit rootless in daemonless mode
+      # Pod template overrides entrypoint to buildctl-daemonless.sh
+      # S3 cache (MinIO) persists RUN --mount=type=cache across pods
+      # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are injected via pod template
+      - name: Run tests with BuildKit (--target test)
+        uses: docker://moby/buildkit:rootless
+        with:
+          args: >-
+            build
+            --frontend=dockerfile.v0
+            --local=context=/github/workspace
+            --local=dockerfile=/github/workspace/apps/${{ matrix.project }}
+            --opt=target=test
+            --import-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://minio.minio-system.svc.cluster.local:9000,use_path_style=true
+            --export-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://minio.minio-system.svc.cluster.local:9000,use_path_style=true,mode=max
+        env:
+          BUILDKITD_FLAGS: "--oci-worker-no-process-sandbox"
+
+  # ---------------------------------------------------------------------------
+  # Build and push Docker images (uses --target runtime)
+  # Depends on docker-test passing
+  # ---------------------------------------------------------------------------
+  docker-build:
+    runs-on: arc-runner-set
+    needs: [docker-test]
+    if: inputs.docker-matrix != '{"include":[]}'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(inputs.docker-matrix) }}
+    name: build (${{ matrix.project }})
+    outputs:
+      pushed-images: ${{ steps.collect-images.outputs.images }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker metadata
+        id: meta
+        run: |
+          # Determine registry URL based on input
+          if [ "${{ inputs.registry }}" = "gar" ]; then
+            REGISTRY="${{ env.GAR_REGISTRY }}"
+          else
+            REGISTRY="${{ env.GHCR_REGISTRY }}"
+          fi
+
+          # Generate image tags
+          SHA_TAG="${{ github.sha }}"
+          SHORT_SHA=$(echo "$SHA_TAG" | cut -c1-7)
+
+          # Environment-specific latest tag
+          if [ "${{ inputs.environment }}" = "production" ]; then
+            LATEST_TAG="latest"
+          else
+            LATEST_TAG="latest-${{ inputs.environment }}"
+          fi
+
+          # Full image references
+          IMAGE_BASE="${REGISTRY}/${{ matrix.project }}"
+          IMAGE_SHA="${IMAGE_BASE}:${SHA_TAG}"
+          IMAGE_SHORT="${IMAGE_BASE}:${SHORT_SHA}"
+          IMAGE_LATEST="${IMAGE_BASE}:${LATEST_TAG}"
+
+          echo "registry=$REGISTRY" >> $GITHUB_OUTPUT
+          echo "image-base=$IMAGE_BASE" >> $GITHUB_OUTPUT
+          echo "sha-tag=$SHA_TAG" >> $GITHUB_OUTPUT
+          echo "short-sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "latest-tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "image-sha=$IMAGE_SHA" >> $GITHUB_OUTPUT
+          echo "image-short=$IMAGE_SHORT" >> $GITHUB_OUTPUT
+          echo "image-latest=$IMAGE_LATEST" >> $GITHUB_OUTPUT
+
+          echo "🐳 Docker metadata for ${{ matrix.project }}:"
+          echo "  Registry: $REGISTRY"
+          echo "  SHA Tag: $SHA_TAG"
+          echo "  Latest Tag: $LATEST_TAG"
+          echo "  Image: $IMAGE_SHA"
+
+      # Create Docker config.json for BuildKit
+      # The ARC pod template copies this to /home/user/.docker
+      - name: Create Docker credentials
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.docker"
+          if [ "${{ inputs.registry }}" = "gar" ]; then
+            cat > "$GITHUB_WORKSPACE/.docker/config.json" << EOF
+          {
+            "auths": {
+              "${{ inputs.gar-region }}-docker.pkg.dev": {
+                "auth": "$(echo -n "_json_key_base64:${{ secrets.GCP_SA_KEY }}" | base64 -w0)"
+              }
+            }
+          }
+          EOF
+          else
+            cat > "$GITHUB_WORKSPACE/.docker/config.json" << EOF
+          {
+            "auths": {
+              "ghcr.io": {
+                "auth": "$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64 -w0)"
+              }
+            }
+          }
+          EOF
+          fi
+          echo "✅ Created Docker config at $GITHUB_WORKSPACE/.docker/config.json"
+
+      # BuildKit rootless in daemonless mode
+      # Pod template overrides entrypoint to buildctl-daemonless.sh
+      # S3 cache (MinIO) persists RUN --mount=type=cache across pods
+      # AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are injected via pod template
+      - name: Build image with BuildKit
+        uses: docker://moby/buildkit:rootless
+        with:
+          args: >-
+            build
+            --frontend=dockerfile.v0
+            --local=context=/github/workspace
+            --local=dockerfile=/github/workspace/apps/${{ matrix.project }}
+            --opt=target=runtime
+            --import-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://minio.minio-system.svc.cluster.local:9000,use_path_style=true
+            --export-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://minio.minio-system.svc.cluster.local:9000,use_path_style=true,mode=max
+            --output=type=image,name=${{ steps.meta.outputs.image-sha }},push=${{ inputs.push }}
+            --output=type=image,name=${{ steps.meta.outputs.image-short }},push=${{ inputs.push }}
+            --output=type=image,name=${{ steps.meta.outputs.image-latest }},push=${{ inputs.push }}
+        env:
+          BUILDKITD_FLAGS: "--oci-worker-no-process-sandbox"
+
+      - name: Collect pushed images
+        if: inputs.push
+        id: collect-images
+        run: |
+          # Output the pushed image reference for downstream jobs
+          echo "images<<EOF" >> $GITHUB_OUTPUT
+          echo '{"project": "${{ matrix.project }}", "sha": "${{ steps.meta.outputs.sha-tag }}", "image": "${{ steps.meta.outputs.image-sha }}"}' >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "✅ Pushed images for ${{ matrix.project }}:"
+          echo "  - ${{ steps.meta.outputs.image-sha }}"
+          echo "  - ${{ steps.meta.outputs.image-short }}"
+          echo "  - ${{ steps.meta.outputs.image-latest }}"
+
+  # ---------------------------------------------------------------------------
+  # Deploy-branch pattern.
+  #
+  # This job pushes Kubernetes values updates to a deploy branch named after
+  # the source branch:
+  #   - main → deploy/main  (production)
+  #   - dev  → deploy/dev   (staging)
+  #
+  # The local environment (ci/test/* branches) does NOT use this pattern;
+  # update-values is skipped entirely. ci/test/* builds still run docker-test
+  # and docker-build for image validation, but no deploy commit lands. Local
+  # cluster deploys are wired manually until the test-branch cluster story
+  # is built (see infrastructure/DEPLOY.md → Future).
+  #
+  # ArgoCD watches deploy/<source-branch>; humans work on dev / main and never
+  # see bot commits in their git log. If you grepped for "deploy/main" or
+  # "deploy/dev" and landed here — yes, this is the only place those branches
+  # are written to. See infrastructure/DEPLOY.md.
+  #
+  # - Commits as a stable bot identity so deploy-branch history reads as
+  #   visibly machine-generated.
+  # - [skip ci] retained as belt-and-suspenders; ci.yml's `branches:` filter
+  #   already excludes deploy/* (only dev, main, ci/test/* trigger CI).
+  # - Authenticates to ArgoCD via GitHub OIDC (no static secrets).
+  # ---------------------------------------------------------------------------
+  update-values:
+    runs-on: arc-runner-set
+    needs: [docker-build]
+    if: inputs.push && inputs.docker-matrix != '{"include":[]}' && inputs.environment != 'local'
+    # Queue concurrent runs by environment so two builds finishing in quick
+    # succession can't race each other on `git push`. The second run fast-
+    # forwards onto the first's commit. `cancel-in-progress: false` keeps
+    # the older deploy in flight rather than dropping it — if Andy's build
+    # is mid-flight when Bernadette merges, we still want Andy's image to
+    # land in the registry's deploy-branch history (1:1 mapping between
+    # merged commits and deployed images for debug-by-checkout later).
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      id-token: write # Required for GitHub OIDC token
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git as deploy bot
+        run: |
+          # Stable bot identity for deploy-branch commits. Distinct from
+          # human authors so `git log deploy/<env>` reads as machine-only.
+          # Adopters forking this template can override via repo vars
+          # DEPLOY_BOT_NAME / DEPLOY_BOT_EMAIL if they want their own.
+          BOT_NAME="${{ vars.DEPLOY_BOT_NAME || 'startup-ai-deploy-bot' }}"
+          BOT_EMAIL="${{ vars.DEPLOY_BOT_EMAIL || 'deploy-bot@users.noreply.github.com' }}"
+          git config user.name "$BOT_NAME"
+          git config user.email "$BOT_EMAIL"
+          echo "BOT_NAME=$BOT_NAME" >> $GITHUB_ENV
+          echo "BOT_EMAIL=$BOT_EMAIL" >> $GITHUB_ENV
+
+      # Switch to the deploy branch first, then edit *its* copies of the values
+      # files. Editing on the source branch and stash-popping into the deploy
+      # branch fails the moment the deploy branch's values diverge from the
+      # source branch's (which is always — every successful deploy commits a
+      # new image tag onto deploy/<env>, so source-branch values are stale
+      # relative to it). Stash-pop's 3-way merge then conflicts on every file.
+      - name: Check out deploy branch
+        id: update
+        run: |
+          DEPLOY_BRANCH="deploy/${{ github.ref_name }}"
+          SOURCE_SHA="${{ github.sha }}"
+          ENV="${{ inputs.environment }}"
+
+          # Detect bootstrap vs. existing-branch case. Loud logging downstream
+          # depends on this distinction.
+          git fetch origin "$DEPLOY_BRANCH" 2>/dev/null || true
+          if git rev-parse --verify "origin/$DEPLOY_BRANCH" >/dev/null 2>&1; then
+            DEPLOY_STATE="existing"
+            DEPLOY_TIP=$(git rev-parse --short "origin/$DEPLOY_BRANCH")
+            git checkout -B "$DEPLOY_BRANCH" "origin/$DEPLOY_BRANCH"
+          else
+            DEPLOY_STATE="bootstrapped"
+            DEPLOY_TIP="(none — first deploy)"
+            git checkout -B "$DEPLOY_BRANCH" "$SOURCE_SHA"
+          fi
+
+          # Loud, structured log block. Folds in normal-day output (group),
+          # but searchable by future-engineer asking "where did deploy/X
+          # come from?".
+          SOURCE_SHORT=$(git rev-parse --short "$SOURCE_SHA")
+          SOURCE_BRANCH="${{ github.ref_name }}"
+          echo "::group::📦 Deploy-branch pattern: targeting $DEPLOY_BRANCH"
+          echo "Source branch:    $SOURCE_BRANCH"
+          echo "Source commit:    $SOURCE_SHORT"
+          echo "Deploy branch:    $DEPLOY_BRANCH"
+          if [ "$DEPLOY_STATE" = "bootstrapped" ]; then
+            echo "Deploy state:     ⚠️  BOOTSTRAPPING — branch did not exist on origin, created from $SOURCE_SHORT"
+          else
+            echo "Deploy state:     existing branch at $DEPLOY_TIP"
+          fi
+          echo "Bot identity:     $BOT_NAME <$BOT_EMAIL>"
+          echo "Pattern docs:     infrastructure/DEPLOY.md"
+          echo "::endgroup::"
+
+          # Bootstrap case also writes to step summary so it surfaces in the
+          # run UI without needing to expand the log group. Routine deploys
+          # don't write to summary (avoids clutter).
+          if [ "$DEPLOY_STATE" = "bootstrapped" ]; then
+            {
+              echo "## 🆕 Bootstrapped \`$DEPLOY_BRANCH\`"
+              echo
+              echo "This is the first time CI deployed to \`$ENV\`. The branch \`$DEPLOY_BRANCH\` did not exist on origin and was created from source commit \`$SOURCE_SHORT\`."
+              echo
+              echo "Subsequent deploys to \`$ENV\` will fast-forward onto this branch. See \`infrastructure/DEPLOY.md\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if ! command -v yq &> /dev/null; then
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          fi
+
+          PROJECTS=$(echo '${{ inputs.docker-matrix }}' | jq -r '.include[].project')
+          UPDATED_PROJECTS=""
+          for PROJECT in $PROJECTS; do
+            VALUES_FILE="infrastructure/kubernetes/environments/${ENV}/values/${PROJECT}.yaml"
+            if [ -f "$VALUES_FILE" ]; then
+              yq -i ".image.tag = \"${SOURCE_SHA}\"" "$VALUES_FILE"
+              UPDATED_PROJECTS="$UPDATED_PROJECTS $PROJECT"
+            else
+              echo "⚠️ Values file not found: $VALUES_FILE"
+            fi
+          done
+
+          echo "projects=$(echo $UPDATED_PROJECTS | xargs)" >> $GITHUB_OUTPUT
+
+      - name: Commit and push to deploy branch
+        id: commit
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit (deploy branch already at this image tag)"
+            echo "changed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          DEPLOY_BRANCH="deploy/${{ github.ref_name }}"
+          SOURCE_SHA="${{ github.sha }}"
+
+          git add infrastructure/kubernetes/environments/*/values/*.yaml
+          SERVICES=$(echo '${{ inputs.docker-matrix }}' | jq -r '.include[].project' | tr '\n' ', ' | sed 's/,$//')
+
+          # [skip ci] is belt-and-suspenders; ci.yml's branch filter already
+          # excludes deploy/*.
+          git commit -m "chore(deploy): update ${{ inputs.environment }} images [${SERVICES}] @ ${SOURCE_SHA} [skip ci]"
+
+          # Plain (non-force) push — the concurrency block + always-fresh
+          # fetch-then-checkout above guarantees this is a fast-forward.
+          # If it's rejected as non-fast-forward, that means a human pushed
+          # directly to $DEPLOY_BRANCH; surface the failure loudly so the
+          # team can investigate (don't auto-recover — see DEPLOY.md).
+          if ! git push origin "$DEPLOY_BRANCH"; then
+            echo "::error::Push to $DEPLOY_BRANCH was rejected. This usually means a human pushed directly to the deploy branch. See infrastructure/DEPLOY.md."
+            exit 1
+          fi
+
+          echo "changed=true" >> $GITHUB_OUTPUT
+
+      # -------------------------------------------------------------------------
+      # Trigger ArgoCD sync via Cloudflare Tunnel + GitHub OIDC
+      #
+      # Requires (per environment):
+      #   - Cloudflare Tunnel pointing to ArgoCD (cloudflared in cluster)
+      #   - Cloudflare Access service token (CF_ACCESS_CLIENT_ID/SECRET)
+      #   - GitHub repo variable: ARGOCD_TUNNEL_<ENV> (e.g., argocd-tunnel-staging.example.com)
+      #
+      # If not configured, ArgoCD will poll for changes (default 3 min)
+      # -------------------------------------------------------------------------
+      - name: Trigger ArgoCD sync via Cloudflare Tunnel
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          ARGOCD_TUNNEL_HOST: ${{ inputs.environment == 'local' && vars.ARGOCD_TUNNEL_LOCAL || (inputs.environment == 'staging' && vars.ARGOCD_TUNNEL_STAGING || vars.ARGOCD_TUNNEL_PRODUCTION) }}
+        run: |
+          ENV="${{ inputs.environment }}"
+          PROJECTS="${{ steps.update.outputs.projects }}"
+
+          # Skip if tunnel not configured
+          if [ -z "$ARGOCD_TUNNEL_HOST" ] || [ -z "$CF_ACCESS_CLIENT_ID" ]; then
+            echo "⏭️ Cloudflare Tunnel not configured for $ENV"
+            echo "   ArgoCD will pick up changes on next poll (default 3 min)"
+            exit 0
+          fi
+
+          echo "🔐 Authenticating to ArgoCD via GitHub OIDC + Cloudflare Tunnel"
+          echo "   Tunnel: $ARGOCD_TUNNEL_HOST"
+
+          # Get GitHub OIDC token
+          GITHUB_TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=argocd" | jq -r '.value')
+
+          if [ -z "$GITHUB_TOKEN" ] || [ "$GITHUB_TOKEN" = "null" ]; then
+            echo "⚠️ Failed to get GitHub OIDC token"
+            echo "   ArgoCD will pick up changes on next poll"
+            exit 0
+          fi
+
+          # Exchange GitHub token for ArgoCD token via Dex (through Cloudflare Tunnel)
+          ARGOCD_TOKEN=$(curl -s -X POST "https://${ARGOCD_TUNNEL_HOST}/api/dex/token" \
+            -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+            -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+            -d "subject_token=${GITHUB_TOKEN}" \
+            -d "subject_token_type=urn:ietf:params:oauth:token-type:id_token" \
+            -d "connector_id=github-actions" \
+            | jq -r '.access_token')
+
+          if [ -z "$ARGOCD_TOKEN" ] || [ "$ARGOCD_TOKEN" = "null" ]; then
+            echo "⚠️ Failed to exchange token with ArgoCD Dex"
+            echo "   ArgoCD will pick up changes on next poll"
+            exit 0
+          fi
+
+          echo "✅ Successfully authenticated to ArgoCD"
+          echo "🚀 Triggering ArgoCD sync for $ENV environment"
+
+          for PROJECT in $PROJECTS; do
+            APP_NAME="${PROJECT}-${ENV}"
+            echo "  Syncing $APP_NAME..."
+
+            HTTP_STATUS=$(curl -s -o /tmp/argocd-response.json -w "%{http_code}" \
+              -X POST "https://${ARGOCD_TUNNEL_HOST}/api/v1/applications/${APP_NAME}/sync" \
+              -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+              -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" \
+              -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d '{"prune": false}')
+
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "  ✅ Sync triggered for $APP_NAME"
+            else
+              echo "  ⚠️ Sync request returned $HTTP_STATUS for $APP_NAME"
+              cat /tmp/argocd-response.json
+              # Don't fail - ArgoCD will eventually sync via polling
+            fi
+          done

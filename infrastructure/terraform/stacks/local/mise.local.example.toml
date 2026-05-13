@@ -1,0 +1,39 @@
+[env]
+# Enable kubernetes infra setup. When set to false, you don't need to stand up
+# the cluster. When true, ensure you have the argocd variables below.
+TF_VAR_enable_kubernetes = false
+
+# ArgoCD
+# ------------------------------------------------------------------------------
+TF_VAR_github_username = "mylesberueda"
+# github.com/settings/personal-access-tokens -> generate new token
+# fine-grained: contents:r, metadata:r
+TF_VAR_github_argocd_token = "ghp_xxx"
+# github.com/settings/personal-access-tokens -> generate new token
+# Need a separate token for this, because Microsoft refuses to add package read
+# to the fine-grained tokens (that they've been pushing) for some reason.
+# classic: read:packages
+TF_VAR_argocd_ghcr_token = "ghp_xxx"
+TF_VAR_argocd_target_revision = "HEAD"
+
+# Zitadel
+# ------------------------------------------------------------------------------
+TF_VAR_discord_client_id = "discord_client_id"
+TF_VAR_discord_client_secret = "discord_client_secret"
+TF_VAR_github_client_id = "github_client_id"
+TF_VAR_github_client_secret = "github_client_secret"
+
+# SMTP for Zitadel email verification
+TF_VAR_zitadel_smtp_sender_address = "noreply@startup.local"
+TF_VAR_zitadel_smtp_sender_name = "Startup AI"
+TF_VAR_zitadel_smtp_host = "maildev:1025"
+TF_VAR_zitadel_smtp_tls = "false"
+TF_VAR_zitadel_smtp_user = ""
+TF_VAR_zitadel_smtp_password = ""
+
+# Stripe
+# ------------------------------------------------------------------------------
+# Get your API key from https://dashboard.stripe.com/test/apikeys
+STRIPE_API_KEY = "sk_test_your_key_here"
+# Webhook URL - only set for staging/production (localhost uses Stripe CLI instead)
+# TF_VAR_stripe_webhook_url = "https://api.staging.startup.ai"

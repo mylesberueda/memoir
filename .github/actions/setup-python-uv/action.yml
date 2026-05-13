@@ -1,0 +1,56 @@
+name: "Setup Python and uv"
+description: "Setup Python, uv, and install Python dependencies with caching"
+
+inputs:
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.12"
+  install-dependencies:
+    description: "Whether to install dependencies"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          uv.lock
+          **/uv.lock
+          **/pyproject.toml
+
+    - name: Install Python dependencies
+      if: inputs.install-dependencies == 'true'
+      shell: bash
+      run: |
+        # Check if agent-api is affected
+        AFFECTED_PROJECTS=$(pnpm nx show projects --affected --json 2>/dev/null || echo "[]")
+        AGENT_API_AFFECTED=$(echo "$AFFECTED_PROJECTS" | grep -q "agent-api" && echo "true" || echo "false")
+
+        echo "🔍 Agent API affected: $AGENT_API_AFFECTED"
+
+        # Always install dependencies for cache population and affected projects
+        # The uv action handles caching internally, so we don't need to check cache-hit
+        if [ "$AGENT_API_AFFECTED" = "true" ]; then
+          echo "🔄 Agent API affected - installing dependencies"
+          SHOULD_INSTALL="true"
+        else
+          echo "📦 Installing dependencies to ensure cache is populated"
+          SHOULD_INSTALL="true"
+        fi
+
+        if [ "$SHOULD_INSTALL" = "true" ]; then
+          echo "🐍 Installing Python dependencies..."
+          # Always sync from workspace root to ensure all dependencies are installed
+          uv sync
+          echo "✅ Python dependencies installed successfully"
+        fi

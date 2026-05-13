@@ -1,0 +1,219 @@
+syntax = "proto3";
+
+package rig.v1;
+
+service DocumentService {
+  rpc UploadDocument(UploadDocumentRequest) returns (UploadDocumentResponse);
+  rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse);
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse);
+  rpc DeleteDocument(DeleteDocumentRequest) returns (DeleteDocumentResponse);
+  rpc UpdateDocument(UpdateDocumentRequest) returns (UpdateDocumentResponse);
+  rpc GetDownloadUrl(GetDownloadUrlRequest) returns (GetDownloadUrlResponse);
+}
+
+service DocumentGroupService {
+  rpc CreateGroup(CreateGroupRequest) returns (CreateGroupResponse);
+  rpc GetGroup(GetGroupRequest) returns (GetGroupResponse);
+  rpc ListGroups(ListGroupsRequest) returns (ListGroupsResponse);
+  rpc DeleteGroup(DeleteGroupRequest) returns (DeleteGroupResponse);
+  rpc UpdateGroup(UpdateGroupRequest) returns (UpdateGroupResponse);
+  rpc AddDocumentsToGroup(AddDocumentsToGroupRequest) returns (AddDocumentsToGroupResponse);
+  rpc RemoveDocumentsFromGroup(RemoveDocumentsFromGroupRequest) returns (RemoveDocumentsFromGroupResponse);
+}
+
+service DocumentSearchService {
+  rpc SearchDocuments(SearchDocumentsRequest) returns (SearchDocumentsResponse);
+  rpc SearchChunks(SearchChunksRequest) returns (SearchChunksResponse);
+}
+
+enum DocumentStatus {
+  DOCUMENT_STATUS_UNSPECIFIED = 0;
+  DOCUMENT_STATUS_PENDING = 1;
+  DOCUMENT_STATUS_PROCESSING = 2;
+  DOCUMENT_STATUS_READY = 3;
+  DOCUMENT_STATUS_FAILED = 4;
+}
+
+message Document {
+  string pid = 1;
+  string filename = 2;
+  string content_type = 3;
+  int64 size_bytes = 4;
+  optional string summary = 5;
+  DocumentStatus status = 6;
+  optional string error_message = 7;
+  string created_at = 8;
+  string updated_at = 9;
+}
+
+message DocumentGroup {
+  string pid = 1;
+  string name = 2;
+  optional string description = 3;
+  bool is_org_shared = 4;
+  int32 document_count = 5;
+  string created_at = 6;
+  string updated_at = 7;
+}
+
+message DocumentChunk {
+  string document_pid = 1;
+  string filename = 2;
+  int32 chunk_index = 3;
+  string text = 4;
+  float score = 5;
+}
+
+message UploadDocumentRequest {
+  string filename = 1;
+  string content_type = 2;
+  bytes content = 3;
+  optional string conversation_pid = 4;
+}
+
+message UploadDocumentResponse {
+  Document document = 1;
+}
+
+message GetDocumentRequest {
+  string pid = 1;
+}
+
+message GetDocumentResponse {
+  Document document = 1;
+}
+
+message ListDocumentsRequest {
+  optional string group_pid = 1;
+  optional DocumentStatus status = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ListDocumentsResponse {
+  repeated Document documents = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message DeleteDocumentRequest {
+  string pid = 1;
+}
+
+message DeleteDocumentResponse {}
+
+message UpdateDocumentRequest {
+  string pid = 1;
+  optional string filename = 2;
+}
+
+message UpdateDocumentResponse {
+  Document document = 1;
+}
+
+message GetDownloadUrlRequest {
+  string pid = 1;
+}
+
+message GetDownloadUrlResponse {
+  string download_url = 1;
+}
+
+// =============================================================================
+// DocumentGroupService messages
+// =============================================================================
+
+message CreateGroupRequest {
+  string name = 1;
+  optional string description = 2;
+  bool is_org_shared = 3;
+}
+
+message CreateGroupResponse {
+  DocumentGroup group = 1;
+}
+
+message GetGroupRequest {
+  string pid = 1;
+}
+
+message GetGroupResponse {
+  DocumentGroup group = 1;
+}
+
+message ListGroupsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+message ListGroupsResponse {
+  repeated DocumentGroup groups = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message DeleteGroupRequest {
+  string pid = 1;
+}
+
+message DeleteGroupResponse {}
+
+message UpdateGroupRequest {
+  string pid = 1;
+  optional string name = 2;
+  optional string description = 3;
+  optional bool is_org_shared = 4;
+}
+
+message UpdateGroupResponse {
+  DocumentGroup group = 1;
+}
+
+message AddDocumentsToGroupRequest {
+  string group_pid = 1;
+  repeated string document_pids = 2;
+}
+
+message AddDocumentsToGroupResponse {
+  DocumentGroup group = 1;
+}
+
+message RemoveDocumentsFromGroupRequest {
+  string group_pid = 1;
+  repeated string document_pids = 2;
+}
+
+message RemoveDocumentsFromGroupResponse {
+  DocumentGroup group = 1;
+}
+
+// =============================================================================
+// DocumentSearchService messages
+// =============================================================================
+
+message SearchDocumentsRequest {
+  string query = 1;
+  repeated string group_pids = 2;
+  optional int32 top_n = 3;
+  optional int32 top_k = 4;
+}
+
+message SearchDocumentsResponse {
+  repeated SearchResult results = 1;
+}
+
+message SearchResult {
+  Document document = 1;
+  repeated DocumentChunk chunks = 2;
+}
+
+message SearchChunksRequest {
+  string query = 1;
+  optional int32 top_k = 2;
+}
+
+message SearchChunksResponse {
+  repeated DocumentChunk chunks = 1;
+}

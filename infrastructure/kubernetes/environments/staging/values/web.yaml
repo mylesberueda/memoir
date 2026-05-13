@@ -1,0 +1,86 @@
+# Staging environment values for web (Next.js)
+
+nameOverride: web
+image:
+  repository: us-central1-docker.pkg.dev/PROJECT_ID/startup-ai/web
+  tag: bc5b2ba9b0de9a6d1256fd05dcc0ceaae37ec261
+  pullPolicy: Always
+replicaCount: 2
+service:
+  port: 3000
+  targetPort: 3000
+# Web service is the only one with ingress
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: staging.example.com # Replace with actual staging domain
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: web-tls
+      hosts:
+        - staging.example.com
+serviceAccount:
+  create: true
+  annotations:
+    iam.gke.io/gcp-service-account: web@PROJECT_ID.iam.gserviceaccount.com
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+healthCheck:
+  enabled: true
+  httpPath: /api/health
+  port: http
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+readinessProbe:
+  enabled: true
+  httpPath: /api/health
+  port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+  successThreshold: 1
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+externalSecret:
+  enabled: true
+  refreshInterval: 1h
+  secretStoreRef:
+    name: gcp-secret-store
+    kind: ClusterSecretStore
+  dataFrom:
+    - extract:
+        key: staging/web
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: web

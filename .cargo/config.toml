@@ -1,0 +1,2 @@
+[alias]
+cmd = "run --package startup-cli --release --"

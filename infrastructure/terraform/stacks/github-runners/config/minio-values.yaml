@@ -1,0 +1,65 @@
+# Local development MinIO configuration for GitHub Actions cache storage
+# Optimized for kind cluster with reduced resources
+# Using official MinIO Helm chart
+
+# Mode configuration - standalone for local development
+mode: standalone
+
+# Authentication
+rootUser: "admin"
+rootPassword: "minio123"
+
+# Replica count for standalone
+replicas: 1
+
+# Persistence configuration - smaller for local
+persistence:
+  enabled: true
+  storageClass: "standard" # kind's default storage class
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+# Service configuration - ClusterIP for internal cluster access only
+service:
+  type: ClusterIP
+  port: 9000
+
+# Console service - ClusterIP for internal access only
+consoleService:
+  type: ClusterIP
+  port: 9001
+
+# Ingress disabled for local
+ingress:
+  enabled: false
+
+# Reduced resource limits for local development
+resources:
+  requests:
+    memory: 128Mi
+
+# Security context
+securityContext:
+  enabled: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  fsGroupChangePolicy: "OnRootMismatch"
+
+containerSecurityContext:
+  readOnlyRootFilesystem: false
+
+# Create default bucket for GitHub Actions cache
+buckets:
+  - name: github-actions-cache
+    policy: none
+    purge: false
+
+# Metrics disabled for local
+metrics:
+  serviceMonitor:
+    enabled: false
+
+# Network policy disabled for local
+networkPolicy:
+  enabled: false

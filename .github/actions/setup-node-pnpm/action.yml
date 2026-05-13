@@ -1,0 +1,101 @@
+name: "Setup Node.js and pnpm"
+description: "Setup Node.js, pnpm, and install dependencies with caching"
+
+inputs:
+  node-version:
+    description: "Node.js version to use"
+    required: false
+    default: "23"
+  install-dependencies:
+    description: "Whether to install dependencies"
+    required: false
+    default: "true"
+  cache-only:
+    description: "Only restore from cache, do not install if cache miss"
+    required: false
+    default: "false"
+  commit-sha:
+    description: "Commit SHA for enhanced caching across workflows"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: "pnpm"
+
+    - name: Get pnpm store directory
+      shell: bash
+      run: |
+        echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+    - name: Setup pnpm cache
+      uses: ./.github/actions/setup-cache
+      id: pnpm-cache
+      with:
+        path: |
+          ${{ env.STORE_PATH }}
+          **/node_modules
+          .next/cache
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+        commit-sha: ${{ inputs.commit-sha }}
+
+    - name: Setup build artifact cache
+      uses: ./.github/actions/setup-cache
+      id: build-cache
+      with:
+        path: |
+          **/dist
+          **/build
+          **/.next/standalone
+          **/.next/static
+          **/coverage
+        key: ${{ runner.os }}-build-artifacts-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-build-artifacts-
+        commit-sha: ${{ inputs.commit-sha }}
+
+    - name: Install dependencies
+      if: inputs.install-dependencies == 'true' && (inputs.cache-only != 'true' || steps.pnpm-cache.outputs.cache-hit != 'true')
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Verify dependencies installation
+      if: inputs.install-dependencies == 'true'
+      shell: bash
+      run: |
+        echo "✅ Dependencies installed successfully"
+        echo "Node modules size: $(du -sh node_modules 2>/dev/null || echo 'N/A')"
+        echo "Pnpm store size: $(du -sh $STORE_PATH 2>/dev/null || echo 'N/A')"
+        echo "Cache key used: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}"
+
+    - name: Verify cache restoration or install fallback
+      if: inputs.cache-only == 'true'
+      shell: bash
+      run: |
+        if [[ "${{ steps.pnpm-cache.outputs.cache-hit }}" != "true" ]]; then
+          echo "⚠️  Cache miss detected in cache-only mode"
+          echo "Cache key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}"
+          echo "Attempting fallback dependency installation..."
+          
+          # Try to install dependencies as fallback
+          if pnpm install --frozen-lockfile; then
+            echo "✅ Fallback installation successful"
+          else
+            echo "❌ Fallback installation failed"
+            echo "This will cause NX commands to fail"
+            exit 1
+          fi
+        else
+          echo "✅ Cache restored successfully"
+          echo "Cache key: ${{ steps.pnpm-cache.outputs.cache-matched-key }}"
+        fi

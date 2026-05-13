@@ -1,0 +1,1 @@
+/* If the styles aren't exported in this way (and instead imported in the component file), the styles are going to be applied multiple times. */

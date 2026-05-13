@@ -1,0 +1,96 @@
+# Production environment values for api-service
+
+nameOverride: api-service
+
+image:
+  repository: us-central1-docker.pkg.dev/PROJECT_ID/startup-ai/api-service
+  tag: latest  # Pinned by ArgoCD to specific SHA
+  pullPolicy: Always
+
+replicaCount: 3
+
+service:
+  port: 5154
+  targetPort: 5154
+
+serviceAccount:
+  create: true
+  annotations:
+    iam.gke.io/gcp-service-account: api-service@PROJECT_ID.iam.gserviceaccount.com
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+healthCheck:
+  enabled: true
+  httpPath: /health
+  port: http
+  initialDelaySeconds: 15
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  httpPath: /health
+  port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+externalSecret:
+  enabled: true
+  refreshInterval: 1h
+  secretStoreRef:
+    name: gcp-secret-store
+    kind: ClusterSecretStore
+  dataFrom:
+    - extract:
+        key: production/api-service
+
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
+
+volumes:
+  - name: tmp
+    emptyDir: {}
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: api-service
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - api-service
+          topologyKey: kubernetes.io/hostname

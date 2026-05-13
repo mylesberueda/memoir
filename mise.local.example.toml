@@ -1,0 +1,9 @@
+# Example local mise configuration for development
+# Copy this file to mise.local.toml and fill in your values
+# mise.local.toml is gitignored and should not be committed
+
+[env]
+# CLI
+# ------------------------------------------------------------------------------
+ZITADEL_URL = "http://localhost:5150"
+GOOGLE_CLOUD_PROJECT = "the-maple-tree"

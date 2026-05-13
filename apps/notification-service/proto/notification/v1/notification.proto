@@ -1,0 +1,287 @@
+syntax = "proto3";
+
+package notification.v1;
+
+import "google/protobuf/empty.proto";
+import "notification/v1/common.proto";
+
+service NotificationService {
+  // ============================================================================
+  // Service-to-service (internal - authenticated with service JWT)
+  // ============================================================================
+
+  // Single notification
+  rpc Push(PushRequest) returns (PushResponse);
+
+  // Batch (e.g., @everyone mention)
+  rpc PushBatch(PushBatchRequest) returns (PushBatchResponse);
+
+  // Update existing notification (e.g., agent finished running)
+  rpc Update(UpdateRequest) returns (UpdateResponse);
+
+  // Client streaming - for live progress updates (e.g., agent tool usage, workflow steps)
+  // First message creates notification, subsequent messages update in-place (ephemeral)
+  // Only init and complete/close are persisted to Postgres
+  rpc PushStream(stream PushStreamMessage) returns (PushStreamResponse);
+
+  // ============================================================================
+  // User-facing (browser - authenticated with user JWT)
+  // ============================================================================
+
+  // Real-time stream
+  rpc Subscribe(SubscribeRequest) returns (stream NotificationEvent);
+
+  // Query
+  rpc List(ListRequest) returns (ListResponse);
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc GetUnreadCount(GetUnreadCountRequest) returns (GetUnreadCountResponse);
+
+  // State changes
+  rpc MarkAsRead(MarkAsReadRequest) returns (google.protobuf.Empty);
+  rpc MarkAllAsRead(MarkAllAsReadRequest) returns (MarkAllAsReadResponse);
+  rpc Dismiss(DismissRequest) returns (google.protobuf.Empty);
+  rpc DismissAll(DismissAllRequest) returns (DismissAllResponse);
+
+  // Preferences
+  rpc GetPreferences(GetPreferencesRequest) returns (GetPreferencesResponse);
+  rpc UpdatePreferences(UpdatePreferencesRequest) returns (UpdatePreferencesResponse);
+}
+
+// ============================================================================
+// Push (service-to-service)
+// ============================================================================
+
+message PushRequest {
+  string user_id = 1;
+  string org_pid = 2;
+
+  string title = 3;
+  string description = 4;
+  optional string icon_url = 5;
+
+  NotificationCategory category = 6;
+  NotificationPriority priority = 7;
+
+  repeated NotificationAction actions = 8;
+
+  // Origin - typed enums, no guessing
+  OriginService origin_service = 9;
+  optional OriginEntityType origin_entity_type = 10;
+  optional string origin_entity_pid = 11;
+
+  optional string expires_at = 12;
+
+  // Deduplication (e.g., don't spam same mention)
+  optional string idempotency_key = 13;
+}
+
+message PushResponse {
+  int64 id = 1; // Internal ID for service-to-service updates
+  string notification_pid = 2; // Public PID for client-facing use
+  bool deduplicated = 3; // True if idempotency_key matched existing
+}
+
+message PushBatchRequest {
+  repeated PushRequest notifications = 1;
+}
+
+message PushBatchResponse {
+  uint64 created_count = 1;
+  uint64 deduplicated_count = 2;
+  repeated string notification_pids = 3;
+}
+
+// ============================================================================
+// Update (service-to-service)
+// ============================================================================
+
+message UpdateRequest {
+  int64 id = 1; // Internal ID from PushResponse
+  optional string title = 2;
+  optional string description = 3;
+  optional string icon_url = 4;
+  optional NotificationPriority priority = 5;
+  repeated NotificationAction actions = 6; // Empty = no change, non-empty = replace
+}
+
+message UpdateResponse {
+  Notification notification = 1;
+}
+
+// ============================================================================
+// PushStream (client streaming for live progress)
+// ============================================================================
+
+message PushStreamMessage {
+  oneof message {
+    PushRequest init = 1; // First message: creates the notification (persisted)
+    StreamUpdate update = 2; // Subsequent: live updates (ephemeral, not persisted)
+    StreamComplete complete = 3; // Optional final state before close (persisted)
+  }
+}
+
+message StreamUpdate {
+  optional string title = 1;
+  optional string description = 2;
+  optional string icon_url = 3;
+  optional NotificationPriority priority = 4;
+  repeated NotificationAction actions = 5; // Empty = no change, non-empty = replace
+}
+
+message StreamComplete {
+  string title = 1;
+  string description = 2;
+  repeated NotificationAction actions = 3; // Final actions (e.g., "View results", "Run again")
+}
+
+message PushStreamResponse {
+  int64 id = 1;
+  string notification_pid = 2;
+}
+
+// ============================================================================
+// Real-time subscription
+// ============================================================================
+
+message SubscribeRequest {
+  // Optional filters for subscription
+  repeated NotificationCategory categories = 1;
+  optional NotificationPriority min_priority = 2;
+}
+
+message NotificationEvent {
+  oneof event {
+    Notification notification = 1;
+    NotificationUpdated updated = 2;
+    NotificationRead read = 3;
+    NotificationDismissed dismissed = 4;
+    UnreadCountChanged count_changed = 5;
+    NotificationProgress progress = 6; // Ephemeral partial update from PushStream
+  }
+}
+
+message NotificationUpdated {
+  Notification notification = 1;
+}
+
+message NotificationRead {
+  string notification_pid = 1;
+  string read_at = 2;
+}
+
+message NotificationDismissed {
+  string notification_pid = 1;
+}
+
+// Ephemeral progress update from PushStream.
+// All fields optional - only changed fields are present.
+// Client MUST merge with cached notification state.
+message NotificationProgress {
+  string notification_pid = 1;
+  optional string title = 2;
+  optional string description = 3;
+  optional string icon_url = 4;
+  optional NotificationPriority priority = 5;
+}
+
+message UnreadCountChanged {
+  uint64 total_unread = 1;
+  map<string, uint64> by_category = 2; // category name -> count
+}
+
+// ============================================================================
+// Query
+// ============================================================================
+
+message ListRequest {
+  optional bool unread_only = 1;
+  repeated NotificationCategory categories = 2;
+  optional NotificationPriority min_priority = 3;
+  uint64 limit = 4;
+  optional string cursor = 5;
+}
+
+message ListResponse {
+  repeated Notification notifications = 1;
+  uint64 total_count = 2;
+  uint64 unread_count = 3;
+  optional string next_cursor = 4;
+}
+
+message GetRequest {
+  string notification_pid = 1;
+}
+
+message GetResponse {
+  Notification notification = 1;
+}
+
+message GetUnreadCountRequest {}
+
+message GetUnreadCountResponse {
+  uint64 total = 1;
+  map<string, uint64> by_category = 2;
+}
+
+// ============================================================================
+// State changes
+// ============================================================================
+
+message MarkAsReadRequest {
+  repeated string notification_pids = 1;
+}
+
+message MarkAllAsReadRequest {
+  optional NotificationCategory category = 1; // If set, only mark this category
+}
+
+message MarkAllAsReadResponse {
+  uint64 marked_count = 1;
+}
+
+message DismissRequest {
+  string notification_pid = 1;
+}
+
+message DismissAllRequest {
+  optional NotificationCategory category = 1;
+}
+
+message DismissAllResponse {
+  uint64 dismissed_count = 1;
+}
+
+// ============================================================================
+// User preferences
+// ============================================================================
+
+message GetPreferencesRequest {}
+
+message GetPreferencesResponse {
+  NotificationPreferences preferences = 1;
+}
+
+message UpdatePreferencesRequest {
+  NotificationPreferences preferences = 1;
+}
+
+message UpdatePreferencesResponse {
+  NotificationPreferences preferences = 1;
+}
+
+message NotificationPreferences {
+  bool push_enabled = 1;
+  bool email_enabled = 2;
+  bool sound_enabled = 3;
+
+  // Per-category settings
+  repeated CategoryPreference category_preferences = 4;
+}
+
+message CategoryPreference {
+  NotificationCategory category = 1;
+  bool enabled = 2;
+  bool push = 3;
+  bool email = 4;
+  NotificationPriority min_priority = 5; // Only notify above this priority
+}

@@ -1,0 +1,197 @@
+{
+	"name": "notification-service",
+	"$schema": "../../node_modules/nx/schemas/project-schema.json",
+	"projectType": "application",
+	"sourceRoot": "apps/notification-service/src",
+	"targets": {
+		"cargo": {
+			"command": "cargo",
+			"options": {
+				"cwd": "{projectRoot}",
+				"env": {
+					"RUST_LOG": "trace"
+				}
+			}
+		},
+		"dev": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo run server start"],
+				"parallel": true
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs"],
+			"outputs": ["{projectRoot}/dist"]
+		},
+		"build": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo build --release"],
+				"parallel": false
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs"],
+			"outputs": ["{projectRoot}/target/release"]
+		},
+		"test": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo test --bins --release --features unit"]
+			},
+			"cache": true,
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/tests/**/*.rs"]
+		},
+		"test:migration": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "sea migrate up",
+				"env": {
+					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/notification_service_test"
+				}
+			},
+			"cache": true,
+			"inputs": ["{projectRoot}/migration/src/**/*.rs"]
+		},
+		"test:integration": {
+			"executor": "nx:run-commands",
+			"dependsOn": ["test:migration"],
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo test --release --features integration"],
+				"env": {
+					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/notification_service_test",
+					"REDIS_URL": "redis://localhost:63791/1"
+				}
+			},
+			"cache": true,
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/tests/**/*.rs"]
+		},
+		"typecheck": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo check"]
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs", "{workspaceRoot}/apps/{projectName}/Cargo.toml"]
+		},
+		"lint": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo clippy --no-deps -- -D warnings"]
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs", "{workspaceRoot}/apps/{projectName}/Cargo.toml"]
+		},
+		"lint:fix": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo clippy --no-deps --fix --allow-dirty --allow-staged -- -D warnings"]
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs", "{workspaceRoot}/apps/{projectName}/Cargo.toml"]
+		},
+		"format": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo fmt --check"]
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs", "{workspaceRoot}/apps/{projectName}/Cargo.toml"]
+		},
+		"format:fix": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo fmt"]
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs", "{workspaceRoot}/apps/{projectName}/Cargo.toml"]
+		},
+		"migrate:up": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "sea migrate up",
+				"envFile": "{projectRoot}/.env"
+			},
+			"inputs": ["{projectRoot}/migration/src/**/*.rs"],
+			"outputs": ["{projectRoot}/src/models/**/*.rs"]
+		},
+		"migrate:down": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "sea migrate down",
+				"envFile": "{projectRoot}/.env"
+			},
+			"inputs": ["{projectRoot}/migration/src/**/*.rs"],
+			"outputs": ["{projectRoot}/src/models/**/*.rs"]
+		},
+		"migrate:fresh": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "sea migrate fresh",
+				"envFile": "{projectRoot}/.env"
+			},
+			"inputs": ["{projectRoot}/migration/src/**/*.rs"],
+			"outputs": ["{projectRoot}/src/models/**/*.rs"]
+		},
+		"gen:entities": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "sea generate entity --with-serde both --enum-extra-derives 'strum::Display,strum::EnumString,Ord,PartialOrd' --output-dir ./src/models/_entity",
+				"envFile": "{projectRoot}/.env"
+			},
+			"inputs": ["{projectRoot}/migration/src/**/*.rs"],
+			"outputs": ["{projectRoot}/src/models/**/*.rs"]
+		},
+		"gen:protos": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "buf generate"
+			},
+			"inputs": ["{projectRoot}/proto/**/*.proto"],
+			"outputs": []
+		},
+		"docker:build": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "docker build -f apps/notification-service/Dockerfile -t {args.repo:-startup-ai}/notification-service:{args.tag:-local} .",
+				"cwd": "{workspaceRoot}"
+			}
+		},
+		"docker:push": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "docker push {args.repo:-startup-ai}/notification-service:{args.tag:-local}",
+				"cwd": "{workspaceRoot}"
+			},
+			"dependsOn": ["docker:build"]
+		},
+		"k8s:configmap": {
+			"executor": "nx:run-commands",
+			"options": {
+				"commands": [
+					"mkdir -p infrastructure/kubernetes/environments/local/configmaps",
+					"kubectl create configmap notification-service-env --from-env-file=apps/notification-service/.env --dry-run=client -o yaml > infrastructure/kubernetes/environments/local/configmaps/notification-service.yaml"
+				],
+				"cwd": "{workspaceRoot}",
+				"parallel": false
+			},
+			"inputs": ["{projectRoot}/.env"],
+			"outputs": ["{workspaceRoot}/infrastructure/kubernetes/environments/local/configmaps/notification-service.yaml"]
+		}
+	},
+	"tags": ["scope:notification-service", "type:app", "lang:rust"]
+}

@@ -1,0 +1,183 @@
+# Default values for service chart
+# These are overridden by service-specific and environment-specific values files
+
+# Set to false to disable deployment entirely (useful for environment-specific toggles)
+enabled: true
+
+# Service metadata
+nameOverride: ""
+fullnameOverride: ""
+
+# Replica configuration
+replicaCount: 1
+
+# Number of old ReplicaSets to retain for rollback
+# Kubernetes default is 10, but 3 is usually sufficient
+revisionHistoryLimit: 3
+
+# Container image configuration
+image:
+  repository: ""              # Required: e.g., us-central1-docker.pkg.dev/project/repo/api-service
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Service account configuration
+serviceAccount:
+  create: true
+  annotations: {}
+  # GCP Workload Identity annotation (set in environment values)
+  # iam.gke.io/gcp-service-account: service@project.iam.gserviceaccount.com
+  name: ""
+
+# Pod annotations and labels
+podAnnotations: {}
+podLabels: {}
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Kubernetes Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+  # For gRPC services, add:
+  # grpc:
+  #   port: 50051
+  #   targetPort: 50051
+
+# Ingress configuration (typically only enabled for web service)
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+    # kubernetes.io/tls-acme: "true"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts: []
+    # - host: app.example.com
+    #   paths:
+    #     - path: /
+    #       pathType: Prefix
+  tls: []
+    # - secretName: app-tls
+    #   hosts:
+    #     - app.example.com
+
+# Resource limits and requests
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Health check configuration
+healthCheck:
+  enabled: true
+  httpPath: /health
+  port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+# Readiness probe (can be different from liveness)
+readinessProbe:
+  enabled: true
+  httpPath: /health
+  port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+  successThreshold: 1
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: null
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Node selection
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}
+
+# Topology spread constraints
+topologySpreadConstraints: []
+
+# Environment variables from ConfigMap or inline
+env: []
+  # - name: RUST_LOG
+  #   value: "info"
+  # - name: DATABASE_URL
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: service-secrets
+  #       key: database-url
+
+# Environment variables from ConfigMap references
+envFrom: []
+  # - configMapRef:
+  #     name: service-config
+  # - secretRef:
+  #     name: service-secrets
+
+# ConfigMap data (creates a ConfigMap if non-empty)
+configMap:
+  data: {}
+    # KEY: value
+
+# External Secrets configuration (for GCP Secret Manager integration)
+externalSecret:
+  enabled: false
+  refreshInterval: 1h
+  secretStoreRef:
+    name: gcp-secret-store
+    kind: ClusterSecretStore
+  # Define secret mappings
+  data: []
+    # - secretKey: database-url
+    #   remoteRef:
+    #     key: api-service-database-url
+    # - secretKey: redis-url
+    #   remoteRef:
+    #     key: api-service-redis-url
+
+# Volume mounts
+volumeMounts: []
+  # - name: tmp
+  #   mountPath: /tmp
+
+# Volumes
+volumes: []
+  # - name: tmp
+  #   emptyDir: {}

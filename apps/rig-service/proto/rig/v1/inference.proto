@@ -1,0 +1,314 @@
+syntax = "proto3";
+
+package rig.v1;
+
+import "google/protobuf/struct.proto";
+import "rig/v1/document.proto";
+
+service InferenceService {
+  rpc Infer(InferRequest) returns (stream InferResponse);
+  rpc InferSync(InferRequest) returns (InferSyncResponse);
+  rpc CancelInference(CancelInferenceRequest) returns (CancelInferenceResponse);
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+  rpc GetConversation(GetConversationRequest) returns (GetConversationResponse);
+  rpc CreateConversation(CreateConversationRequest) returns (CreateConversationResponse);
+  rpc DeleteConversation(DeleteConversationRequest) returns (DeleteConversationResponse);
+  rpc AttachDocuments(AttachDocumentsRequest) returns (AttachDocumentsResponse);
+  rpc DetachDocuments(DetachDocumentsRequest) returns (DetachDocumentsResponse);
+  rpc ListConversationDocuments(ListConversationDocumentsRequest) returns (ListConversationDocumentsResponse);
+  rpc ShareConversation(ShareConversationRequest) returns (ShareConversationResponse);
+  rpc UnshareConversation(UnshareConversationRequest) returns (UnshareConversationResponse);
+  rpc ListConversationShares(ListConversationSharesRequest) returns (ListConversationSharesResponse);
+}
+
+enum MessagePartKind {
+  MESSAGE_PART_KIND_UNSPECIFIED = 0;
+  MESSAGE_PART_KIND_TEXT = 1;
+  MESSAGE_PART_KIND_THINKING = 2;
+  MESSAGE_PART_KIND_TOOL_CALL = 3;
+  MESSAGE_PART_KIND_TOOL_RESULT = 4;
+  MESSAGE_PART_KIND_IMAGE = 5;
+  MESSAGE_PART_KIND_AUDIO = 6;
+  MESSAGE_PART_KIND_VIDEO = 7;
+  MESSAGE_PART_KIND_DOCUMENT = 8;
+  MESSAGE_PART_KIND_METADATA = 9;
+}
+
+enum MessagePartStatus {
+  MESSAGE_PART_STATUS_UNSPECIFIED = 0;
+  MESSAGE_PART_STATUS_PENDING = 1;
+  MESSAGE_PART_STATUS_STREAMING = 2;
+  MESSAGE_PART_STATUS_COMPLETE = 3;
+  MESSAGE_PART_STATUS_FAILED = 4;
+}
+
+// MessageStatus - overall status of a message (not individual parts)
+enum MessageStatus {
+  MESSAGE_STATUS_UNSPECIFIED = 0;
+  MESSAGE_STATUS_COMPLETE = 1;
+  MESSAGE_STATUS_CANCELLED = 2;
+  MESSAGE_STATUS_ERROR = 3;
+}
+
+// Tool execution status - for tracking tool call lifecycle
+enum ToolExecutionStatus {
+  TOOL_EXECUTION_STATUS_UNSPECIFIED = 0;
+  TOOL_EXECUTION_STATUS_CALLING = 1;
+  TOOL_EXECUTION_STATUS_RUNNING = 2;
+  TOOL_EXECUTION_STATUS_COMPLETED = 3;
+  TOOL_EXECUTION_STATUS_FAILED = 4;
+}
+
+// ToolCall represents an invocation of a tool
+message ToolCall {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Struct arguments = 3;
+  ToolExecutionStatus status = 4;
+}
+
+// ToolResult represents the output of a tool call
+message ToolResult {
+  string tool_call_id = 1;
+  string result = 2;
+  ToolExecutionStatus status = 3;
+}
+
+// MediaContent represents image, audio, video, or document data
+message MediaContent {
+  oneof source {
+    string url = 1; // URL/URI to the media
+    bytes data = 2; // Raw binary data
+    string base64 = 3; // Base64-encoded string
+  }
+  optional string media_type = 4; // MIME type: "image/png", "audio/mp3", etc.
+}
+
+// MessagePart represents a single part of a message (text, thinking, tool_call, tool_result, media)
+message MessagePart {
+  string id = 1;
+  MessagePartKind kind = 2;
+  MessagePartStatus status = 3;
+  optional string content = 4;
+  optional ToolCall tool_call = 5;
+  optional ToolResult tool_result = 6;
+  optional MediaContent media = 7; // For IMAGE, AUDIO, VIDEO, DOCUMENT kinds
+  optional string summary = 8; // Document summary (for DOCUMENT kind)
+}
+
+message Message {
+  string pid = 1;
+  string role = 2;
+  MessageStatus status = 3;
+  repeated MessagePart parts = 7;
+  string created_at = 8;
+}
+
+message Conversation {
+  string pid = 1;
+  optional string user_id = 2;
+  string agent_pid = 3;
+  optional string title = 4;
+  repeated Message messages = 5;
+  int32 message_count = 6;
+  optional string last_message_at = 7;
+  string created_at = 9;
+  string updated_at = 10;
+}
+
+message InferRequest {
+  string agent_pid = 1;
+  optional string conversation_pid = 2;
+  string message = 3;
+  string request_id = 4;
+  repeated string document_pids = 5;
+}
+
+// Streaming response events - follows SSE pattern: part_start, part_delta, part_end
+message InferResponse {
+  oneof event {
+    PartStart part_start = 1;
+    PartDelta part_delta = 2;
+    PartEnd part_end = 3;
+    ToolStatus tool_status = 4;
+    InferenceComplete complete = 5;
+    InferenceCancelled cancelled = 6;
+    MessageAcknowledged acknowledged = 7;
+  }
+}
+
+// Signals that the user message has been persisted to the database.
+// Emitted before inference begins.
+message MessageAcknowledged {
+  string conversation_pid = 1;
+  string message_pid = 2;
+}
+
+// Signals that inference was cancelled by user request
+message InferenceCancelled {
+  string reason = 1;
+}
+
+message CancelInferenceRequest {
+  string request_id = 1;
+  string conversation_pid = 2;
+}
+
+message CancelInferenceResponse {
+  bool cancelled = 1;
+}
+
+// Signals the start of a new message part
+message PartStart {
+  string part_id = 1;
+  MessagePartKind kind = 2;
+
+  optional string tool_name = 3;
+  optional string tool_call_id = 4;
+}
+
+// Streaming content delta for a part
+message PartDelta {
+  string part_id = 1;
+  MessagePartKind kind = 2;
+
+  oneof delta {
+    string content = 3;
+    google.protobuf.Struct arguments = 4;
+    MediaContent media = 5; // For IMAGE, AUDIO, VIDEO, DOCUMENT (typically sent complete, not streamed)
+  }
+}
+
+// Signals the end of a message part
+message PartEnd {
+  string part_id = 1;
+  MessagePartStatus status = 2;
+}
+
+// Tool execution status update (emitted via rig prompt hooks)
+message ToolStatus {
+  string tool_call_id = 1;
+  ToolExecutionStatus status = 2;
+  optional string error = 3;
+}
+
+// Inference completed - final summary
+message InferenceComplete {
+  string conversation_pid = 1;
+  Message message = 3;
+  optional google.protobuf.Struct metadata = 4;
+}
+
+// Synchronous inference response - complete response in one message
+message InferSyncResponse {
+  string request_id = 1;
+  string conversation_pid = 2;
+  string message_pid = 3;
+  Message message = 4;
+  optional google.protobuf.Struct metadata = 5;
+}
+
+message ListConversationsRequest {
+  optional bool is_active = 1;
+  optional string agent_pid = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ListConversationsResponse {
+  repeated Conversation conversations = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message GetConversationRequest {
+  string pid = 1;
+}
+
+message GetConversationResponse {
+  Conversation conversation = 1;
+}
+
+message CreateConversationRequest {
+  string agent_pid = 1;
+  optional string title = 2;
+}
+
+message CreateConversationResponse {
+  Conversation conversation = 1;
+}
+
+message DeleteConversationRequest {
+  string pid = 1;
+}
+
+message DeleteConversationResponse {}
+
+// =============================================================================
+// Conversation-Document management
+// =============================================================================
+
+message AttachDocumentsRequest {
+  string conversation_pid = 1;
+  repeated string document_pids = 2;
+}
+
+message AttachDocumentsResponse {
+  int32 attached_count = 1;
+}
+
+message DetachDocumentsRequest {
+  string conversation_pid = 1;
+  repeated string document_pids = 2;
+}
+
+message DetachDocumentsResponse {
+  int32 detached_count = 1;
+}
+
+message ListConversationDocumentsRequest {
+  string conversation_pid = 1;
+}
+
+message ListConversationDocumentsResponse {
+  repeated Document documents = 1;
+}
+
+// --- Sharing ---
+
+message ConversationShare {
+  string user_id = 1;
+  int32 permissions = 2; // bitfield: 1=read, 2=write, 4=execute
+  string shared_by = 3;
+  string created_at = 4;
+  optional string display_name = 5;
+  string email = 6;
+}
+
+message ShareConversationRequest {
+  string conversation_pid = 1;
+  string user_id = 2; // recipient
+  int32 permissions = 3; // bitfield
+}
+
+message ShareConversationResponse {}
+
+message UnshareConversationRequest {
+  string conversation_pid = 1;
+  string user_id = 2; // recipient to revoke
+}
+
+message UnshareConversationResponse {}
+
+message ListConversationSharesRequest {
+  string conversation_pid = 1;
+  int32 page_size = 2;
+  optional string cursor = 3;
+}
+
+message ListConversationSharesResponse {
+  repeated ConversationShare shares = 1;
+  optional string next_cursor = 2;
+  int32 total = 3;
+}

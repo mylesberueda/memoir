@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "../components/index.css";
+/* biome-ignore lint/suspicious/noUnknownAtRules: needed for daisy */
+@source "../../../../node_modules/daisyui/dist/**/*.js";
+/* biome-ignore lint/suspicious/noUnknownAtRules: needed for daisy */
+@source "../../../../node_modules/react-daisyui/dist/**/*.js";
+/* biome-ignore lint/suspicious/noUnknownAtRules: needed for daisy */
+@source "../../node_modules/rsc-daisyui/dist";
+/* biome-ignore lint/suspicious/noUnknownAtRules: needed for daisy */
+@source "../app/**/*.{tsx,html}";
+
+/* biome-ignore lint/suspicious/noUnknownAtRules: needed for daisy */
+@plugin "daisyui" {
+	/* biome-ignore lint/correctness/noUnknownProperty: https://daisyui.com/docs/themes */
+	themes:
+		light --preferslight,
+		dark --default;
+}
+
+/* biome-ignore lint/suspicious/noUnknownAtRules: needed for daisy */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/*
+ * GLOBAL TYPOGRAPHY SCALE
+ * Applies to ALL themes (light, dark, etc.)
+ * Using 1.25 ratio (Major Third) with 18px base for comfortable reading
+ */
+/* biome-ignore lint/suspicious/noUnknownAtRules: tailwind v4 theme block */
+@theme {
+	--font-sans:
+		ui-sans-serif,
+		system-ui,
+		-apple-system,
+		BlinkMacSystemFont,
+		"Segoe UI",
+		Roboto,
+		"Helvetica Neue",
+		Arial,
+		"Noto Sans",
+		sans-serif,
+		"Apple Color Emoji",
+		"Segoe UI Emoji",
+		"Segoe UI Symbol",
+		"Noto Color Emoji";
+
+	/* Typography scale */
+	--text-xs: 0.75rem;
+	/* 12px - metadata, timestamps, badges */
+	--text-sm: 0.875rem;
+	/* 14px - secondary text, captions */
+	--text-base: 1.125rem;
+	/* 18px - body text */
+	--text-lg: 1.25rem;
+	/* 20px - emphasized body, lead paragraphs */
+	--text-xl: 1.5rem;
+	/* 24px - h4, card titles */
+	--text-2xl: 1.875rem;
+	/* 30px - h3 */
+	--text-3xl: 2.25rem;
+	/* 36px - h2 */
+	--text-4xl: 3rem;
+	/* 48px - h1 */
+	--text-5xl: 3.75rem;
+	/* 60px - hero headlines */
+
+	/* Line heights */
+	--leading-tight: 1.25;
+	--leading-snug: 1.375;
+	--leading-normal: 1.5;
+	--leading-relaxed: 1.625;
+	--leading-loose: 1.75;
+}
+
+/* shadcn/ui CSS variables for AI Elements */
+@layer base {
+	:root {
+		--radius: 0.5rem;
+	}
+}
+
+html {
+	font-size: 16px;
+	-webkit-text-size-adjust: 100%;
+	font-family: var(--font-sans);
+	line-height: var(--leading-normal);
+	tab-size: 4;
+	scroll-behavior: smooth;
+}
+
+body {
+	font-family: inherit;
+	font-size: var(--text-base);
+	line-height: var(--leading-relaxed);
+	margin: 0;
+}

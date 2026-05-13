@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package api.v1;
+
+service AdminService {
+  rpc GetOrganizationPlan(GetOrganizationPlanRequest) returns (GetOrganizationPlanResponse);
+  rpc UpdateOrganizationPlan(UpdateOrganizationPlanRequest) returns (UpdateOrganizationPlanResponse);
+}
+
+message OrganizationPlan {
+  string organization_pid = 1;
+  string tier = 2;
+  optional string expires_at = 3;
+  string created_at = 4;
+  string updated_at = 5;
+}
+
+message GetOrganizationPlanRequest {
+  string organization_pid = 1;
+}
+
+message GetOrganizationPlanResponse {
+  OrganizationPlan plan = 1;
+}
+
+message UpdateOrganizationPlanRequest {
+  string organization_pid = 1;
+  optional string tier = 2;
+  optional string expires_at = 3;
+}
+
+message UpdateOrganizationPlanResponse {
+  OrganizationPlan plan = 1;
+}

@@ -1,0 +1,34 @@
+[env]
+TF_VAR_gcp_project_id = "staging-gcp-project-id"
+TF_VAR_domain = "staging.startup.ai"
+
+# ArgoCD
+# ------------------------------------------------------------------------------
+# github.com/settings/personal-access-tokens -> generate new token
+# contents:r, metadata:r
+TF_VAR_github_argocd_token = "ghp_xxx"
+TF_VAR_argocd_target_revision = "deploy/main"
+# Optionally set up cloudflared for instant sync (vs 3 min poll)
+# TF_VAR_cloudflare_tunnel_token = "your-cloudflare-tunnel-token"
+
+# Zitadel
+# ------------------------------------------------------------------------------
+TF_VAR_discord_client_id = "discord_client_id"
+TF_VAR_discord_client_secret = "discord_client_secret"
+TF_VAR_github_client_id = "github_client_id"
+TF_VAR_github_client_secret = "github_client_secret"
+
+# SMTP for Zitadel email verification
+TF_VAR_zitadel_smtp_sender_address = "noreply@startup.local"
+TF_VAR_zitadel_smtp_sender_name = "Startup AI"
+TF_VAR_zitadel_smtp_host = "maildev:1025"
+TF_VAR_zitadel_smtp_tls = "false"
+TF_VAR_zitadel_smtp_user = ""
+TF_VAR_zitadel_smtp_password = ""
+
+# Stripe
+# ------------------------------------------------------------------------------
+# Get your API key from https://dashboard.stripe.com/test/apikeys
+STRIPE_API_KEY = "sk_test_your_key_here"
+# Webhook URL - only set for staging/production (localhost uses Stripe CLI instead)
+# TF_VAR_stripe_webhook_url = "https://api.staging.startup.ai"

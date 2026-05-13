@@ -1,0 +1,27 @@
+[tools]
+node = "latest"
+buf = "latest"
+stripe = "latest"
+
+terraform = "latest"
+helm = "latest"
+kind = "latest"
+kubectl = "latest"
+protoc = "latest"
+argocd = "latest"
+
+[env]
+DB_HOST = "localhost"
+DB_PORT = "54321"
+DB_USER = "postgres"
+DB_PASS = "postgres"
+
+[tasks.stripe]
+description = "Start the development webhook listener. Make sure you log in with `stripe login`."
+run = [
+  "echo 'Copy the webhook secret to api-service/.env'",
+  "stripe listen --forward-to localhost:5154/v1/webhooks/stripe",
+]
+
+[settings]
+idiomatic_version_file_enable_tools = []

@@ -1,0 +1,63 @@
+[package]
+name = "api-service"
+version = "0.1.0"
+description = "The main API for startup.ai."
+authors = ["Myles Berueda <myles@polypixel.io>"]
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+api-service-migration = { path = "./migration" }
+async-stripe = "1.0.0-rc.0"
+async-stripe-billing = { version = "1.0.0-rc.0", features = ["full"] }
+async-stripe-checkout = { version = "1.0.0-rc.0", features = [
+  "checkout_session",
+] }
+async-stripe-client-core = "1.0.0-rc.0"
+async-stripe-product = { version = "1.0.0-rc.0", features = ["price"] }
+async-stripe-shared = "1.0.0-rc.0"
+async-stripe-webhook = "1.0.0-rc.0"
+axum = { workspace = true }
+base64 = "0.22"
+chrono = "0.4"
+color-eyre = { workspace = true }
+common-rs = { path = "../../packages/common-rs" }
+dashmap = "6.1"
+platform-rs = { path = "../../packages/platform-rs" }
+fred = { workspace = true }
+http = { version = "1.4" }
+jsonwebtoken = { version = "10.2", features = ["rust_crypto"] }
+pbjson-types = "0.9.0"
+proto-rs = { path = "../../packages/proto-rs" }
+reqwest = { workspace = true, features = ["json", "form"] }
+sea-orm = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tonic = { workspace = true, features = ["router"] }
+tonic-health = { version = "0.14" }
+tower = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
+
+[dependencies.clap]
+git = "https://github.com/clap-rs/clap"
+branch = "master"
+features = ["derive"]
+
+[features]
+default = []
+integration = []
+unit = []
+
+[dev-dependencies]
+async-stripe-core = { version = "1.0.0-rc.0", features = ["customer"] }
+async-stripe-payment = { version = "1.0.0-rc.0", features = ["payment_method"] }
+common-rs = { path = "../../packages/common-rs", features = ["test_utils"] }
+platform-rs = { path = "../../packages/platform-rs", features = ["test_utils"] }
+http-body-util = "0.1"
+serial_test = "3.1.1"
+test-context = "0.5"

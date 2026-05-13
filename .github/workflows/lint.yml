@@ -1,0 +1,113 @@
+name: Lint
+
+on:
+  workflow_call:
+    inputs:
+      node-projects:
+        description: "Node.js projects to lint (JSON array)"
+        required: true
+        type: string
+      rust-projects:
+        description: "Rust projects to lint (JSON array)"
+        required: true
+        type: string
+
+env:
+  NODE_VERSION: "23"
+  NX_KEY: ${{ secrets.NX_KEY }}
+
+jobs:
+  lint-node:
+    runs-on: arc-runner-set
+    if: inputs.node-projects != '[]'
+    name: lint (node)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          install-dependencies: "true"
+          cache-only: "false"
+          commit-sha: ${{ github.sha }}
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: "dev"
+
+      - name: Lint Node.js projects
+        run: |
+          PROJECTS='${{ inputs.node-projects }}'
+          PROJECT_LIST=$(echo "$PROJECTS" | jq -r 'join(",")')
+          echo "🔍 Linting: $PROJECT_LIST"
+          pnpm nx run-many --target lint --projects "$PROJECT_LIST" --parallel
+        env:
+          NODE_NO_WARNINGS: 1
+          NODE_OPTIONS: "--no-deprecation"
+
+      - name: Check formatting
+        run: |
+          PROJECTS='${{ inputs.node-projects }}'
+          # Find intersection of affected projects and projects with format target
+          FORMAT_PROJECTS=$(pnpm --silent nx show projects --projects tag:lang:node --with-target format --json 2>/dev/null || echo "[]")
+          TO_FORMAT=$(echo "$PROJECTS $FORMAT_PROJECTS" | jq -sc '.[0] as $a | .[1] as $b | $a | map(select(. as $i | $b | index($i)))')
+
+          if [ "$TO_FORMAT" != "[]" ]; then
+            PROJECT_LIST=$(echo "$TO_FORMAT" | jq -r 'join(",")')
+            echo "✨ Checking format: $PROJECT_LIST"
+            pnpm nx run-many --target format --projects "$PROJECT_LIST" --parallel
+          else
+            echo "✅ No projects with format target"
+          fi
+        env:
+          NODE_NO_WARNINGS: 1
+          NODE_OPTIONS: "--no-deprecation"
+
+  lint-rust:
+    runs-on: arc-runner-set
+    if: inputs.rust-projects != '[]'
+    name: lint (rust)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Rust system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: "dev"
+
+      - name: Lint Rust projects
+        run: |
+          PROJECTS='${{ inputs.rust-projects }}'
+          PROJECT_LIST=$(echo "$PROJECTS" | jq -r 'join(",")')
+          echo "🔍 Linting: $PROJECT_LIST"
+          pnpm nx run-many --target lint --projects "$PROJECT_LIST" --parallel
+        env:
+          NODE_NO_WARNINGS: 1
+          NODE_OPTIONS: "--no-deprecation"

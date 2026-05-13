@@ -1,0 +1,9 @@
+[tool.uv.sources]
+agent-api = { workspace = true }
+proto-python = { workspace = true }
+
+[tool.uv.workspace]
+members = ["apps/agent-api", "packages/proto-python"]
+
+[dependency-groups]
+dev = []

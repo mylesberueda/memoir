@@ -1,0 +1,283 @@
+name: "Setup Test Services"
+description: "Setup Redis and PostgreSQL services using Kubernetes deployments"
+
+inputs:
+  setup-redis:
+    description: "Whether to setup Redis"
+    required: false
+    default: "true"
+  setup-postgres:
+    description: "Whether to setup PostgreSQL"
+    required: false
+    default: "true"
+  postgres-db:
+    description: "PostgreSQL database name"
+    required: false
+    default: "postgres_test"
+  postgres-user:
+    description: "PostgreSQL user"
+    required: false
+    default: "postgres"
+  postgres-password:
+    description: "PostgreSQL password"
+    required: false
+    default: "postgres"
+  namespace:
+    description: "Kubernetes namespace for test services"
+    required: false
+    default: "test-services"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Create test namespace
+      shell: bash
+      run: |
+        echo "🔧 Creating namespace ${{ inputs.namespace }}..."
+        kubectl create namespace ${{ inputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy Redis
+      if: inputs.setup-redis == 'true'
+      shell: bash
+      run: |
+        echo "🚀 Deploying Redis..."
+        cat <<EOF | kubectl apply -f -
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: redis-test
+          namespace: ${{ inputs.namespace }}
+          labels:
+            app: redis-test
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: redis-test
+          template:
+            metadata:
+              labels:
+                app: redis-test
+            spec:
+              containers:
+              - name: redis
+                image: redis:7-alpine
+                resources:
+                  requests:
+                    memory: "64Mi"
+                    cpu: "50m"
+                  limits:
+                    memory: "128Mi"
+                    cpu: "100m"
+                ports:
+                - containerPort: 6379
+                readinessProbe:
+                  exec:
+                    command:
+                    - redis-cli
+                    - ping
+                  initialDelaySeconds: 5
+                  periodSeconds: 5
+                  timeoutSeconds: 3
+                livenessProbe:
+                  exec:
+                    command:
+                    - redis-cli
+                    - ping
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  timeoutSeconds: 3
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: redis-test
+          namespace: ${{ inputs.namespace }}
+          labels:
+            app: redis-test
+        spec:
+          selector:
+            app: redis-test
+          ports:
+          - port: 6379
+            targetPort: 6379
+            name: redis
+        EOF
+
+    - name: Deploy PostgreSQL
+      if: inputs.setup-postgres == 'true'
+      shell: bash
+      run: |
+        echo "🚀 Deploying PostgreSQL..."
+        cat <<EOF | kubectl apply -f -
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: postgres-test
+          namespace: ${{ inputs.namespace }}
+          labels:
+            app: postgres-test
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: postgres-test
+          template:
+            metadata:
+              labels:
+                app: postgres-test
+            spec:
+              containers:
+              - name: postgres
+                image: postgres:16-alpine
+                resources:
+                  requests:
+                    memory: "128Mi"
+                    cpu: "100m"
+                  limits:
+                    memory: "256Mi"
+                    cpu: "200m"
+                env:
+                - name: POSTGRES_DB
+                  value: "${{ inputs.postgres-db }}"
+                - name: POSTGRES_USER
+                  value: "${{ inputs.postgres-user }}"
+                - name: POSTGRES_PASSWORD
+                  value: "${{ inputs.postgres-password }}"
+                ports:
+                - containerPort: 5432
+                readinessProbe:
+                  exec:
+                    command:
+                    - pg_isready
+                    - -U
+                    - "${{ inputs.postgres-user }}"
+                  initialDelaySeconds: 5
+                  periodSeconds: 5
+                  timeoutSeconds: 3
+                livenessProbe:
+                  exec:
+                    command:
+                    - pg_isready
+                    - -U
+                    - "${{ inputs.postgres-user }}"
+                  initialDelaySeconds: 10
+                  periodSeconds: 10
+                  timeoutSeconds: 3
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: postgres-test
+          namespace: ${{ inputs.namespace }}
+          labels:
+            app: postgres-test
+        spec:
+          selector:
+            app: postgres-test
+          ports:
+          - port: 5432
+            targetPort: 5432
+            name: postgres
+          - port: 54321
+            targetPort: 5432
+            name: postgres-alt
+        EOF
+
+    - name: Wait for services to be ready
+      shell: bash
+      run: |
+        echo "⏳ Waiting for services to be ready..."
+
+        if [ "${{ inputs.setup-redis }}" = "true" ]; then
+          echo "Waiting for Redis deployment..."
+          kubectl wait --for=condition=available deployment/redis-test -n ${{ inputs.namespace }} --timeout=120s
+          echo "Waiting for Redis pods..."
+          kubectl wait --for=condition=ready pod -l app=redis-test -n ${{ inputs.namespace }} --timeout=60s
+          echo "✅ Redis is ready"
+        fi
+
+        if [ "${{ inputs.setup-postgres }}" = "true" ]; then
+          echo "Waiting for PostgreSQL deployment..."
+          kubectl wait --for=condition=available deployment/postgres-test -n ${{ inputs.namespace }} --timeout=120s
+          echo "Waiting for PostgreSQL pods..."
+          kubectl wait --for=condition=ready pod -l app=postgres-test -n ${{ inputs.namespace }} --timeout=60s
+          echo "✅ PostgreSQL is ready"
+        fi
+
+    - name: Setup test databases
+      if: inputs.setup-postgres == 'true'
+      shell: bash
+      run: |
+        echo "🗄️  Setting up test databases..."
+
+        # Get PostgreSQL pod name
+        POSTGRES_POD=$(kubectl get pods -n ${{ inputs.namespace }} -l app=postgres-test -o jsonpath='{.items[0].metadata.name}')
+        echo "Using PostgreSQL pod: $POSTGRES_POD"
+
+        # Wait for PostgreSQL to be fully ready
+        echo "Waiting for PostgreSQL to accept connections..."
+        timeout 60 bash -c 'until kubectl exec -n ${{ inputs.namespace }} '$POSTGRES_POD' -- pg_isready -U ${{ inputs.postgres-user }}; do sleep 2; done' || echo "PostgreSQL readiness check timeout"
+
+        # Create the agent-api test database
+        echo "Creating agent_service_test database..."
+        kubectl exec -n ${{ inputs.namespace }} $POSTGRES_POD -- psql -U ${{ inputs.postgres-user }} -d ${{ inputs.postgres-db }} -c "CREATE DATABASE agent_service_test;" || echo "Database may already exist"
+
+        # Create api_test database for other services
+        echo "Creating api_test database..."
+        kubectl exec -n ${{ inputs.namespace }} $POSTGRES_POD -- psql -U ${{ inputs.postgres-user }} -d ${{ inputs.postgres-db }} -c "CREATE DATABASE api_test;" || echo "Database may already exist"
+
+        # Verify databases were created
+        echo "Verifying databases..."
+        if kubectl exec -n ${{ inputs.namespace }} $POSTGRES_POD -- psql -U ${{ inputs.postgres-user }} -d agent_service_test -c "SELECT 1;" > /dev/null 2>&1; then
+          echo "✅ agent_service_test database ready"
+        else
+          echo "❌ agent_service_test database verification failed"
+        fi
+
+        if kubectl exec -n ${{ inputs.namespace }} $POSTGRES_POD -- psql -U ${{ inputs.postgres-user }} -d api_test -c "SELECT 1;" > /dev/null 2>&1; then
+          echo "✅ api_test database ready"
+        else
+          echo "❌ api_test database verification failed"
+        fi
+
+        # List all databases for debugging
+        echo "Available databases:"
+        kubectl exec -n ${{ inputs.namespace }} $POSTGRES_POD -- psql -U ${{ inputs.postgres-user }} -d ${{ inputs.postgres-db }} -c "\l"
+
+    - name: Setup service endpoints
+      shell: bash
+      run: |
+        echo "🔗 Setting up service endpoints..."
+
+        # Export service endpoints as environment variables for subsequent steps
+        echo "REDIS_SERVICE_HOST=redis-test.${{ inputs.namespace }}.svc.cluster.local" >> $GITHUB_ENV
+        echo "REDIS_SERVICE_PORT=6379" >> $GITHUB_ENV
+        echo "POSTGRES_SERVICE_HOST=postgres-test.${{ inputs.namespace }}.svc.cluster.local" >> $GITHUB_ENV
+        echo "POSTGRES_SERVICE_PORT=5432" >> $GITHUB_ENV
+        echo "POSTGRES_SERVICE_PORT_ALT=54321" >> $GITHUB_ENV
+
+        echo "✅ Service endpoints configured:"
+        echo "  Redis: redis-test.${{ inputs.namespace }}.svc.cluster.local:6379"
+        echo "  PostgreSQL: postgres-test.${{ inputs.namespace }}.svc.cluster.local:5432"
+        echo "  PostgreSQL (alt): postgres-test.${{ inputs.namespace }}.svc.cluster.local:54321"
+
+outputs:
+  redis-host:
+    description: "Redis service hostname"
+    value: "redis-test.${{ inputs.namespace }}.svc.cluster.local"
+  redis-port:
+    description: "Redis service port"
+    value: "6379"
+  postgres-host:
+    description: "PostgreSQL service hostname"
+    value: "postgres-test.${{ inputs.namespace }}.svc.cluster.local"
+  postgres-port:
+    description: "PostgreSQL service port"
+    value: "5432"
+  postgres-port-alt:
+    description: "PostgreSQL alternative service port"
+    value: "54321"
+  namespace:
+    description: "Kubernetes namespace where services are deployed"
+    value: "${{ inputs.namespace }}"

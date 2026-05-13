@@ -1,0 +1,11 @@
+# Base Helm chart for all services
+# This is a reusable template chart - each service provides its own values
+apiVersion: v2
+name: service
+description: Base chart for startup-ai services
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+# This chart is designed to be used with different values files per service/environment
+# Usage: helm template <release-name> . -f /path/to/values/service.yaml

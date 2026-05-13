@@ -1,0 +1,179 @@
+name: "Smart Cache Setup"
+description: "Intelligent cache setup that uses MinIO for self-hosted runners and GitHub cache for GitHub runners"
+
+inputs:
+  path:
+    description: "A list of files, directories, and wildcard patterns to cache and restore"
+    required: true
+  key:
+    description: "An explicit key for restoring and saving the cache"
+    required: true
+  restore-keys:
+    description: "An ordered list of keys to use for restoring stale cache if no cache hit occurred for key"
+    required: false
+  commit-sha:
+    description: "Commit SHA to include in cache key for cross-workflow caching"
+    required: false
+    default: ""
+  upload-chunk-size:
+    description: "The chunk size used to split up large files during upload, in bytes"
+    required: false
+  enableCrossOsArchive:
+    description: "An optional boolean when enabled, allows windows runners to save or restore caches that can be restored or saved respectively on other platforms"
+    required: false
+    default: "false"
+  fail-on-cache-miss:
+    description: "Fail the workflow if cache entry is not found"
+    required: false
+    default: "false"
+  lookup-only:
+    description: "Check if a cache entry exists for the given input(s) (key, restore-keys) without downloading the cache"
+    required: false
+    default: "false"
+  save-always:
+    description: "Run the save step even if another step before fails"
+    required: false
+    default: "false"
+
+outputs:
+  cache-hit:
+    description: "A boolean value to indicate an exact match was found for the primary key"
+    value: ${{ steps.cache-action.outputs.cache-hit }}
+  cache-primary-key:
+    description: "A resolved cache key for which cache match was attempted"
+    value: ${{ steps.cache-action.outputs.cache-primary-key }}
+  cache-matched-key:
+    description: "Key of the cache that was restored, it could either be the primary key on cache-hit or a partial/complete match of one of the restore keys"
+    value: ${{ steps.cache-action.outputs.cache-matched-key }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Detect runner type
+      id: detect-runner
+      shell: bash
+      run: |
+        # Check if we're running on a self-hosted runner with MinIO access
+        if [[ -n "${RUNNER_NAME:-}" ]] && [[ "${RUNNER_NAME}" == *"arc-runner"* ]]; then
+          echo "runner-type=self-hosted" >> $GITHUB_OUTPUT
+          echo "🏃 Detected self-hosted runner: ${RUNNER_NAME}"
+        elif [[ -n "${RUNS_ON_RUNNER_NAME:-}" ]]; then
+          echo "runner-type=runs-on" >> $GITHUB_OUTPUT
+          echo "🏃 Detected RunsOn runner: ${RUNS_ON_RUNNER_NAME}"
+        else
+          echo "runner-type=github" >> $GITHUB_OUTPUT
+          echo "🏃 Detected GitHub-hosted runner"
+        fi
+
+    - name: Setup MinIO credentials for self-hosted runners
+      id: setup-minio
+      if: steps.detect-runner.outputs.runner-type == 'self-hosted'
+      shell: bash
+      run: |
+        # Set up MinIO credentials for self-hosted runners
+        echo "Setting up MinIO credentials for cache access..."
+
+        # MinIO service endpoint (adjust based on your cluster setup)
+        if [[ "${ENVIRONMENT:-local}" == "local" ]]; then
+          MINIO_ENDPOINT="http://minio.minio-system.svc.cluster.local:9000"
+        else
+          MINIO_ENDPOINT="http://minio.minio-system.svc.cluster.local:9000"
+        fi
+
+        echo "AWS_ACCESS_KEY_ID=admin" >> $GITHUB_ENV
+        echo "AWS_SECRET_ACCESS_KEY=minio123" >> $GITHUB_ENV
+        echo "AWS_ENDPOINT_URL=${MINIO_ENDPOINT}" >> $GITHUB_ENV
+        echo "AWS_S3_FORCE_PATH_STYLE=true" >> $GITHUB_ENV
+        echo "RUNS_ON_S3_BUCKET_CACHE=github-actions-cache" >> $GITHUB_ENV
+        echo "AWS_REGION=us-east-1" >> $GITHUB_ENV
+
+        echo "✅ MinIO credentials configured"
+
+    - name: Enhance cache keys with commit SHA
+      id: enhance-keys
+      shell: bash
+      run: |
+        COMMIT_SHA="${{ inputs.commit-sha }}"
+        BASE_KEY="${{ inputs.key }}"
+        BASE_RESTORE_KEYS="${{ inputs.restore-keys }}"
+
+        if [[ -n "$COMMIT_SHA" ]]; then
+          # Add commit SHA to primary key
+          ENHANCED_KEY="${BASE_KEY}-${COMMIT_SHA}"
+          echo "enhanced-key=$ENHANCED_KEY" >> $GITHUB_OUTPUT
+
+          # Add commit-based restore keys
+          if [[ -n "$BASE_RESTORE_KEYS" ]]; then
+            # Add original key as restore key, then base restore keys
+            ENHANCED_RESTORE_KEYS="${BASE_KEY}
+        ${BASE_RESTORE_KEYS}"
+          else
+            ENHANCED_RESTORE_KEYS="${BASE_KEY}"
+          fi
+          echo "enhanced-restore-keys<<EOF" >> $GITHUB_OUTPUT
+          echo "$ENHANCED_RESTORE_KEYS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          echo "🔑 Enhanced cache key: $ENHANCED_KEY"
+          echo "🔄 Enhanced restore keys: $ENHANCED_RESTORE_KEYS"
+        else
+          # No commit SHA, use original keys
+          echo "enhanced-key=$BASE_KEY" >> $GITHUB_OUTPUT
+          echo "enhanced-restore-keys=$BASE_RESTORE_KEYS" >> $GITHUB_OUTPUT
+          echo "🔑 Using original cache key: $BASE_KEY"
+        fi
+
+    - name: Cache with runs-on/cache (self-hosted/RunsOn runners)
+      id: cache-action
+      if: steps.detect-runner.outputs.runner-type != 'github'
+      uses: runs-on/cache@v4
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ steps.enhance-keys.outputs.enhanced-key }}
+        restore-keys: ${{ steps.enhance-keys.outputs.enhanced-restore-keys }}
+        upload-chunk-size: ${{ inputs.upload-chunk-size }}
+        enableCrossOsArchive: ${{ inputs.enableCrossOsArchive }}
+        fail-on-cache-miss: ${{ inputs.fail-on-cache-miss }}
+        lookup-only: ${{ inputs.lookup-only }}
+        save-always: ${{ inputs.save-always }}
+
+    - name: Cache with actions/cache (GitHub runners)
+      id: cache-action-github
+      if: steps.detect-runner.outputs.runner-type == 'github'
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ steps.enhance-keys.outputs.enhanced-key }}
+        restore-keys: ${{ steps.enhance-keys.outputs.enhanced-restore-keys }}
+        upload-chunk-size: ${{ inputs.upload-chunk-size }}
+        enableCrossOsArchive: ${{ inputs.enableCrossOsArchive }}
+        fail-on-cache-miss: ${{ inputs.fail-on-cache-miss }}
+        lookup-only: ${{ inputs.lookup-only }}
+
+    - name: Set outputs for GitHub runners
+      if: steps.detect-runner.outputs.runner-type == 'github'
+      shell: bash
+      run: |
+        echo "cache-hit=${{ steps.cache-action-github.outputs.cache-hit }}" >> $GITHUB_OUTPUT
+        echo "cache-primary-key=${{ steps.cache-action-github.outputs.cache-primary-key }}" >> $GITHUB_OUTPUT
+        echo "cache-matched-key=${{ steps.cache-action-github.outputs.cache-matched-key }}" >> $GITHUB_OUTPUT
+
+    - name: Cache status summary
+      shell: bash
+      run: |
+        RUNNER_TYPE="${{ steps.detect-runner.outputs.runner-type }}"
+        if [[ "$RUNNER_TYPE" == "github" ]]; then
+          CACHE_HIT="${{ steps.cache-action-github.outputs.cache-hit }}"
+          CACHE_KEY="${{ steps.cache-action-github.outputs.cache-matched-key }}"
+          BACKEND="GitHub Actions Cache"
+        else
+          CACHE_HIT="${{ steps.cache-action.outputs.cache-hit }}"
+          CACHE_KEY="${{ steps.cache-action.outputs.cache-matched-key }}"
+          BACKEND="MinIO S3 Cache"
+        fi
+
+        echo "📊 Cache Summary:"
+        echo "  Runner Type: $RUNNER_TYPE"
+        echo "  Cache Backend: $BACKEND"
+        echo "  Cache Hit: $CACHE_HIT"
+        echo "  Cache Key: $CACHE_KEY"

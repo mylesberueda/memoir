@@ -1,0 +1,19 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`FormInput > matches snapshot 1`] = `
+<label
+  class="fieldset-legend"
+  for="test-field"
+>
+  Test Label
+</label>
+`;
+
+exports[`FormInput > matches snapshot with error 1`] = `
+<label
+  class="fieldset-legend"
+  for="test-field"
+>
+  Test Label
+</label>
+`;

@@ -1,0 +1,22 @@
+# Local development values for ARC Controller
+# Minimal configuration for kind cluster
+
+# Resource limits for local development
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# RBAC configuration - API discovery permissions
+rbac:
+  rules:
+    - nonResourceURLs:
+        - "/api"
+        - "/api/*"
+        - "/apis"
+        - "/apis/*"
+      verbs:
+        - "get"

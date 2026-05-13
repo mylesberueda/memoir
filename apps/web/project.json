@@ -1,0 +1,164 @@
+{
+	"name": "web",
+	"$schema": "../../node_modules/nx/schemas/project-schema.json",
+	"sourceRoot": "apps/web",
+	"projectType": "application",
+	"tags": ["scope:web", "type:app", "lang:node"],
+	"targets": {
+		"test": {
+			"executor": "@nx/vite:test",
+			"outputs": ["{options.reportsDirectory}"],
+			"options": {
+				"project": ["unit"],
+				"reportsDirectory": "coverage/combined",
+				"configFile": "{projectRoot}/vitest.config.ts",
+				"coverage": true,
+				"passWithNoTests": true
+			}
+		},
+		"test:unit": {
+			"executor": "@nx/vite:test",
+			"outputs": ["{options.reportsDirectory}"],
+			"options": {
+				"project": "unit",
+				"reportsDirectory": "coverage/unit",
+				"configFile": "{projectRoot}/vitest.config.ts",
+				"coverage": true,
+				"passWithNoTests": true
+			}
+		},
+		"test:integration": {
+			"executor": "@nx/vite:test",
+			"outputs": ["{options.reportsDirectory}"],
+			"options": {
+				"project": "integration",
+				"reportsDirectory": "coverage/integration",
+				"configFile": "{projectRoot}/vitest.config.ts",
+				"coverage": true,
+				"passWithNoTests": true
+			}
+		},
+		"test:storybook": {
+			"executor": "@nx/vite:test",
+			"outputs": ["{options.reportsDirectory}"],
+			"options": {
+				"project": "storybook",
+				"reportsDirectory": "coverage/storybook",
+				"configFile": "{projectRoot}/vitest.config.ts",
+				"coverage": true,
+				"passWithNoTests": true
+			}
+		},
+		"storybook": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "./node_modules/.bin/storybook dev --port 4400 --config-dir {projectRoot}/.storybook",
+				"cwd": "{workspaceRoot}"
+			},
+			"configurations": {
+				"ci": {
+					"command": "./node_modules/.bin/storybook dev --port 4400 --config-dir {projectRoot}/.storybook --ci --quiet"
+				}
+			}
+		},
+		"build-storybook": {
+			"executor": "nx:run-commands",
+			"outputs": ["{projectRoot}/dist/storybook"],
+			"options": {
+				"command": "./node_modules/.bin/storybook build --output-dir {projectRoot}/dist/storybook --config-dir {projectRoot}/.storybook",
+				"cwd": "{workspaceRoot}"
+			},
+			"configurations": {
+				"ci": {
+					"command": "./node_modules/.bin/storybook build --output-dir {projectRoot}/dist/storybook --config-dir {projectRoot}/.storybook --quiet"
+				}
+			}
+		},
+		"build": {
+			"executor": "nx:run-commands",
+			"inputs": ["{projectRoot}/src/**/*"],
+			"outputs": ["{projectRoot}/.next", "{projectRoot}/dist/build"],
+			"options": {
+				"command": "pnpm build && mkdir -p dist/build && cp -r .next dist/build/",
+				"cwd": "{projectRoot}"
+			},
+			"dependsOn": ["proto-ts:build"]
+		},
+		"dev": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "next dev --port 3000",
+				"cwd": "{projectRoot}"
+			}
+		},
+		"typecheck": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "tsc --noEmit -p tsconfig.build.json",
+				"cwd": "{projectRoot}"
+			}
+		},
+		"format": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "biome format",
+				"cwd": "{projectRoot}"
+			},
+			"cache": true
+		},
+		"format:fix": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "biome format --write",
+				"cwd": "{projectRoot}"
+			},
+			"cache": true
+		},
+		"lint": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "biome check --no-errors-on-unmatched --files-ignore-unknown=true {projectRoot}/",
+				"cwd": "{workspaceRoot}"
+			},
+			"cache": true
+		},
+		"lint:fix": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "biome check --no-errors-on-unmatched --files-ignore-unknown=true --write --unsafe {projectRoot}/",
+				"cwd": "{workspaceRoot}"
+			},
+			"cache": true
+		},
+		"docker:build": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "docker build -f apps/web/Dockerfile -t {args.repo:-startup-ai}/web:{args.tag:-local} .",
+				"cwd": "{workspaceRoot}"
+			},
+			"cache": true,
+			"dependsOn": ["build"]
+		},
+		"docker:push": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "docker push {args.repo:-startup-ai}/web:{args.tag:-local}",
+				"cwd": "{workspaceRoot}"
+			},
+			"dependsOn": ["docker:build"]
+		},
+		"k8s:configmap": {
+			"executor": "nx:run-commands",
+			"options": {
+				"commands": [
+					"mkdir -p infrastructure/kubernetes/environments/local/configmaps",
+					"kubectl create configmap web-env --from-env-file=apps/web/.env --dry-run=client -o yaml > infrastructure/kubernetes/environments/local/configmaps/web.yaml"
+				],
+				"cwd": "{workspaceRoot}",
+				"parallel": false
+			},
+			"inputs": ["{projectRoot}/.env"],
+			"outputs": ["{workspaceRoot}/infrastructure/kubernetes/environments/local/configmaps/web.yaml"]
+		}
+	}
+}

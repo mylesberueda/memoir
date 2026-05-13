@@ -1,0 +1,93 @@
+name: Detect Changes
+
+on:
+  workflow_call:
+    outputs:
+      # Lint outputs (runs outside Docker for fast feedback)
+      node-lint:
+        description: "Node.js projects with lint target"
+        value: ${{ jobs.detect-changes.outputs.node-lint }}
+      rust-lint:
+        description: "Rust projects with lint target"
+        value: ${{ jobs.detect-changes.outputs.rust-lint }}
+      # Docker matrix (apps that need test + build via Docker)
+      docker-matrix:
+        description: "Apps with Dockerfiles that need test and build"
+        value: ${{ jobs.detect-changes.outputs.docker-matrix }}
+      has-docker-builds:
+        description: "Whether there are affected apps with Dockerfiles"
+        value: ${{ jobs.detect-changes.outputs.has-docker-builds }}
+
+env:
+  NODE_VERSION: "23"
+
+jobs:
+  detect-changes:
+    runs-on: arc-runner-set
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      node-lint: ${{ steps.detect.outputs.node-lint }}
+      rust-lint: ${{ steps.detect.outputs.rust-lint }}
+      docker-matrix: ${{ steps.detect.outputs.docker-matrix }}
+      has-docker-builds: ${{ steps.detect.outputs.has-docker-builds }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Set directory as safe (for runners)
+        run: sudo git config --system --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: "dev"
+
+      - name: Detect affected projects
+        id: detect
+        run: |
+          set -euo pipefail
+          export NODE_NO_WARNINGS=1
+          export NODE_OPTIONS="--no-deprecation"
+
+          # Get affected projects with lint target (for fast pre-check)
+          NODE_LINT=$(pnpm --silent nx show projects --affected --projects tag:lang:node --with-target lint --json 2>/dev/null | awk '/^\[/' || echo "[]")
+          RUST_LINT=$(pnpm --silent nx show projects --affected --projects tag:lang:rust --with-target lint --json 2>/dev/null | awk '/^\[/' || echo "[]")
+
+          echo "node-lint=$NODE_LINT" >> $GITHUB_OUTPUT
+          echo "rust-lint=$RUST_LINT" >> $GITHUB_OUTPUT
+
+          # Get affected apps with docker:build target
+          AFFECTED_DOCKER=$(pnpm --silent nx show projects --affected --projects tag:type:app --with-target docker:build --json 2>/dev/null | awk '/^\[/' || echo "[]")
+
+          # Build compact docker matrix (MUST be single line for GitHub Actions)
+          DOCKER_MATRIX=$(echo "$AFFECTED_DOCKER" | jq -c '{include: [.[] | {project: .}]}')
+
+          DOCKER_COUNT=$(echo "$AFFECTED_DOCKER" | jq 'length' 2>/dev/null || echo "0")
+          HAS_DOCKER_BUILDS=$([ "$DOCKER_COUNT" -gt 0 ] && echo 'true' || echo 'false')
+
+          echo "docker-matrix=$DOCKER_MATRIX" >> $GITHUB_OUTPUT
+          echo "has-docker-builds=$HAS_DOCKER_BUILDS" >> $GITHUB_OUTPUT
+
+          # Summary
+          echo "📋 Affected Projects Summary:"
+          echo "  Node.js lint: $NODE_LINT"
+          echo "  Rust lint: $RUST_LINT"
+          echo "  Docker apps: $AFFECTED_DOCKER"
+          echo "  Docker matrix: $DOCKER_MATRIX"
+          echo "  Has Docker builds: $HAS_DOCKER_BUILDS"

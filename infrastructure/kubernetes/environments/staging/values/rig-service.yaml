@@ -1,0 +1,70 @@
+# Staging environment values for rig-service
+
+nameOverride: rig-service
+image:
+  repository: us-central1-docker.pkg.dev/PROJECT_ID/startup-ai/rig-service
+  tag: cac57f303f745807545dfbd24cb9f3fc7b284c94
+  pullPolicy: Always
+replicaCount: 2
+service:
+  port: 5153
+  targetPort: 5153
+serviceAccount:
+  create: true
+  annotations:
+    iam.gke.io/gcp-service-account: rig-service@PROJECT_ID.iam.gserviceaccount.com
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+healthCheck:
+  enabled: true
+  httpPath: /health
+  port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+readinessProbe:
+  enabled: true
+  httpPath: /health
+  port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+  successThreshold: 1
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+externalSecret:
+  enabled: true
+  refreshInterval: 1h
+  secretStoreRef:
+    name: gcp-secret-store
+    kind: ClusterSecretStore
+  dataFrom:
+    - extract:
+        key: staging/rig-service
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
+volumes:
+  - name: tmp
+    emptyDir: {}
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: rig-service

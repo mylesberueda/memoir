@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`RootLayout > matches snapshot 1`] = `
+<div
+  data-testid="layout-children"
+>
+  Test Content
+</div>
+`;

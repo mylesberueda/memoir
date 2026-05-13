@@ -1,0 +1,228 @@
+syntax = "proto3";
+
+package chat.v1;
+
+import "chat/v1/common.proto";
+
+service ChannelService {
+  // ============================================================================
+  // Channel CRUD
+  // ============================================================================
+
+  rpc GetChannels(GetChannelsRequest) returns (GetChannelsResponse);
+  rpc CreateChannel(CreateChannelRequest) returns (CreateChannelResponse);
+  rpc GetChannel(GetChannelRequest) returns (GetChannelResponse);
+  rpc UpdateChannel(UpdateChannelRequest) returns (UpdateChannelResponse);
+  rpc DeleteChannel(DeleteChannelRequest) returns (DeleteChannelResponse);
+
+  // ============================================================================
+  // Membership
+  // ============================================================================
+
+  rpc InviteToChannel(InviteToChannelRequest) returns (InviteToChannelResponse);
+  rpc LeaveChannel(LeaveChannelRequest) returns (LeaveChannelResponse);
+  rpc KickFromChannel(KickFromChannelRequest) returns (KickFromChannelResponse);
+  rpc GetChannelMembers(GetChannelMembersRequest) returns (GetChannelMembersResponse);
+  rpc UpdateMemberRole(UpdateMemberRoleRequest) returns (UpdateMemberRoleResponse);
+
+  // ============================================================================
+  // Read state
+  // ============================================================================
+
+  rpc MarkAsRead(MarkAsReadRequest) returns (MarkAsReadResponse);
+  rpc GetUnreadCounts(GetUnreadCountsRequest) returns (GetUnreadCountsResponse);
+
+  // ============================================================================
+  // DMs / Conversations
+  // ============================================================================
+
+  rpc StartConversation(StartConversationRequest) returns (StartConversationResponse);
+  rpc GetConversations(GetConversationsRequest) returns (GetConversationsResponse);
+}
+
+// ============================================================================
+// Channel CRUD
+// ============================================================================
+
+message GetChannelsRequest {
+  optional ChannelType channel_type = 1;
+  optional string organization_pid = 2;
+  optional int32 limit = 3;
+  optional string cursor = 4;
+  optional bool include_archived = 5;
+}
+
+message GetChannelsResponse {
+  repeated ChannelSummary channels = 1;
+  optional string next_cursor = 2;
+}
+
+message CreateChannelRequest {
+  string name = 1;
+  ChannelType channel_type = 2;
+  optional string description = 3;
+  optional string organization_pid = 4;
+  repeated string participant_ids = 5; // For private channels / group DMs
+  optional string icon_url = 6;
+}
+
+message CreateChannelResponse {
+  Channel channel = 1;
+}
+
+message GetChannelRequest {
+  string channel_pid = 1;
+}
+
+message GetChannelResponse {
+  Channel channel = 1;
+  optional ChannelMember my_membership = 2; // Current user's membership info
+}
+
+message UpdateChannelRequest {
+  string channel_pid = 1;
+  optional string name = 2;
+  optional string description = 3;
+  optional string icon_url = 4;
+  optional bool archived = 5;
+}
+
+message UpdateChannelResponse {
+  Channel channel = 1;
+}
+
+message DeleteChannelRequest {
+  string channel_pid = 1;
+}
+
+message DeleteChannelResponse {}
+
+// ============================================================================
+// Membership
+// ============================================================================
+
+message InviteToChannelRequest {
+  string channel_pid = 1;
+  repeated string user_ids = 2;
+  optional string invite_message = 3;
+}
+
+message InviteToChannelResponse {
+  repeated InviteResult results = 1;
+}
+
+message InviteResult {
+  string user_id = 1;
+  bool success = 2;
+  optional string error = 3; // e.g., "user_not_found", "already_member", "blocked"
+}
+
+message LeaveChannelRequest {
+  string channel_pid = 1;
+}
+
+message LeaveChannelResponse {}
+
+message KickFromChannelRequest {
+  string channel_pid = 1;
+  string user_id = 2;
+  optional string reason = 3;
+}
+
+message KickFromChannelResponse {}
+
+message GetChannelMembersRequest {
+  string channel_pid = 1;
+  optional int32 limit = 2;
+  optional string cursor = 3;
+  optional ChannelRole role_filter = 4;
+  optional bool online_only = 5;
+}
+
+message GetChannelMembersResponse {
+  repeated ChannelMember members = 1;
+  optional string next_cursor = 2;
+  int32 total_count = 3;
+  int32 online_count = 4;
+}
+
+message UpdateMemberRoleRequest {
+  string channel_pid = 1;
+  string user_id = 2;
+  ChannelRole new_role = 3;
+}
+
+message UpdateMemberRoleResponse {
+  ChannelMember member = 1;
+}
+
+// ============================================================================
+// Read state
+// ============================================================================
+
+message MarkAsReadRequest {
+  string channel_pid = 1;
+  optional string last_read_message_pid = 2; // If absent, mark all as read
+}
+
+message MarkAsReadResponse {
+  string last_read_at = 1;
+  int32 remaining_unread = 2;
+}
+
+message GetUnreadCountsRequest {
+  repeated string channel_pids = 1; // If empty, get all channels
+}
+
+message GetUnreadCountsResponse {
+  map<string, UnreadInfo> channels = 1;
+  int32 total_unread = 2;
+  int32 total_mentions = 3;
+}
+
+message UnreadInfo {
+  int32 unread_count = 1;
+  int32 mention_count = 2;
+  optional string last_message_at = 3;
+}
+
+// ============================================================================
+// DMs / Conversations
+// ============================================================================
+
+message StartConversationRequest {
+  repeated string participant_ids = 1; // Other users (self is implicit)
+  optional string initial_message = 2; // Optional first message
+}
+
+message StartConversationResponse {
+  Channel channel = 1;
+  bool created = 2; // true if new channel, false if existing
+  optional string initial_message_pid = 3; // If initial_message was sent
+}
+
+message GetConversationsRequest {
+  optional int32 limit = 1;
+  optional string cursor = 2;
+  optional bool unread_only = 3;
+}
+
+message GetConversationsResponse {
+  repeated ConversationSummary conversations = 1;
+  optional string next_cursor = 2;
+}
+
+message ConversationSummary {
+  Channel channel = 1;
+  repeated ParticipantInfo participants = 2; // Other participants (not self)
+  optional ChatMessage last_message = 3;
+  int32 unread_count = 4;
+  optional string last_read_at = 5;
+}
+
+message ParticipantInfo {
+  string user_id = 1;
+  string user_name = 2;
+  optional string avatar_url = 3;
+  PresenceStatus presence = 4;
+}
