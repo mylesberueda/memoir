@@ -1,7 +1,7 @@
 version: v2
 plugins:
   - remote: buf.build/bufbuild/es:v2.10.1
-    out: ../../packages/memoir-sdk-ts/src/example-grpc-service
+    out: ../../packages/memoir-sdk-ts/src
     opt:
       - target=ts
 
