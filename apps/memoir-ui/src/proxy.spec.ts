@@ -102,22 +102,6 @@ describe('proxy', () => {
 			expect(response.headers.get('location')).toContain('from=%2Fdashboard');
 		});
 
-		it('should redirect /assistant to login when no session token', () => {
-			const request = createMockRequest('/assistant');
-			const response = proxy(request);
-
-			expect(response.status).toBe(307);
-			expect(response.headers.get('location')).toContain('/auth/login');
-		});
-
-		it('should redirect /chat to login when no session token', () => {
-			const request = createMockRequest('/chat');
-			const response = proxy(request);
-
-			expect(response.status).toBe(307);
-			expect(response.headers.get('location')).toContain('/auth/login');
-		});
-
 		it('should redirect /settings to login when no session token', () => {
 			const request = createMockRequest('/settings');
 			const response = proxy(request);
@@ -126,16 +110,8 @@ describe('proxy', () => {
 			expect(response.headers.get('location')).toContain('/auth/login');
 		});
 
-		it('should redirect /agents to login when no session token', () => {
-			const request = createMockRequest('/agents');
-			const response = proxy(request);
-
-			expect(response.status).toBe(307);
-			expect(response.headers.get('location')).toContain('/auth/login');
-		});
-
-		it('should redirect /conversations to login when no session token', () => {
-			const request = createMockRequest('/conversations');
+		it('should redirect /org/members to login when no session token', () => {
+			const request = createMockRequest('/org/members');
 			const response = proxy(request);
 
 			expect(response.status).toBe(307);
@@ -197,9 +173,9 @@ describe('proxy', () => {
 			expect(response.headers.get('location')).toBeNull();
 		});
 
-		it('should allow access to /assistant with valid session token', () => {
+		it('should allow access to /settings with valid session token', () => {
 			const validToken = createSignedToken('session-456', 'test-secret-that-is-at-least-32-chars');
-			const request = createMockRequest('/assistant', {
+			const request = createMockRequest('/settings', {
 				cookies: { session_token: validToken },
 			});
 			const response = proxy(request);

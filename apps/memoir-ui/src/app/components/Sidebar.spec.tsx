@@ -16,13 +16,11 @@ vi.mock('@hooks/useAuth', () => ({
 }));
 
 // Mock useOrganizationsOptional
-const mockCan = vi.fn().mockReturnValue(true);
 vi.mock('@providers/OrganizationContextProvider', () => ({
 	useOrganizationsOptional: () => ({
 		currentOrg: { pid: 'org-1', name: 'Test Org', slug: 'test-org' },
 		currentOrgPid: 'org-1',
 		organizations: [{ pid: 'org-1', name: 'Test Org', slug: 'test-org' }],
-		can: (...args: unknown[]) => mockCan(...args),
 	}),
 }));
 
@@ -109,66 +107,54 @@ describe('Sidebar Component', () => {
 	it('renders sidebar with branding', () => {
 		renderWithLayoutProvider(<Sidebar />);
 
-		// Verify branding is displayed
 		expect(screen.getByText('MEMOIR')).toBeInTheDocument();
-		expect(screen.getByText('.ai')).toBeInTheDocument();
 	});
 
 	it('renders all navigation sections', () => {
 		renderWithLayoutProvider(<Sidebar />);
 
-		// Verify main sections
 		expect(screen.getByText('Overview')).toBeInTheDocument();
-		expect(screen.getAllByText('Test Org').length).toBeGreaterThanOrEqual(1); // org section header
+		expect(screen.getAllByText('Test Org').length).toBeGreaterThanOrEqual(1);
 	});
 
 	it('renders overview section navigation items', () => {
 		renderWithLayoutProvider(<Sidebar />);
 
-		// Verify Overview section items
-		expect(screen.getByText('Assistant')).toBeInTheDocument();
 		expect(screen.getByText('Dashboard')).toBeInTheDocument();
-		expect(screen.getByText('Agents')).toBeInTheDocument();
-		expect(screen.getByText('Conversations')).toBeInTheDocument();
-		expect(screen.getByText('Projects')).toBeInTheDocument();
 	});
 
 	it('renders org section navigation items', () => {
 		renderWithLayoutProvider(<Sidebar />);
 
-		// Verify org section items
 		expect(screen.getByText('Details')).toBeInTheDocument();
 		expect(screen.getByText('Members')).toBeInTheDocument();
-		expect(screen.getByText('Billing')).toBeInTheDocument();
 	});
 
 	it('renders footer navigation items', () => {
 		renderWithLayoutProvider(<Sidebar />);
 
-		// Verify footer items
 		expect(screen.getByText('Settings')).toBeInTheDocument();
-		expect(screen.getByText('Help')).toBeInTheDocument();
 	});
 
 	it('handles navigation link clicks', async () => {
 		renderWithLayoutProvider(<Sidebar />);
 
-		const assistantLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Assistant'));
+		const dashboardLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Dashboard'));
 
-		expect(assistantLink).toBeInTheDocument();
-		expect(assistantLink).toHaveAttribute('href', '/assistant');
+		expect(dashboardLink).toBeInTheDocument();
+		expect(dashboardLink).toHaveAttribute('href', '/dashboard');
 	});
 
 	it('calls closeSidebar when navigation link is clicked', async () => {
 		renderWithLayoutProvider(<Sidebar />);
 
 		const user = userEvent.setup();
-		const assistantLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Assistant'));
+		const dashboardLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Dashboard'));
 
-		expect(assistantLink).toBeInTheDocument();
-		if (!assistantLink) return;
+		expect(dashboardLink).toBeInTheDocument();
+		if (!dashboardLink) return;
 
-		await user.click(assistantLink);
+		await user.click(dashboardLink);
 		expect(layoutSpies.closeSidebar).toHaveBeenCalledOnce();
 	});
 
@@ -177,9 +163,9 @@ describe('Sidebar Component', () => {
 
 		const user = userEvent.setup();
 		const navigationLinks = [
-			{ text: 'Assistant', expectedCalls: 1 },
-			{ text: 'Dashboard', expectedCalls: 2 },
-			{ text: 'Details', expectedCalls: 3 },
+			{ text: 'Dashboard', expectedCalls: 1 },
+			{ text: 'Details', expectedCalls: 2 },
+			{ text: 'Members', expectedCalls: 3 },
 		];
 
 		for (const { text, expectedCalls } of navigationLinks) {
@@ -209,20 +195,13 @@ describe('Sidebar Component', () => {
 	it('applies correct href attributes to navigation links', () => {
 		renderWithLayoutProvider(<Sidebar />);
 
-		// Verify key navigation links have correct hrefs
-		const assistantLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Assistant'));
 		const dashboardLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Dashboard'));
-		const agentsLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Agents'));
 		const detailsLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Details'));
 		const membersLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Members'));
-		const billingLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Billing'));
 
-		expect(assistantLink).toHaveAttribute('href', '/assistant');
 		expect(dashboardLink).toHaveAttribute('href', '/dashboard');
-		expect(agentsLink).toHaveAttribute('href', '/agents');
 		expect(detailsLink).toHaveAttribute('href', '/org/details');
 		expect(membersLink).toHaveAttribute('href', '/org/members');
-		expect(billingLink).toHaveAttribute('href', '/org/billing');
 	});
 
 	it('handles different user types', () => {
@@ -241,16 +220,13 @@ describe('Sidebar Component', () => {
 		});
 		renderWithLayoutProvider(<Sidebar />);
 
-		// Sidebar should render the same regardless of user type (for now)
 		expect(screen.getByText('MEMOIR')).toBeInTheDocument();
-		expect(screen.getByText('Assistant')).toBeInTheDocument();
 		expect(screen.getByText('Dashboard')).toBeInTheDocument();
 	});
 
 	it('applies responsive classes correctly', () => {
 		const { container } = renderWithLayoutProvider(<Sidebar />);
 
-		// Verify main navigation container has responsive classes
 		const nav = container.querySelector('nav');
 		expect(nav).toHaveClass('fixed', 'inset-y-0', 'left-0', 'z-[70]', 'w-64');
 	});
@@ -258,11 +234,9 @@ describe('Sidebar Component', () => {
 	it('renders with proper accessibility attributes', () => {
 		renderWithLayoutProvider(<Sidebar />);
 
-		// Verify navigation structure
 		const nav = screen.getByRole('navigation');
 		expect(nav).toBeInTheDocument();
 
-		// Verify brand link
 		const brandLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('MEMOIR'));
 		expect(brandLink).toHaveAttribute('href', '/');
 		expect(brandLink).toHaveAttribute('target', '_blank');
@@ -271,7 +245,6 @@ describe('Sidebar Component', () => {
 
 	describe('when user is not provided', () => {
 		beforeEach(() => {
-			// Mock useAuth to return null user
 			vi.mocked(useAuth).mockReturnValue({
 				user: null,
 				isLoading: false,
@@ -284,11 +257,8 @@ describe('Sidebar Component', () => {
 		it('renders sign in and sign up buttons instead of settings', () => {
 			renderWithLayoutProvider(<Sidebar />);
 
-			// Should not show Settings and Help when no user
 			expect(screen.queryByText('Settings')).not.toBeInTheDocument();
-			expect(screen.queryByText('Help')).not.toBeInTheDocument();
 
-			// Should show sign in and sign up buttons
 			expect(screen.getByRole('link', { name: 'Sign In' })).toBeInTheDocument();
 			expect(screen.getByRole('link', { name: 'Sign Up' })).toBeInTheDocument();
 		});
@@ -310,11 +280,9 @@ describe('Sidebar Component', () => {
 			const signInButton = screen.getByRole('link', { name: 'Sign In' });
 			const signUpButton = screen.getByRole('link', { name: 'Sign Up' });
 
-			// Test sign in button closes sidebar
 			await user.click(signInButton);
 			expect(layoutSpies.closeSidebar).toHaveBeenCalledOnce();
 
-			// Test sign up button closes sidebar
 			await user.click(signUpButton);
 			expect(layoutSpies.closeSidebar).toHaveBeenCalledTimes(2);
 		});
@@ -322,43 +290,10 @@ describe('Sidebar Component', () => {
 		it('still renders all navigation sections and branding', () => {
 			renderWithLayoutProvider(<Sidebar />);
 
-			// Should still show branding
 			expect(screen.getByText('MEMOIR')).toBeInTheDocument();
-			expect(screen.getByText('.ai')).toBeInTheDocument();
-
-			// Should still show navigation sections
 			expect(screen.getByText('Overview')).toBeInTheDocument();
 			expect(screen.getAllByText('Test Org').length).toBeGreaterThanOrEqual(1);
-
-			// Should still show navigation items
-			expect(screen.getByText('Assistant')).toBeInTheDocument();
 			expect(screen.getByText('Dashboard')).toBeInTheDocument();
-		});
-	});
-
-	describe('permission-based gating', () => {
-		it('should hide billing nav when billing.read is denied', () => {
-			mockCan.mockImplementation((resource: string) => resource !== 'billing');
-			renderWithLayoutProvider(<Sidebar />);
-
-			expect(screen.queryByText('Billing')).not.toBeInTheDocument();
-			// Other org items should still be visible
-			expect(screen.getByText('Details')).toBeInTheDocument();
-			expect(screen.getByText('Members')).toBeInTheDocument();
-		});
-
-		it('should show billing nav when billing.read is allowed', () => {
-			mockCan.mockReturnValue(true);
-			renderWithLayoutProvider(<Sidebar />);
-
-			expect(screen.getByText('Billing')).toBeInTheDocument();
-		});
-
-		it('should call can with correct arguments for billing', () => {
-			mockCan.mockReturnValue(true);
-			renderWithLayoutProvider(<Sidebar />);
-
-			expect(mockCan).toHaveBeenCalledWith('billing', 'read');
 		});
 	});
 });

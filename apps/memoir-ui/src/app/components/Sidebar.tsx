@@ -4,19 +4,7 @@ import useAuth from '@hooks/useAuth';
 import { useLayoutContext } from '@providers';
 import { useOrganizationsOptional } from '@providers/OrganizationContextProvider';
 import cns from 'classnames';
-import {
-	BotMessageSquare,
-	BrainCircuit,
-	Building2,
-	CreditCard,
-	FileText,
-	Folder,
-	HelpCircle,
-	Home,
-	Settings,
-	Sparkles,
-	Users2,
-} from 'lucide-react';
+import { BrainCircuit, Building2, Home, Settings, Users2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import OrgSelectorWrapper from './OrgSelectorWrapper';
@@ -29,7 +17,6 @@ export default function Sidebar() {
 
 	const currentOrg = orgContext?.currentOrg;
 	const orgLabel = currentOrg?.name;
-	const can = orgContext?.can ?? (() => false);
 
 	interface NavItemProps {
 		href: string;
@@ -89,30 +76,10 @@ export default function Sidebar() {
 					<div className="flex-1 overflow-y-auto px-4 py-4">
 						<div className="space-y-6">
 							<div>
-								<div className="space-y-1">
-									<NavItem href="/assistant" icon={Sparkles}>
-										Assistant
-									</NavItem>
-								</div>
-							</div>
-
-							<div>
 								<SectionHeader>Overview</SectionHeader>
 								<div className="space-y-1">
 									<NavItem href="/dashboard" icon={Home}>
 										Dashboard
-									</NavItem>
-									<NavItem href="/agents" icon={BotMessageSquare}>
-										Agents
-									</NavItem>
-									<NavItem href="/conversations" icon={Building2}>
-										Conversations
-									</NavItem>
-									<NavItem href="/files" icon={FileText}>
-										Files
-									</NavItem>
-									<NavItem href="#" icon={Folder}>
-										Projects
 									</NavItem>
 								</div>
 							</div>
@@ -131,11 +98,6 @@ export default function Sidebar() {
 										<NavItem href="/org/members" icon={Users2}>
 											Members
 										</NavItem>
-										{can('billing', 'read') && (
-											<NavItem href="/org/billing" icon={CreditCard}>
-												Billing
-											</NavItem>
-										)}
 									</div>
 								</div>
 							)}
@@ -147,9 +109,6 @@ export default function Sidebar() {
 							<div className="space-y-1">
 								<NavItem href="/settings" icon={Settings}>
 									Settings
-								</NavItem>
-								<NavItem href="#" icon={HelpCircle}>
-									Help
 								</NavItem>
 							</div>
 						) : (

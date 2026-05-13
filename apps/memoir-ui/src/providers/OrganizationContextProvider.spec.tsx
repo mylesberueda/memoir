@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import type { Organization, ResourcePermission } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
+import type { Organization, ResourcePermission } from '@/lib/proto-shims';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useContext } from 'react';

@@ -255,9 +255,6 @@ importers:
       '@connectrpc/connect-node':
         specifier: ^2.1.1
         version: 2.1.1(@bufbuild/protobuf@2.10.1)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.10.1))
-      '@polypixel/memoir-sdk':
-        specifier: workspace:*
-        version: link:../../packages/memoir-sdk-ts
       ai:
         specifier: ^5.0.22
         version: 5.0.22(zod@3.25.56)

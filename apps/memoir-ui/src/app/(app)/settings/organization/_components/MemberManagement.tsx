@@ -2,7 +2,7 @@
 
 import { addOrgMemberByEmail, getOrgMembers, removeOrgMember, updateOrgMemberRole } from '@actions/organizations';
 import { Select } from '@components';
-import type { Organization, OrganizationMember } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
+import type { Organization, OrganizationMember } from '@/lib/proto-shims';
 import { Mail, Trash2, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
@@ -282,7 +282,7 @@ function MemberRow({
 			</div>
 
 			<div id="member_row__joined" className="hidden sm:block text-xs text-base-content/50">
-				{formatDate(member.createdAt)}
+				{member.createdAt ? formatDate(member.createdAt) : ''}
 			</div>
 
 			<div id="member_row__actions" className="hidden sm:flex justify-end">

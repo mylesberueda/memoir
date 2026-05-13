@@ -9,7 +9,7 @@ const ORGANIZATION_COOKIE_NAME = 'x-organization-id';
 const ZITADEL_PROXY_PATHS = ['/.well-known/', '/oauth/', '/oidc/', '/idps/callback/', '/saml/'];
 
 // Define protected routes that require authentication
-const protectedRoutes = ['/dashboard', '/assistant', '/chat', '/settings', '/agents', '/conversations'];
+const protectedRoutes = ['/dashboard', '/settings', '/org', '/organizations'];
 
 // Define auth routes that should redirect to dashboard if already logged in
 // Note: /login is included because Zitadel redirects there with authRequest parameter

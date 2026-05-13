@@ -1,19 +1,9 @@
 import { timingSafeEqual } from 'node:crypto';
-import { create } from '@bufbuild/protobuf';
-import { createClient } from '@connectrpc/connect';
 import { getAuthProvider } from '@lib/auth';
-import { createTransportWithToken } from '@lib/grpc/transport';
 import { createSession } from '@lib/session';
-import {
-	ListOrganizationsRequestSchema,
-	OrganizationService,
-} from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
 import { cookies } from 'next/headers';
 import { type NextRequest, NextResponse } from 'next/server';
 
-const COOKIE_NAME_ORGANIZATION_ID = 'x-organization-id';
-
-// Redirect URI must match what was used in authorize request
 const REDIRECT_URI = process.env.NEXT_PUBLIC_APP_URL
 	? `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback`
 	: 'http://localhost:3000/api/auth/callback';
@@ -21,6 +11,12 @@ const REDIRECT_URI = process.env.NEXT_PUBLIC_APP_URL
 /**
  * OIDC callback handler.
  * Receives authorization code from auth provider, exchanges for tokens, creates session.
+ *
+ * Org-resolution after sign-in is intentionally absent: the OrganizationService
+ * gRPC client that previously populated the session's initial org pid was
+ * removed alongside the rest of the deleted api-service surface. The future
+ * memoir-server scaffold reintroduces whatever org bootstrap shape Memoir
+ * actually wants.
  */
 export async function GET(request: NextRequest) {
 	const searchParams = request.nextUrl.searchParams;
@@ -29,7 +25,6 @@ export async function GET(request: NextRequest) {
 	const error = searchParams.get('error');
 	const errorDescription = searchParams.get('error_description');
 
-	// Handle OIDC errors
 	if (error) {
 		console.error('OIDC callback error:', error, errorDescription);
 		const loginUrl = new URL('/auth/login', request.url);
@@ -76,7 +71,6 @@ export async function GET(request: NextRequest) {
 			throw new Error('No ID token received. Ensure openid scope is requested.');
 		}
 
-		// Create our session in Redis
 		await createSession({
 			accessToken: tokens.accessToken,
 			refreshToken: tokens.refreshToken,
@@ -87,36 +81,6 @@ export async function GET(request: NextRequest) {
 
 		cookieStore.delete('pkce_verifier');
 		cookieStore.delete('oauth_state');
-
-		// Resolve organization context: ?oid param > existing cookie > first org
-		const apiServiceUrl = process.env.API_SERVICE_URL;
-		if (!apiServiceUrl) {
-			throw new Error('API_SERVICE_URL is not set');
-		}
-		const transport = await createTransportWithToken(apiServiceUrl, tokens.accessToken, tokens.idToken ?? undefined, {
-			mode: 'none',
-		});
-		const orgClient = createClient(OrganizationService, transport);
-		const orgsResponse = await orgClient.listOrganizations(create(ListOrganizationsRequestSchema, {}));
-
-		const orgs = orgsResponse.organizations;
-		const oidParam = request.nextUrl.searchParams.get('oid');
-		const existingCookie = cookieStore.get(COOKIE_NAME_ORGANIZATION_ID)?.value;
-
-		const resolvedOrgPid =
-			(oidParam && orgs.some((o) => o.pid === oidParam) ? oidParam : undefined) ??
-			(existingCookie && orgs.some((o) => o.pid === existingCookie) ? existingCookie : undefined) ??
-			orgs.at(0)?.pid;
-
-		if (resolvedOrgPid) {
-			cookieStore.set(COOKIE_NAME_ORGANIZATION_ID, resolvedOrgPid, {
-				httpOnly: true,
-				secure: process.env.NODE_ENV === 'production',
-				sameSite: 'strict',
-				path: '/',
-				maxAge: 365 * 24 * 60 * 60,
-			});
-		}
 
 		return NextResponse.redirect(new URL('/dashboard', request.url));
 	} catch (err) {

@@ -2,7 +2,6 @@ export { default as Avatar } from './Avatar';
 export { default as Badge } from './Badge';
 export { default as Button } from './Button';
 export { default as Card } from './Card';
-export { default as Chat } from './Chat';
 export { default as FormInput } from './FormInput';
 export { default as Modal } from './Modal';
 export { default as ResponsiveDock } from './ResponsiveDock';

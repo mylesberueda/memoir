@@ -81,8 +81,7 @@
 			"options": {
 				"command": "pnpm build && mkdir -p dist/build && cp -r .next dist/build/",
 				"cwd": "{projectRoot}"
-			},
-			"dependsOn": ["memoir-sdk-ts:build"]
+			}
 		},
 		"dev": {
 			"executor": "nx:run-commands",

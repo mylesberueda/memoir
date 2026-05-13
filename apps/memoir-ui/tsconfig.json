@@ -49,9 +49,6 @@
 	"exclude": ["out-tsc", "dist", "node_modules", "jest.config.ts", ".next", "**/*.stories.ts", "**/*.stories.js"],
 	"references": [
 		{
-			"path": "../../packages/memoir-sdk-ts"
-		},
-		{
 			"path": "./tsconfig.storybook.json"
 		}
 	]

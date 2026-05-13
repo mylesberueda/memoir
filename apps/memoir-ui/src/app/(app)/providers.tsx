@@ -1,11 +1,9 @@
 'use client';
 
-import { AssistantChatProvider } from '@lib/chat-state';
-import { AssistantChatProvider as AssistantChatUIProvider, LayoutProvider } from '@providers';
+import { LayoutProvider } from '@providers';
 import { AuthContextProvider, type User } from '@providers/AuthContextProvider';
 import { OrganizationContextProvider } from '@providers/OrganizationContextProvider';
-import type { Organization, ResourcePermission } from '@polypixel/memoir-sdk/api-service/api/v1/organizations_pb';
-import { AssistantChat } from '../components';
+import type { Organization, ResourcePermission } from '@/lib/proto-shims';
 
 interface AppProvidersProps {
 	children: React.ReactNode;
@@ -31,14 +29,7 @@ export function AppProviders({
 				initialOrgPid={initialOrgPid}
 				initialPermissions={initialPermissions}
 				cookieOrgPid={cookieOrgPid}>
-				<LayoutProvider>
-					<AssistantChatProvider>
-						<AssistantChatUIProvider>
-							{children}
-							<AssistantChat />
-						</AssistantChatUIProvider>
-					</AssistantChatProvider>
-				</LayoutProvider>
+				<LayoutProvider>{children}</LayoutProvider>
 			</OrganizationContextProvider>
 		</AuthContextProvider>
 	);
