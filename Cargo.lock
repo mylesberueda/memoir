@@ -1275,15 +1275,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "example-grpc-service-migration"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "regex",
- "sea-orm-migration",
-]
-
-[[package]]
 name = "eyre"
 version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2280,8 +2271,8 @@ dependencies = [
  "color-eyre",
  "common-rs",
  "dashmap",
- "example-grpc-service-migration",
  "http",
+ "memoir-service-migration",
  "pbjson-types",
  "polypixel-memoir-sdk",
  "reqwest",
@@ -2296,6 +2287,15 @@ dependencies = [
  "tonic-health",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "memoir-service-migration"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "regex",
+ "sea-orm-migration",
 ]
 
 [[package]]

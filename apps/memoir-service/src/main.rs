@@ -8,13 +8,11 @@ mod services;
 use clap::Parser as _;
 use commands::*;
 pub(crate) use context::*;
-#[allow(unused_imports)] // DELETEME(_): Delete if not example service
-pub(crate) use services::*;
 
 type Result<T> = color_eyre::Result<T>;
 
 #[derive(clap::Parser)]
-#[clap(name = "Notification Service")]
+#[clap(name = "memoir")]
 #[command(author, version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
@@ -24,9 +22,6 @@ struct Cli {
 #[derive(clap::Subcommand)]
 #[command(arg_required_else_help = true)]
 enum Commands {
-    /// Basic command that does things and stuff
-    Basic,
-    Example(example::Arguments),
     Server(server::Arguments),
 }
 
@@ -37,17 +32,10 @@ async fn main() -> crate::Result<()> {
 
     if let Some(cmds) = &cli.command {
         match cmds {
-            Commands::Basic => basic_command(),
-            Commands::Example(args) => example::run(args),
             Commands::Server(args) => server::run(args).await,
         }?;
     };
 
-    Ok(())
-}
-
-fn basic_command() -> crate::Result<()> {
-    println!("Running the basic command from the top level");
     Ok(())
 }
 

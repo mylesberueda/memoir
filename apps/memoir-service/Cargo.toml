@@ -7,12 +7,16 @@ edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "memoir"
+path = "src/main.rs"
+
 [dependencies]
 chrono = "0.4"
 color-eyre = { workspace = true }
 common-rs = { path = "../../packages/common-rs" }
 dashmap = "6.1"
-example-grpc-service-migration = { path = "./migration" }
+memoir-service-migration = { path = "./migration" }
 http = { version = "1.4" }
 pbjson-types = "0.9.0"
 memoir-sdk = { package = "polypixel-memoir-sdk", path = "../../packages/memoir-sdk-rs" }
