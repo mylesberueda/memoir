@@ -1275,33 +1275,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "example-grpc-service"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap 4.6.0 (git+https://github.com/clap-rs/clap?branch=master)",
- "color-eyre",
- "common-rs",
- "dashmap",
- "example-grpc-service-migration",
- "http",
- "pbjson-types",
- "polypixel-memoir-sdk",
- "reqwest",
- "sea-orm",
- "serde",
- "serde_json",
- "serial_test",
- "test-context",
- "thiserror",
- "tokio",
- "tonic",
- "tonic-health",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "example-grpc-service-migration"
 version = "0.1.0"
 dependencies = [
@@ -2296,6 +2269,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "memoir-service"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap 4.6.0 (git+https://github.com/clap-rs/clap?branch=master)",
+ "color-eyre",
+ "common-rs",
+ "dashmap",
+ "example-grpc-service-migration",
+ "http",
+ "pbjson-types",
+ "polypixel-memoir-sdk",
+ "reqwest",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "test-context",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tonic-health",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

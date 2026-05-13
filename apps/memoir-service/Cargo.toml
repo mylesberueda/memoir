@@ -1,7 +1,7 @@
 [package]
-name = "example-grpc-service"
+name = "memoir-service"
 version = "0.1.0"
-description = "Example gRPC service (gRPC microservice) for memoir"
+description = "Memoir gRPC service — auth + memory APIs"
 authors = ["Myles Berueda <myles@polypixel.io>"]
 edition = "2024"
 

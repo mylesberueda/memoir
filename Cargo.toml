@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-  "apps/example-grpc-service",
-  "apps/example-grpc-service/migration",
+  "apps/memoir-service",
+  "apps/memoir-service/migration",
   "packages/common-rs",
 ]
 

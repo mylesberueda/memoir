@@ -1,8 +1,8 @@
 {
-	"name": "example-grpc-service",
+	"name": "memoir-service",
 	"$schema": "../../node_modules/nx/schemas/project-schema.json",
 	"projectType": "application",
-	"sourceRoot": "apps/example-grpc-service/src",
+	"sourceRoot": "apps/memoir-service/src",
 	"targets": {
 		"cargo": {
 			"command": "cargo",
@@ -50,7 +50,7 @@
 				"cwd": "{projectRoot}",
 				"commands": ["cargo test --release --features integration"],
 				"env": {
-					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_server_test"
+					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_service_test"
 				}
 			},
 			"cache": true,
@@ -151,5 +151,5 @@
 			"outputs": []
 		}
 	},
-	"tags": ["scope:example-grpc-service", "type:app", "lang:rust"]
+	"tags": ["scope:memoir-service", "type:app", "lang:rust"]
 }
