@@ -2,15 +2,8 @@
 
 use crate::AppContext;
 use migration::MigratorTrait as _;
-use platform_rs::middleware::{
-    auth::{AuthConfig, AuthLayer, ZitadelUserExtractor},
-    organization::OrganizationLayer,
-};
 use std::net::SocketAddr;
 use tonic::transport::Server;
-
-const DEV_ZITADEL_URL: &str = "http://localhost:5150";
-const JWKS_REFRESH_TIMEOUT: u64 = 86400;
 
 #[derive(clap::Args)]
 pub(crate) struct Arguments {
@@ -46,43 +39,9 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
         .expect("Failed to run migrations");
     tracing::info!("Migrations ran!");
 
-    let jwks_url = std::env::var("ZITADEL_JWKS_URL").unwrap_or_else(|_| {
-        format!(
-            "{}/oauth/v2/keys",
-            std::env::var("ZITADEL_URL").unwrap_or_else(|_| DEV_ZITADEL_URL.to_string())
-        )
-    });
-    let zitadel_url = std::env::var("ZITADEL_ISSUER")
-        .or_else(|_| std::env::var("ZITADEL_URL"))
-        .unwrap_or_else(|_| DEV_ZITADEL_URL.to_string());
-    let audience = std::env::var("ZITADEL_AUDIENCE").expect("ZITADEL_AUDIENCE must be set for JWT validation");
-
-    let auth_config = AuthConfig {
-        jwks_url,
-        issuer: zitadel_url,
-        audience,
-    };
-
-    tracing::info!("Initializing auth layer");
-    let auth_layer = AuthLayer::<ZitadelUserExtractor>::new(&auth_config)
-        .await
-        .expect("Failed to initialize auth layer");
-
-    auth_layer.start_key_refresh(JWKS_REFRESH_TIMEOUT);
-    tracing::info!("Started JWT key refresh task");
-
     tracing::info!("Initializing services");
-    // let admin_service = crate::AdminService::new(db.clone());
+    // let admin_service = crate::AdminService::new(ctx.clone());
     tracing::info!("Services initialized");
-
-    let org_layer = OrganizationLayer::new();
-
-    let middleware_stack = tower::ServiceBuilder::new()
-        .layer(auth_layer)
-        .layer(org_layer)
-        // .layer(org_context_layer)
-        // .layer(user_context_layer)
-        .into_inner();
 
     let host_env = std::env::var("HOST").ok();
     let port_env = std::env::var("PORT").ok();
@@ -96,9 +55,9 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     //     .set_serving::<AdminServiceServer<crate::AdminService>>()
     //     .await;
 
-    tracing::info!("Starting gRPC server on {addr} with JWT authentication");
+    // Auth + middleware wiring will be reintroduced by the local-auth epic.
+    tracing::info!("Starting gRPC server on {addr} (no auth wired yet)");
     Server::builder()
-        .layer(middleware_stack)
         .add_service(health_service)
         // .add_service(AdminServiceServer::new(admin_service))
         .serve(addr)

@@ -1,11 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-  "cli",
   "apps/example-grpc-service",
   "apps/example-grpc-service/migration",
   "packages/common-rs",
-  "packages/platform-rs",
 ]
 
 [workspace.dependencies]
