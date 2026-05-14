@@ -10,7 +10,9 @@ name = "memoir_core"
 path = "src/lib.rs"
 
 [dependencies]
+chrono = { version = "0.4", features = ["serde"] }
 fastembed = { version = "5.13" }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 

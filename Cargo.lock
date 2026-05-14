@@ -3553,7 +3553,9 @@ dependencies = [
 name = "polypixel-memoir-core"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "fastembed",
+ "serde_json",
  "thiserror",
  "tokio",
 ]
