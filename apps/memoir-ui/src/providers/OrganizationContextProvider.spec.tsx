@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 
-import type { Organization, ResourcePermission } from '@/lib/proto-shims';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useContext } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Organization, ResourcePermission } from '@/lib/proto-shims';
 import { OrganizationContext, OrganizationContextProvider, useOrganizations } from './OrganizationContextProvider';
 
 const mockPush = vi.fn();
@@ -194,10 +194,7 @@ describe('OrganizationContextProvider', () => {
 
 		it('should write the cookie when there was no cookie pid', async () => {
 			render(
-				<OrganizationContextProvider
-					organizations={orgs}
-					initialOrgPid="org-1"
-					initialPermissions={ownerPermissions}>
+				<OrganizationContextProvider organizations={orgs} initialOrgPid="org-1" initialPermissions={ownerPermissions}>
 					<TestConsumer />
 				</OrganizationContextProvider>,
 			);

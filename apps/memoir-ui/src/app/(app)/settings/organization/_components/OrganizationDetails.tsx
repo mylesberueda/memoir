@@ -1,11 +1,11 @@
 'use client';
 
 import { deleteOrg, updateOrg } from '@actions/organizations';
-import type { Organization } from '@/lib/proto-shims';
 import { Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
+import type { Organization } from '@/lib/proto-shims';
 
 interface OrganizationDetailsProps {
 	organization: Organization;

@@ -19,22 +19,22 @@ use common_rs::crypto::CryptoError;
 use common_rs::crypto::hashing::{generate_api_key, hash_password, verify_password};
 use memoir_sdk::memoir::v1::auth_service_server::AuthService;
 use memoir_sdk::memoir::v1::{
-    ApiKey, ApiKeyRole, ApiKeyStatus, ConsumeBootstrapTokenRequest, ConsumeBootstrapTokenResponse,
-    CreateApiKeyRequest, CreateApiKeyResponse, CreateUserRequest, CreateUserResponse,
-    DeleteUserRequest, DeleteUserResponse, GetApiKeyRequest, GetApiKeyResponse, GetUserRequest,
-    GetUserResponse, ListApiKeysRequest, ListApiKeysResponse, ListUsersRequest, ListUsersResponse,
-    RevokeApiKeyRequest, RevokeApiKeyResponse, RotateApiKeyRequest, RotateApiKeyResponse, User,
+    ApiKey, ApiKeyRole, ApiKeyStatus, ConsumeBootstrapTokenRequest, ConsumeBootstrapTokenResponse, CreateApiKeyRequest,
+    CreateApiKeyResponse, CreateUserRequest, CreateUserResponse, DeleteUserRequest, DeleteUserResponse,
+    GetApiKeyRequest, GetApiKeyResponse, GetUserRequest, GetUserResponse, ListApiKeysRequest, ListApiKeysResponse,
+    ListUsersRequest, ListUsersResponse, RevokeApiKeyRequest, RevokeApiKeyResponse, RotateApiKeyRequest,
+    RotateApiKeyResponse, User,
 };
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait,
-    QueryFilter, QueryOrder, QuerySelect,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect,
 };
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
 use crate::middleware::auth::authenticate;
-use crate::models::{ApiKeys, BootstrapTokens, Users};
 use crate::models::_entity::{api_keys, bootstrap_tokens, users};
+use crate::models::{ApiKeys, BootstrapTokens, Users};
 
 /// Maximum number of rows a list RPC may return in a single page.
 ///
@@ -174,10 +174,7 @@ impl AuthService for Auth {
         }))
     }
 
-    async fn create_user(
-        &self,
-        request: Request<CreateUserRequest>,
-    ) -> Result<Response<CreateUserResponse>, Status> {
+    async fn create_user(&self, request: Request<CreateUserRequest>) -> Result<Response<CreateUserResponse>, Status> {
         let caller = authenticate(self.db(), &request).await?;
         caller.require_admin()?;
         let req = request.into_inner();
@@ -195,10 +192,7 @@ impl AuthService for Auth {
         }))
     }
 
-    async fn get_user(
-        &self,
-        request: Request<GetUserRequest>,
-    ) -> Result<Response<GetUserResponse>, Status> {
+    async fn get_user(&self, request: Request<GetUserRequest>) -> Result<Response<GetUserResponse>, Status> {
         let _caller = authenticate(self.db(), &request).await?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
@@ -215,10 +209,7 @@ impl AuthService for Auth {
         }))
     }
 
-    async fn list_users(
-        &self,
-        request: Request<ListUsersRequest>,
-    ) -> Result<Response<ListUsersResponse>, Status> {
+    async fn list_users(&self, request: Request<ListUsersRequest>) -> Result<Response<ListUsersResponse>, Status> {
         let _caller = authenticate(self.db(), &request).await?;
         let req = request.into_inner();
         let limit = resolve_limit(req.limit);
@@ -248,10 +239,7 @@ impl AuthService for Auth {
         }))
     }
 
-    async fn delete_user(
-        &self,
-        request: Request<DeleteUserRequest>,
-    ) -> Result<Response<DeleteUserResponse>, Status> {
+    async fn delete_user(&self, request: Request<DeleteUserRequest>) -> Result<Response<DeleteUserResponse>, Status> {
         let caller = authenticate(self.db(), &request).await?;
         caller.require_admin()?;
         let req = request.into_inner();
@@ -305,10 +293,7 @@ impl AuthService for Auth {
         }))
     }
 
-    async fn get_api_key(
-        &self,
-        request: Request<GetApiKeyRequest>,
-    ) -> Result<Response<GetApiKeyResponse>, Status> {
+    async fn get_api_key(&self, request: Request<GetApiKeyRequest>) -> Result<Response<GetApiKeyResponse>, Status> {
         let _caller = authenticate(self.db(), &request).await?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
@@ -339,8 +324,7 @@ impl AuthService for Auth {
             query = query.filter(api_keys::Column::Id.gt(id));
         }
         if let Some(status) = req.status {
-            let status_enum =
-                ApiKeyStatus::try_from(status).unwrap_or(ApiKeyStatus::Unspecified);
+            let status_enum = ApiKeyStatus::try_from(status).unwrap_or(ApiKeyStatus::Unspecified);
             if let Some(s) = status_to_db(status_enum) {
                 query = query.filter(api_keys::Column::Status.eq(s));
             }

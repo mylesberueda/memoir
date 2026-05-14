@@ -2,7 +2,6 @@
 
 import { getOrganizationByPid } from '@actions/organizations';
 import { setOrganizationContext } from '@lib/grpc/transport';
-import type { Organization, ResourcePermission } from '@/lib/proto-shims';
 import { useRouter } from 'next/navigation';
 import {
 	createContext,
@@ -14,6 +13,7 @@ import {
 	useState,
 	useTransition,
 } from 'react';
+import type { Organization, ResourcePermission } from '@/lib/proto-shims';
 
 type PermissionsMap = { [key: string]: ResourcePermission };
 

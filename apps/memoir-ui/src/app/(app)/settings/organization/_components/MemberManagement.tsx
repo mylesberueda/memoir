@@ -2,11 +2,11 @@
 
 import { addOrgMemberByEmail, getOrgMembers, removeOrgMember, updateOrgMemberRole } from '@actions/organizations';
 import { Select } from '@components';
-import type { Organization, OrganizationMember } from '@/lib/proto-shims';
 import { Mail, Trash2, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
+import type { Organization, OrganizationMember } from '@/lib/proto-shims';
 
 interface MemberManagementProps {
 	organization: Organization;

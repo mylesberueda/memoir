@@ -16,8 +16,8 @@ use memoir_sdk::memoir::v1::ApiKeyRole;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use tonic::{Request, Status};
 
-use crate::models::ApiKeys;
 use crate::models::_entity::api_keys;
+use crate::models::ApiKeys;
 
 /// HTTP/gRPC metadata header that carries the bearer token.
 ///
@@ -85,13 +85,9 @@ impl CallerIdentity {
 ///   via the error code alone.
 /// - [`Status::internal`] when a DB error prevents lookup. The underlying
 ///   error is logged at error level; the client sees only a generic message.
-pub(crate) async fn authenticate<T>(
-    db: &DatabaseConnection,
-    request: &Request<T>,
-) -> Result<CallerIdentity, Status> {
+pub(crate) async fn authenticate<T>(db: &DatabaseConnection, request: &Request<T>) -> Result<CallerIdentity, Status> {
     let token = extract_bearer(request)?;
-    let (key_id, secret) =
-        parse_api_key(token).map_err(|_| Status::unauthenticated("invalid credentials"))?;
+    let (key_id, secret) = parse_api_key(token).map_err(|_| Status::unauthenticated("invalid credentials"))?;
 
     let row = ApiKeys::find()
         .filter(api_keys::Column::KeyId.eq(key_id))

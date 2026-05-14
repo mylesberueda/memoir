@@ -6,15 +6,12 @@ use common_rs::crypto::hashing::{generate_bootstrap_token, hash_password};
 use memoir_sdk::memoir::v1::auth_service_server::AuthServiceServer;
 use memoir_sdk::memoir::v1::memory_service_server::MemoryServiceServer;
 use migration::MigratorTrait as _;
-use sea_orm::{
-    ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait,
-    QueryFilter,
-};
+use sea_orm::{ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryFilter};
 use tonic::transport::Server;
 
 use crate::AppContext;
-use crate::models::{BootstrapTokens, Users};
 use crate::models::_entity::{bootstrap_tokens, users};
+use crate::models::{BootstrapTokens, Users};
 use crate::services::auth::{Auth, create_user};
 use crate::services::memory::Memory;
 
@@ -80,12 +77,8 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     let addr: SocketAddr = format!("{host}:{port}").parse()?;
 
     let (health_reporter, health_service) = tonic_health::server::health_reporter();
-    health_reporter
-        .set_serving::<AuthServiceServer<Auth>>()
-        .await;
-    health_reporter
-        .set_serving::<MemoryServiceServer<Memory>>()
-        .await;
+    health_reporter.set_serving::<AuthServiceServer<Auth>>().await;
+    health_reporter.set_serving::<MemoryServiceServer<Memory>>().await;
 
     tracing::info!(server.address = %addr, "starting gRPC server");
 
@@ -186,9 +179,7 @@ async fn bootstrap_one_time_token(db: &DatabaseConnection) -> crate::Result<()> 
         }
         Err(DbErr::Query(_) | DbErr::Exec(_)) => {
             // Partial-unique constraint violation: another process won the race.
-            tracing::info!(
-                "bootstrap token already pending (another process won the first-start race); skipping"
-            );
+            tracing::info!("bootstrap token already pending (another process won the first-start race); skipping");
             Ok(())
         }
         Err(other) => Err(other).wrap_err("failed to insert bootstrap token"),

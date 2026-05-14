@@ -153,7 +153,7 @@ pub fn verify_password(
 /// use common_rs::crypto::hashing::{generate_api_key, parse_api_key};
 ///
 /// let key = generate_api_key().unwrap();
-/// assert!(key.plaintext.starts_with("mk_"));
+/// assert!(key.plaintext.starts_with("mk."));
 ///
 /// let parsed = parse_api_key(&key.plaintext).unwrap();
 /// assert_eq!(parsed.0, key.key_id);

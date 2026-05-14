@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use memoir_sdk::memoir::v1::memory_service_server::MemoryService;
 use memoir_sdk::memoir::v1::{
-    ForgetRequest, ForgetResponse, RecallRequest, RecallResponse, RememberRequest,
-    RememberResponse, SearchRequest, SearchResponse,
+    ForgetRequest, ForgetResponse, RecallRequest, RecallResponse, RememberRequest, RememberResponse, SearchRequest,
+    SearchResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -43,34 +43,22 @@ impl Memory {
 
 #[tonic::async_trait]
 impl MemoryService for Memory {
-    async fn search(
-        &self,
-        request: Request<SearchRequest>,
-    ) -> Result<Response<SearchResponse>, Status> {
+    async fn search(&self, request: Request<SearchRequest>) -> Result<Response<SearchResponse>, Status> {
         let _caller = authenticate(self.ctx.db.as_ref(), &request).await?;
         Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
     }
 
-    async fn recall(
-        &self,
-        request: Request<RecallRequest>,
-    ) -> Result<Response<RecallResponse>, Status> {
+    async fn recall(&self, request: Request<RecallRequest>) -> Result<Response<RecallResponse>, Status> {
         let _caller = authenticate(self.ctx.db.as_ref(), &request).await?;
         Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
     }
 
-    async fn remember(
-        &self,
-        request: Request<RememberRequest>,
-    ) -> Result<Response<RememberResponse>, Status> {
+    async fn remember(&self, request: Request<RememberRequest>) -> Result<Response<RememberResponse>, Status> {
         let _caller = authenticate(self.ctx.db.as_ref(), &request).await?;
         Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
     }
 
-    async fn forget(
-        &self,
-        request: Request<ForgetRequest>,
-    ) -> Result<Response<ForgetResponse>, Status> {
+    async fn forget(&self, request: Request<ForgetRequest>) -> Result<Response<ForgetResponse>, Status> {
         let _caller = authenticate(self.ctx.db.as_ref(), &request).await?;
         Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
     }
