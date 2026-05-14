@@ -1,8 +1,10 @@
 //! High-level facade composing the embedder, store, and vector index.
 
 mod error;
+mod remember;
 
 pub use error::ClientError;
+pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
 
 use std::sync::Arc;
 
@@ -142,5 +144,28 @@ impl Client {
     /// Returns the vector index used by this client.
     pub fn index(&self) -> &QdrantIndex {
         &self.inner.index
+    }
+
+    /// Writes `prompt` as an episodic memory and retrieves related memories.
+    ///
+    /// Returns a per-call builder; await it to run the operation. The kind
+    /// toggles on the builder filter retrieval — the write is always episodic.
+    /// See [`RememberBuilder`] for builder methods.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use memoir_core::client::Client;
+    /// # use memoir_core::memory::Scope;
+    /// # async fn example(client: &Client, scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
+    /// let memories = client.remember("hello", scope).await?;
+    /// for m in memories.list() {
+    ///     println!("{}", m.content);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn remember(&self, prompt: impl Into<String>, scope: crate::memory::Scope) -> RememberBuilder<'_> {
+        RememberBuilder::new(self, prompt.into(), scope)
     }
 }

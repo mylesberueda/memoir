@@ -13,7 +13,7 @@ pub use qdrant::QdrantIndex;
 
 use std::future::Future;
 
-use crate::memory::{MemoryKind, MemoryKindFilter, Scope};
+use crate::memory::{KindSelector, MemoryKind, Scope};
 
 /// Stores and queries vectors keyed by memory pid.
 ///
@@ -72,7 +72,7 @@ pub trait VectorIndex: Send + Sync + 'static {
         scope: Scope,
         query_embedding: Vec<f32>,
         limit: usize,
-        kind: MemoryKindFilter,
+        kinds: KindSelector,
     ) -> impl Future<Output = Result<Vec<(String, f32)>, VectorError>> + Send;
 
     /// Deletes vectors for the given pids.
@@ -125,7 +125,7 @@ mod tests {
             _scope: Scope,
             _query_embedding: Vec<f32>,
             limit: usize,
-            _kind: MemoryKindFilter,
+            _kinds: KindSelector,
         ) -> Result<Vec<(String, f32)>, VectorError> {
             Ok(self
                 .points
@@ -162,7 +162,7 @@ mod tests {
             .unwrap();
 
         let hits = index
-            .search(scope, vec![0.1, 0.2, 0.3, 0.4], 5, MemoryKindFilter::Both)
+            .search(scope, vec![0.1, 0.2, 0.3, 0.4], 5, KindSelector::default())
             .await
             .unwrap();
         assert_eq!(hits.len(), 1);

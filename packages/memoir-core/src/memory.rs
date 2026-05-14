@@ -40,15 +40,50 @@ impl std::fmt::Display for MemoryKind {
     }
 }
 
-/// Filter applied when reading memories.
+/// Selects which memory kinds a read includes.
 ///
-/// [`MemoryKindFilter::Both`] is the union of episodic + semantic and has no
-/// direct write counterpart in [`MemoryKind`].
+/// Each field gates inclusion of one kind. Default ([`Self::default`]) has
+/// every field `true` — retrieve all kinds. A field set to `false` filters
+/// that kind out. Constructing with all fields `false` is legal and yields an
+/// empty result.
+///
+/// Designed so that adding a new kind later is additive: a new `pub bool`
+/// field with default `true` does not break existing constructors that use
+/// `..Default::default()` or named-field init.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MemoryKindFilter {
-    Episodic,
-    Semantic,
-    Both,
+pub struct KindSelector {
+    pub episodic: bool,
+    pub semantic: bool,
+}
+
+impl Default for KindSelector {
+    fn default() -> Self {
+        Self { episodic: true, semantic: true }
+    }
+}
+
+impl KindSelector {
+    /// Returns the kinds this selector includes, in canonical order.
+    pub fn included_kinds(&self) -> Vec<MemoryKind> {
+        let mut out = Vec::with_capacity(2);
+        if self.episodic {
+            out.push(MemoryKind::Episodic);
+        }
+        if self.semantic {
+            out.push(MemoryKind::Semantic);
+        }
+        out
+    }
+
+    /// Returns `true` when every defined kind is included.
+    pub fn includes_all(&self) -> bool {
+        self.episodic && self.semantic
+    }
+
+    /// Returns `true` when no kind is included.
+    pub fn is_empty(&self) -> bool {
+        !self.episodic && !self.semantic
+    }
 }
 
 /// A stored memory and (if from a vector search) its similarity score.
@@ -76,9 +111,81 @@ pub enum ForgetTarget {
     Scope(Scope),
 }
 
+/// A list of memories and an optional LLM-facing system prompt section.
+///
+/// Returned by [`crate::client::Client::remember`]. Implements [`Display`]
+/// for direct injection into a system prompt and [`Deref`] to `[Memory]`
+/// for iteration.
+///
+/// When `system_prompt` is `Some`, [`Display`] emits the prompt followed by
+/// a bullet list of memory content. When `None`, only the bullet list is
+/// emitted — the caller takes responsibility for instructing the LLM.
+///
+/// [`Display`]: std::fmt::Display
+/// [`Deref`]: std::ops::Deref
+#[derive(Debug, Clone)]
+pub struct Memories {
+    list: Vec<Memory>,
+    system_prompt: Option<String>,
+}
+
+impl Memories {
+    /// Builds a `Memories` from a list and an optional system prompt section.
+    pub fn new(list: Vec<Memory>, system_prompt: Option<String>) -> Self {
+        Self { list, system_prompt }
+    }
+
+    /// Returns the contained memories as a slice.
+    pub fn list(&self) -> &[Memory] {
+        &self.list
+    }
+
+    /// Returns the configured system-prompt section, if any.
+    pub fn system_prompt(&self) -> Option<&str> {
+        self.system_prompt.as_deref()
+    }
+}
+
+impl std::fmt::Display for Memories {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(prompt) = &self.system_prompt {
+            writeln!(f, "{prompt}")?;
+        }
+        for memory in &self.list {
+            writeln!(f, "- {}", memory.content)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::ops::Deref for Memories {
+    type Target = [Memory];
+
+    fn deref(&self) -> &[Memory] {
+        &self.list
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
+
+    fn fixture(content: &str) -> Memory {
+        Memory {
+            pid: "test".into(),
+            scope: Scope {
+                agent_id: "a".into(),
+                org_id: "o".into(),
+                user_id: "u".into(),
+            },
+            content: content.into(),
+            metadata: serde_json::json!({}),
+            kind: MemoryKind::Episodic,
+            created_at: Utc::now().into(),
+            score: None,
+        }
+    }
 
     #[test]
     fn should_render_memory_kind_as_lowercase_string() {
@@ -90,5 +197,35 @@ mod tests {
     fn should_display_memory_kind_matching_as_str() {
         assert_eq!(MemoryKind::Episodic.to_string(), "episodic");
         assert_eq!(MemoryKind::Semantic.to_string(), "semantic");
+    }
+
+    #[test]
+    fn should_display_memories_with_system_prompt_and_bullets() {
+        let memories = Memories::new(
+            vec![fixture("first"), fixture("second")],
+            Some("Context:".into()),
+        );
+
+        assert_eq!(memories.to_string(), "Context:\n- first\n- second\n");
+    }
+
+    #[test]
+    fn should_display_memories_without_system_prompt_as_bullets_only() {
+        let memories = Memories::new(vec![fixture("only")], None);
+
+        assert_eq!(memories.to_string(), "- only\n");
+    }
+
+    #[test]
+    fn should_display_empty_memories_as_empty_string() {
+        let memories = Memories::new(Vec::new(), None);
+        assert_eq!(memories.to_string(), "");
+    }
+
+    #[test]
+    fn should_deref_memories_to_slice() {
+        let memories = Memories::new(vec![fixture("a"), fixture("b")], None);
+        assert_eq!(memories.len(), 2);
+        assert_eq!(memories[0].content, "a");
     }
 }

@@ -7,7 +7,7 @@ use qdrant_client::qdrant::{
 };
 
 use super::{VectorError, VectorIndex};
-use crate::memory::{MemoryKind, MemoryKindFilter, Scope};
+use crate::memory::{KindSelector, MemoryKind, Scope};
 
 const DEFAULT_COLLECTION: &str = "memoir_memories";
 
@@ -100,21 +100,24 @@ impl VectorIndex for QdrantIndex {
         scope: Scope,
         query_embedding: Vec<f32>,
         limit: usize,
-        kind: MemoryKindFilter,
+        kinds: KindSelector,
     ) -> Result<Vec<(String, f32)>, VectorError> {
+        if kinds.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let mut conditions = vec![
             Condition::matches("agent_id", scope.agent_id),
             Condition::matches("org_id", scope.org_id),
             Condition::matches("user_id", scope.user_id),
         ];
-        match kind {
-            MemoryKindFilter::Episodic => {
-                conditions.push(Condition::matches("kind", MemoryKind::Episodic.as_str().to_string()));
-            }
-            MemoryKindFilter::Semantic => {
-                conditions.push(Condition::matches("kind", MemoryKind::Semantic.as_str().to_string()));
-            }
-            MemoryKindFilter::Both => {}
+        if !kinds.includes_all() {
+            let names: Vec<String> = kinds
+                .included_kinds()
+                .into_iter()
+                .map(|k| k.as_str().to_string())
+                .collect();
+            conditions.push(Condition::matches("kind", names));
         }
         let filter = Filter::must(conditions);
 
