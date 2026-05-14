@@ -13,7 +13,8 @@ use qdrant_client::Qdrant;
 use sea_orm::DatabaseConnection;
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
-use crate::store::PostgresStore;
+use crate::memory::Memory;
+use crate::store::{MemoryStore, PostgresStore};
 use crate::vector::{QdrantIndex, VectorIndex};
 
 /// Shared internal state held by [`Client`] behind an `Arc`.
@@ -70,13 +71,13 @@ impl Client {
     ///
     /// Returns [`ClientError::Embedding`] if the embedder fails to initialize
     /// and [`ClientError::Vector`] if `ensure_collection` fails on Qdrant.
-    #[builder]
-    pub async fn build(
+    #[builder(start_fn = builder, finish_fn = build)]
+    pub async fn new(
         db: DatabaseConnection,
         qdrant: Qdrant,
-        schema: Option<String>,
-        system_prompt: Option<String>,
-        collection: Option<String>,
+        #[builder(into)] schema: Option<String>,
+        #[builder(into)] system_prompt: Option<String>,
+        #[builder(into)] collection: Option<String>,
     ) -> Result<Client, ClientError> {
         let embedder = OnnxEmbedding::new()?;
         let store = PostgresStore::new(db);
@@ -167,5 +168,36 @@ impl Client {
     /// ```
     pub fn remember(&self, prompt: impl Into<String>, scope: crate::memory::Scope) -> RememberBuilder<'_> {
         RememberBuilder::new(self, prompt.into(), scope)
+    }
+
+    /// Looks up a single memory by its public id, at any lifecycle state.
+    ///
+    /// Returns the memory regardless of whether its vector index entry is
+    /// `pending`, `indexed`, or `failed` — callers using this for direct
+    /// lookups see the source-of-truth row from Postgres.
+    ///
+    /// No scope check is performed: any caller holding a `pid` can retrieve
+    /// the corresponding memory. The library treats its caller as the trust
+    /// boundary; service-mode callers (epic 0007) gate access via their own
+    /// auth layer.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use memoir_core::client::Client;
+    /// # async fn example(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// let memory = client.recall("AbCdEfGhIjKlMnOpQrStU").await?;
+    /// println!("{}", memory.content);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping [`crate::store::StoreError::NotFound`]
+    /// when no memory matches `pid`, and [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::Database`] for database failures.
+    pub async fn recall(&self, pid: &str) -> Result<Memory, ClientError> {
+        Ok(self.inner.store.recall(pid).await?)
     }
 }
