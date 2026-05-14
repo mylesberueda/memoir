@@ -3561,6 +3561,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypixel-memoir-core-migration"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "regex",
+ "sea-orm-migration",
+ "thiserror",
+]
+
+[[package]]
 name = "polypixel-memoir-sdk"
 version = "0.1.0"
 dependencies = [

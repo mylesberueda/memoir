@@ -5,7 +5,6 @@ pub mod m20000000_000002_add_updated_at_trigger;
 mod m20000000_000003_create_users;
 mod m20000000_000004_create_api_keys;
 mod m20000000_000005_create_bootstrap_tokens;
-mod m20000000_000006_create_memories;
 
 pub struct Migrator;
 
@@ -21,7 +20,6 @@ impl MigratorTrait for Migrator {
             Box::new(m20000000_000003_create_users::Migration),
             Box::new(m20000000_000004_create_api_keys::Migration),
             Box::new(m20000000_000005_create_bootstrap_tokens::Migration),
-            Box::new(m20000000_000006_create_memories::Migration),
         ]
     }
 }
