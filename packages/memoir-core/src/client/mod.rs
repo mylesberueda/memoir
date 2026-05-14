@@ -14,7 +14,7 @@ use qdrant_client::Qdrant;
 use sea_orm::DatabaseConnection;
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
-use crate::memory::Memory;
+use crate::memory::{ForgetTarget, Memory};
 use crate::store::{MemoryStore, PostgresStore};
 use crate::vector::{QdrantIndex, VectorIndex};
 
@@ -200,5 +200,64 @@ impl Client {
     /// [`crate::store::StoreError::Database`] for database failures.
     pub async fn recall(&self, pid: &str) -> Result<Memory, ClientError> {
         Ok(self.inner.store.recall(pid).await?)
+    }
+
+    /// Deletes one memory by pid, or every memory matching a scope tuple.
+    ///
+    /// The Postgres delete is authoritative — returned pids reflect what was
+    /// actually removed from the source of truth. The Qdrant delete is
+    /// best-effort: on failure the source-of-truth row is already gone and
+    /// the orphaned vector becomes the reconciliation sweep's problem
+    /// (ticket 0012). Failure does not propagate; it emits
+    /// `memoir.forget.index_delete_failed` at WARN.
+    ///
+    /// Returns the pids that were deleted. An empty vector means the target
+    /// matched no rows — not an error.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use memoir_core::client::Client;
+    /// # use memoir_core::memory::{ForgetTarget, Scope};
+    /// # async fn example(client: &Client, scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
+    /// let deleted = client.forget(ForgetTarget::Pid("abc123".to_string())).await?;
+    /// let cleared = client.forget(ForgetTarget::Scope(scope)).await?;
+    /// # let _ = (deleted, cleared);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::InvalidScope`] when a `Scope` target has
+    /// any empty field, and [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::Database`] for database failures.
+    pub async fn forget(&self, target: ForgetTarget) -> Result<Vec<String>, ClientError> {
+        let deleted = self.inner.store.forget(target).await?;
+
+        if deleted.is_empty() {
+            return Ok(deleted);
+        }
+
+        let pid_refs: Vec<&str> = deleted.iter().map(String::as_str).collect();
+        if let Err(err) = self.inner.index.delete_by_pids(&pid_refs).await {
+            tracing::event!(
+                name: "memoir.forget.index_delete_failed",
+                tracing::Level::WARN,
+                pid_count = deleted.len(),
+                error = %err,
+                "vector delete failed for {{pid_count}} pid(s) — reconciliation will clean up orphans",
+            );
+        } else {
+            tracing::event!(
+                name: "memoir.forget.success",
+                tracing::Level::INFO,
+                pid_count = deleted.len(),
+                "{{pid_count}} memories forgotten",
+            );
+        }
+
+        Ok(deleted)
     }
 }
