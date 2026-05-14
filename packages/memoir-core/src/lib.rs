@@ -1,5 +1,6 @@
 //! Memoir memory substrate as an embeddable Rust library.
 
+pub mod client;
 pub mod embedding;
 pub mod memory;
 pub mod store;

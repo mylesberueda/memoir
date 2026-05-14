@@ -23,6 +23,11 @@ impl PostgresStore {
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
     }
+
+    /// Returns the underlying Postgres connection.
+    pub fn db(&self) -> &DatabaseConnection {
+        &self.db
+    }
 }
 
 impl MemoryStore for PostgresStore {
@@ -109,10 +114,7 @@ impl MemoryStore for PostgresStore {
             [SeaOrmValue::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
-                    owned_pids
-                        .into_iter()
-                        .map(|p| SeaOrmValue::String(Some(p)))
-                        .collect(),
+                    owned_pids.into_iter().map(|p| SeaOrmValue::String(Some(p))).collect(),
                 )),
             )],
         );
