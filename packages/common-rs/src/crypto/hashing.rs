@@ -186,6 +186,25 @@ pub fn generate_api_key() -> Result<ApiKey, CryptoError> {
     })
 }
 
+/// Generates a single-use bootstrap token suitable for first-admin creation.
+///
+/// Returns a string of shape `mb.<random>` where `<random>` is 32 bytes of
+/// CSPRNG output, base64url-encoded. The `mb` prefix distinguishes a
+/// bootstrap token from a long-lived API key (`mk.` prefix) on inspection.
+///
+/// # Errors
+///
+/// Returns [`CryptoError::RngFailed`] if the OS CSPRNG cannot produce
+/// random bytes.
+pub fn generate_bootstrap_token() -> Result<String, CryptoError> {
+    let mut bytes = [0u8; SECRET_BYTES];
+    OsRng
+        .try_fill_bytes(&mut bytes)
+        .map_err(|_| CryptoError::RngFailed)?;
+    let secret = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
+    Ok(format!("mb.{secret}"))
+}
+
 /// Parses an API key string of shape `mk.<key_id>.<secret>` into its parts.
 ///
 /// Returns `(key_id, secret)` on success. Used by the auth interceptor to
@@ -319,5 +338,26 @@ mod tests {
         let stored_hash = hash_password(&key.secret).unwrap();
         let (_id, secret) = parse_api_key(&key.plaintext).unwrap();
         assert!(verify_password(secret, &stored_hash).unwrap());
+    }
+
+    #[test]
+    fn should_generate_bootstrap_token_with_mb_prefix() {
+        let token = generate_bootstrap_token().unwrap();
+        assert!(token.starts_with("mb."));
+    }
+
+    #[test]
+    fn should_generate_unique_bootstrap_tokens() {
+        let t1 = generate_bootstrap_token().unwrap();
+        let t2 = generate_bootstrap_token().unwrap();
+        assert_ne!(t1, t2);
+    }
+
+    #[test]
+    fn should_verify_hashed_bootstrap_token() {
+        let token = generate_bootstrap_token().unwrap();
+        let hash = hash_password(&token).unwrap();
+        assert!(verify_password(&token, &hash).unwrap());
+        assert!(!verify_password("mb.wrong", &hash).unwrap());
     }
 }

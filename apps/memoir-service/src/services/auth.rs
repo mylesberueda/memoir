@@ -4,6 +4,10 @@
 //! to proto types at the handler boundary — entities (with their hash columns)
 //! never leave this module over gRPC.
 //!
+//! Also exposes [`create_user`] as a `pub(crate)` free function so the CLI
+//! (`memoir auth create`) and bootstrap paths can reuse the same logic
+//! without re-implementing password hashing and uniqueness handling.
+//!
 //! Security note: this module is unauthenticated until ticket 0011 wires the
 //! gRPC interceptor. Until then any caller can invoke any RPC.
 
@@ -11,6 +15,7 @@ use std::sync::Arc;
 
 use base64::Engine as _;
 use chrono::{DateTime, FixedOffset};
+use common_rs::crypto::CryptoError;
 use common_rs::crypto::hashing::{generate_api_key, hash_password, verify_password};
 use memoir_sdk::memoir::v1::auth_service_server::AuthService;
 use memoir_sdk::memoir::v1::{
@@ -59,6 +64,51 @@ const BOOTSTRAP_PENDING: &str = "pending";
 /// String value persisted in `bootstrap_tokens.status` for consumed tokens.
 const BOOTSTRAP_CONSUMED: &str = "consumed";
 
+/// Error type for shared auth operations callable outside the RPC layer.
+///
+/// The RPC layer maps these into `tonic::Status`; the CLI layer reports them
+/// as eyre errors. Centralizing here keeps duplicate-username detection in
+/// one place rather than scattered between handlers and CLI subcommands.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum AuthOpError {
+    #[error("username already taken")]
+    DuplicateUsername,
+    #[error("password hashing failed")]
+    Hash(#[from] CryptoError),
+    #[error("database error: {0}")]
+    Db(#[from] DbErr),
+}
+
+/// Creates a user with a hashed password.
+///
+/// Shared by the `CreateUser` RPC, the `memoir auth create` CLI subcommand,
+/// and the `MEMOIR_DEV_MODE` / bootstrap-token paths. Returns the inserted
+/// row so callers can surface its `pid` to the user.
+///
+/// # Errors
+///
+/// Returns [`AuthOpError::DuplicateUsername`] when the username already
+/// exists, [`AuthOpError::Hash`] when Argon2 fails to derive the password
+/// hash, and [`AuthOpError::Db`] for unexpected database errors.
+pub(crate) async fn create_user(
+    db: &DatabaseConnection,
+    username: String,
+    password: &str,
+    is_admin: bool,
+) -> Result<users::Model, AuthOpError> {
+    let password_hash = hash_password(password)?;
+    let new_user = users::ActiveModel {
+        username: Set(username),
+        password_hash: Set(password_hash),
+        is_admin: Set(is_admin),
+        ..Default::default()
+    };
+    new_user.insert(db).await.map_err(|err| match err {
+        DbErr::Query(_) | DbErr::Exec(_) => AuthOpError::DuplicateUsername,
+        other => AuthOpError::Db(other),
+    })
+}
+
 /// `AuthService` RPC handler backed by Postgres via SeaORM.
 pub struct Auth {
     ctx: Arc<AppContext>,
@@ -103,20 +153,9 @@ impl AuthService for Auth {
 
         // Bootstrap creates an admin user. Same path as CreateUser internally
         // but bypasses the (not-yet-wired) auth interceptor.
-        let password_hash = hash_password(&req.password).map_err(internal_error)?;
-        let new_user = users::ActiveModel {
-            username: Set(req.username),
-            password_hash: Set(password_hash),
-            is_admin: Set(true),
-            ..Default::default()
-        };
-        let inserted_user = new_user
-            .insert(self.db())
+        let inserted_user = create_user(self.db(), req.username, &req.password, true)
             .await
-            .map_err(|err| match err {
-                DbErr::Query(_) | DbErr::Exec(_) => Status::already_exists("username taken"),
-                _ => internal_error(err),
-            })?;
+            .map_err(auth_op_to_status)?;
 
         // Mark the token consumed.
         let mut consumed: bootstrap_tokens::ActiveModel = matched.into();
@@ -142,20 +181,9 @@ impl AuthService for Auth {
         validate_non_empty("username", &req.username)?;
         validate_non_empty("password", &req.password)?;
 
-        let password_hash = hash_password(&req.password).map_err(internal_error)?;
-        let new_user = users::ActiveModel {
-            username: Set(req.username),
-            password_hash: Set(password_hash),
-            is_admin: Set(req.is_admin),
-            ..Default::default()
-        };
-        let inserted = new_user
-            .insert(self.db())
+        let inserted = create_user(self.db(), req.username, &req.password, req.is_admin)
             .await
-            .map_err(|err| match err {
-                DbErr::Query(_) | DbErr::Exec(_) => Status::already_exists("username taken"),
-                _ => internal_error(err),
-            })?;
+            .map_err(auth_op_to_status)?;
 
         tracing::info!(user.pid = %inserted.pid, "user created");
 
@@ -455,6 +483,14 @@ fn status_from_db(status: &str) -> ApiKeyStatus {
 fn internal_error<E: std::fmt::Display>(err: E) -> Status {
     tracing::error!(error.message = %err, "internal error in auth handler");
     Status::internal("internal error")
+}
+
+/// Maps a shared [`AuthOpError`] into the gRPC status the RPC layer expects.
+fn auth_op_to_status(err: AuthOpError) -> Status {
+    match err {
+        AuthOpError::DuplicateUsername => Status::already_exists("username taken"),
+        AuthOpError::Hash(_) | AuthOpError::Db(_) => internal_error(err),
+    }
 }
 
 fn ts_to_proto(ts: DateTime<FixedOffset>) -> pbjson_types::Timestamp {

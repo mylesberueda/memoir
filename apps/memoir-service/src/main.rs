@@ -22,6 +22,9 @@ struct Cli {
 #[derive(clap::Subcommand)]
 #[command(arg_required_else_help = true)]
 enum Commands {
+    /// Manage admin users and API keys.
+    Auth(auth::Arguments),
+    /// Run the gRPC server.
     Server(server::Arguments),
 }
 
@@ -32,6 +35,7 @@ async fn main() -> crate::Result<()> {
 
     if let Some(cmds) = &cli.command {
         match cmds {
+            Commands::Auth(args) => auth::run(args).await,
             Commands::Server(args) => server::run(args).await,
         }?;
     };
