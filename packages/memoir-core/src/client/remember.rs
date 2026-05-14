@@ -5,7 +5,7 @@ use std::pin::Pin;
 
 use crate::embedding::EmbeddingModel;
 use crate::memory::{KindSelector, Memories, MemoryKind, Scope};
-use crate::store::{IndexStatus, MemoryStore};
+use crate::store::MemoryStore;
 use crate::vector::VectorIndex;
 
 use super::{Client, ClientError};
@@ -106,7 +106,7 @@ impl<'a> RememberBuilder<'a> {
 fn kind_selector(episodic: bool, semantic: bool) -> KindSelector {
     match (episodic, semantic) {
         (false, false) => KindSelector::default(),
-        (e, s) => KindSelector { episodic: e, semantic: s },
+        (episodic, semantic) => KindSelector { episodic, semantic },
     }
 }
 
@@ -133,19 +133,18 @@ async fn execute(builder: RememberBuilder<'_>) -> Result<Memories, ClientError> 
 
     let written = inner
         .store
-        .remember(scope.clone(), prompt.clone(), serde_json::json!({}), MemoryKind::Episodic)
+        .remember(
+            scope.clone(),
+            prompt.clone(),
+            serde_json::json!({}),
+            MemoryKind::Episodic,
+        )
         .await?;
 
-    // TODO(0010): hand off to async embed substrate. For 0008's MVP the write
-    // path stays sequential — embed + upsert + flip status inline on a
-    // detached `tokio::spawn` so the caller does not block on it.
-    spawn_embed_for_write(inner.clone(), written.clone());
+    inner.spawn_embed_for_write(written.clone());
 
     let query_vector = inner.embedder.embed(&prompt).await?;
-    let hits = inner
-        .index
-        .search(scope, query_vector, limit, kinds)
-        .await?;
+    let hits = inner.index.search(scope, query_vector, limit, kinds).await?;
 
     let pids: Vec<&str> = hits.iter().map(|(pid, _)| pid.as_str()).collect();
     let mut rows = inner.store.find_by_pids(&pids).await?;
@@ -194,33 +193,4 @@ mod tests {
         assert!(!selector.episodic);
         assert!(selector.semantic);
     }
-}
-
-fn spawn_embed_for_write(inner: std::sync::Arc<super::ClientInner>, written: crate::memory::Memory) {
-    tokio::spawn(async move {
-        let result = async {
-            let vector = inner.embedder.embed(&written.content).await?;
-            inner
-                .index
-                .upsert(&written.pid, &written.scope, written.kind, vector)
-                .await?;
-            inner
-                .store
-                .set_index_status(&written.pid, IndexStatus::Indexed)
-                .await?;
-            Ok::<(), ClientError>(())
-        }
-        .await;
-
-        if let Err(err) = result {
-            tracing::warn!(pid = %written.pid, error = %err, "memoir embed-on-write failed");
-            if let Err(set_err) = inner
-                .store
-                .set_index_status(&written.pid, IndexStatus::Failed)
-                .await
-            {
-                tracing::warn!(pid = %written.pid, error = %set_err, "memoir set_index_status(failed) failed");
-            }
-        }
-    });
 }

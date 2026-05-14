@@ -1,5 +1,6 @@
 //! High-level facade composing the embedder, store, and vector index.
 
+mod embed;
 mod error;
 mod remember;
 
