@@ -32,6 +32,7 @@ use sea_orm::{
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
+use crate::middleware::auth::authenticate;
 use crate::models::{ApiKeys, BootstrapTokens, Users};
 use crate::models::_entity::{api_keys, bootstrap_tokens, users};
 
@@ -177,6 +178,8 @@ impl AuthService for Auth {
         &self,
         request: Request<CreateUserRequest>,
     ) -> Result<Response<CreateUserResponse>, Status> {
+        let caller = authenticate(self.db(), &request).await?;
+        caller.require_admin()?;
         let req = request.into_inner();
         validate_non_empty("username", &req.username)?;
         validate_non_empty("password", &req.password)?;
@@ -196,6 +199,7 @@ impl AuthService for Auth {
         &self,
         request: Request<GetUserRequest>,
     ) -> Result<Response<GetUserResponse>, Status> {
+        let _caller = authenticate(self.db(), &request).await?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
 
@@ -215,6 +219,7 @@ impl AuthService for Auth {
         &self,
         request: Request<ListUsersRequest>,
     ) -> Result<Response<ListUsersResponse>, Status> {
+        let _caller = authenticate(self.db(), &request).await?;
         let req = request.into_inner();
         let limit = resolve_limit(req.limit);
         let after = decode_cursor(req.cursor.as_deref())?;
@@ -247,6 +252,8 @@ impl AuthService for Auth {
         &self,
         request: Request<DeleteUserRequest>,
     ) -> Result<Response<DeleteUserResponse>, Status> {
+        let caller = authenticate(self.db(), &request).await?;
+        caller.require_admin()?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
 
@@ -267,6 +274,8 @@ impl AuthService for Auth {
         &self,
         request: Request<CreateApiKeyRequest>,
     ) -> Result<Response<CreateApiKeyResponse>, Status> {
+        let caller = authenticate(self.db(), &request).await?;
+        caller.require_admin()?;
         let req = request.into_inner();
         validate_non_empty("name", &req.name)?;
         let role_str = role_to_db(ApiKeyRole::try_from(req.role).unwrap_or(ApiKeyRole::Unspecified))?;
@@ -300,6 +309,7 @@ impl AuthService for Auth {
         &self,
         request: Request<GetApiKeyRequest>,
     ) -> Result<Response<GetApiKeyResponse>, Status> {
+        let _caller = authenticate(self.db(), &request).await?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
 
@@ -319,6 +329,7 @@ impl AuthService for Auth {
         &self,
         request: Request<ListApiKeysRequest>,
     ) -> Result<Response<ListApiKeysResponse>, Status> {
+        let _caller = authenticate(self.db(), &request).await?;
         let req = request.into_inner();
         let limit = resolve_limit(req.limit);
         let after = decode_cursor(req.cursor.as_deref())?;
@@ -357,6 +368,8 @@ impl AuthService for Auth {
         &self,
         request: Request<RotateApiKeyRequest>,
     ) -> Result<Response<RotateApiKeyResponse>, Status> {
+        let caller = authenticate(self.db(), &request).await?;
+        caller.require_admin()?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
 
@@ -387,6 +400,8 @@ impl AuthService for Auth {
         &self,
         request: Request<RevokeApiKeyRequest>,
     ) -> Result<Response<RevokeApiKeyResponse>, Status> {
+        let caller = authenticate(self.db(), &request).await?;
+        caller.require_admin()?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
 
