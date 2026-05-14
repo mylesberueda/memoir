@@ -1,8 +1,4 @@
-//! Shared value types for memory operations.
-//!
-//! Defines [`Scope`], [`Memory`], [`MemoryKind`], [`MemoryKindFilter`], and
-//! [`ForgetTarget`] — used across the storage trait, the client facade, and
-//! the return types consumers handle directly.
+//! Memory domain types.
 
 use chrono::{DateTime, FixedOffset};
 

@@ -12,9 +12,13 @@ path = "src/lib.rs"
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 fastembed = { version = "5.13" }
+nanoid = { version = "0.4" }
+qdrant-client = { version = "1.18" }
+sea-orm = { version = "2.0.0-rc.20", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
