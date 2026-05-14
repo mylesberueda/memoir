@@ -17,10 +17,11 @@ impl MigrationTrait for Migration {
         //
         // DECISION: status is also TEXT + CHECK rather than enum, same rationale.
         //
-        // DECISION: key_id is the lookup half of `mk_<key_id>_<secret>`. The
+        // DECISION: key_id is the lookup half of `mk.<key_id>.<secret>`. The
         // interceptor parses the bearer token, finds the row by key_id, then
         // Argon2-verifies the secret half against key_hash. key_id is non-secret;
-        // key_hash is Argon2 PHC.
+        // key_hash is Argon2 PHC. The `.` separator (instead of `_`) avoids
+        // ambiguity with the base64url alphabet which includes `_`.
         db.execute_unprepared(
             r#"
             CREATE TABLE api_keys (

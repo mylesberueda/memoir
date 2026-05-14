@@ -896,7 +896,9 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "argon2",
+ "base64",
  "color-eyre",
+ "rand_core 0.6.4",
  "thiserror",
  "tracing",
  "tracing-subscriber",
@@ -2582,6 +2584,7 @@ checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
 dependencies = [
  "getrandom 0.4.2",
  "phc",
+ "rand_core 0.10.0",
 ]
 
 [[package]]
@@ -2665,6 +2668,7 @@ dependencies = [
  "base64ct",
  "ctutils",
  "getrandom 0.4.2",
+ "rand_core 0.10.0",
 ]
 
 [[package]]

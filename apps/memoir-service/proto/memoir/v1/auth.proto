@@ -9,7 +9,7 @@ import "google/protobuf/timestamp.proto";
 // Two principal types:
 //   - User: an operator with username + password. Bootstrap creates the first
 //     admin; subsequent users are created by existing admins.
-//   - ApiKey: a bearer token (string of shape `mk_<key_id>_<secret>`) presented
+//   - ApiKey: a bearer token (string of shape `mk.<key_id>.<secret>`) presented
 //     in request metadata to authenticate calls. Keys have a role
 //     (admin | integration) and optionally bind to an org_id scope.
 //
@@ -63,7 +63,7 @@ message User {
 // in CreateApiKeyResponse and RotateApiKeyResponse; Get/List never include it.
 message ApiKey {
   string pid = 1;
-  string key_id = 2; // The lookup half of `mk_<key_id>_<secret>`. Non-secret.
+  string key_id = 2; // The lookup half of `mk.<key_id>.<secret>`. Non-secret.
   string name = 3; // Human-readable label set at creation, e.g. "ci-runner".
   ApiKeyRole role = 4;
   optional string org_id = 5; // When set, the key is scope-bound to this org.
@@ -143,7 +143,7 @@ message CreateApiKeyRequest {
 
 message CreateApiKeyResponse {
   ApiKey key = 1;
-  string plaintext = 2; // The full `mk_<key_id>_<secret>` string. Shown ONCE.
+  string plaintext = 2; // The full `mk.<key_id>.<secret>` string. Shown ONCE.
 }
 
 message GetApiKeyRequest {
@@ -171,7 +171,7 @@ message RotateApiKeyRequest {
 
 message RotateApiKeyResponse {
   ApiKey key = 1;
-  string plaintext = 2; // The new `mk_<key_id>_<secret>` string. Shown ONCE.
+  string plaintext = 2; // The new `mk.<key_id>.<secret>` string. Shown ONCE.
 }
 
 message RevokeApiKeyRequest {
