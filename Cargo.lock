@@ -2775,6 +2775,10 @@ dependencies = [
 [[package]]
 name = "polypixel-memoir-core"
 version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "tokio",
+]
 
 [[package]]
 name = "polypixel-memoir-sdk"

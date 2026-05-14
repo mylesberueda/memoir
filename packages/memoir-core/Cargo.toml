@@ -10,6 +10,10 @@ name = "memoir_core"
 path = "src/lib.rs"
 
 [dependencies]
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [features]
 default = []
