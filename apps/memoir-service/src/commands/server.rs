@@ -4,6 +4,7 @@ use std::sync::Arc;
 use color_eyre::eyre::{Context as _, bail};
 use common_rs::crypto::hashing::{generate_bootstrap_token, hash_password};
 use memoir_sdk::memoir::v1::auth_service_server::AuthServiceServer;
+use memoir_sdk::memoir::v1::memory_service_server::MemoryServiceServer;
 use migration::MigratorTrait as _;
 use sea_orm::{
     ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait,
@@ -15,6 +16,7 @@ use crate::AppContext;
 use crate::models::{BootstrapTokens, Users};
 use crate::models::_entity::{bootstrap_tokens, users};
 use crate::services::auth::{Auth, create_user};
+use crate::services::memory::Memory;
 
 /// Env var that opts the server into dev-mode bootstrap.
 ///
@@ -69,6 +71,7 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     bootstrap_admin(ctx.clone()).await?;
 
     let auth_handler = Auth::new(ctx.clone());
+    let memory_handler = Memory::new(ctx.clone());
 
     let host_env = std::env::var("HOST").ok();
     let port_env = std::env::var("PORT").ok();
@@ -80,12 +83,16 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     health_reporter
         .set_serving::<AuthServiceServer<Auth>>()
         .await;
+    health_reporter
+        .set_serving::<MemoryServiceServer<Memory>>()
+        .await;
 
-    tracing::info!(server.address = %addr, "starting gRPC server (auth unauthenticated until interceptor lands)");
+    tracing::info!(server.address = %addr, "starting gRPC server");
 
     Server::builder()
         .add_service(health_service)
         .add_service(AuthServiceServer::new(auth_handler))
+        .add_service(MemoryServiceServer::new(memory_handler))
         .serve(addr)
         .await?;
 
