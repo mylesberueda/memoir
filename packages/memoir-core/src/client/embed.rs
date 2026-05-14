@@ -22,6 +22,17 @@ use crate::vector::VectorIndex;
 
 use super::ClientInner;
 
+/// Outcome of an inline (awaited) embed-and-index pass.
+///
+/// Returned by [`ClientInner::embed_and_index`] so callers like the
+/// reconciliation sweep can count successes vs. failures without re-parsing
+/// tracing output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum EmbedOutcome {
+    Indexed,
+    Failed,
+}
+
 impl ClientInner {
     /// Spawns a detached embed-and-index task for the freshly written row.
     ///
@@ -30,10 +41,16 @@ impl ClientInner {
     pub(super) fn spawn_embed_for_write(self: &Arc<Self>, written: Memory) {
         let inner = self.clone();
         let span = info_span!("memoir.embed", pid = %written.pid);
-        tokio::spawn(inner.run_embed(written).instrument(span));
+        tokio::spawn(async move { inner.embed_and_index(written).await }.instrument(span));
     }
 
-    async fn run_embed(self: Arc<Self>, written: Memory) {
+    /// Embeds the row, upserts the vector, and flips its lifecycle state.
+    ///
+    /// Shared between the write-time `tokio::spawn` path
+    /// ([`Self::spawn_embed_for_write`]) and the reconciliation sweep's
+    /// retry pass. Returns whether the row reached `indexed` or got flipped
+    /// to `failed`.
+    pub(super) async fn embed_and_index(&self, written: Memory) -> EmbedOutcome {
         let pid = written.pid.as_str();
 
         let vector = match self.embedder.embed(&written.content).await {
@@ -47,7 +64,7 @@ impl ClientInner {
                     "embed step failed for {{pid}}",
                 );
                 self.record_failed(pid).await;
-                return;
+                return EmbedOutcome::Failed;
             }
         };
 
@@ -64,7 +81,7 @@ impl ClientInner {
                 "vector upsert failed for {{pid}}",
             );
             self.record_failed(pid).await;
-            return;
+            return EmbedOutcome::Failed;
         }
 
         if let Err(err) = self.store.set_index_status(pid, IndexStatus::Indexed).await {
@@ -75,7 +92,7 @@ impl ClientInner {
                 error = %err,
                 "set_index_status(indexed) failed for {{pid}} — row stays pending until reconciliation",
             );
-            return;
+            return EmbedOutcome::Failed;
         }
 
         event!(
@@ -84,6 +101,7 @@ impl ClientInner {
             pid = %pid,
             "{{pid}} indexed",
         );
+        EmbedOutcome::Indexed
     }
 
     async fn record_failed(&self, pid: &str) {

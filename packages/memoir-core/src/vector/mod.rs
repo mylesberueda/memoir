@@ -88,6 +88,20 @@ pub trait VectorIndex: Send + Sync + 'static {
         &self,
         pids: &[&str],
     ) -> impl Future<Output = Result<(), VectorError>> + Send;
+
+    /// Returns every pid in the index that matches `scope`.
+    ///
+    /// Used by the reconciliation sweep's orphan-cleanup pass. Implementations
+    /// paginate internally using `page_size` and concatenate the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VectorError::Connection`] on backend errors.
+    fn list_pids_in_scope(
+        &self,
+        scope: Scope,
+        page_size: usize,
+    ) -> impl Future<Output = Result<Vec<String>, VectorError>> + Send;
 }
 
 #[cfg(test)]
@@ -143,6 +157,21 @@ mod tests {
                 points.remove(*pid);
             }
             Ok(())
+        }
+
+        async fn list_pids_in_scope(
+            &self,
+            scope: Scope,
+            _page_size: usize,
+        ) -> Result<Vec<String>, VectorError> {
+            Ok(self
+                .points
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(_, (s, _, _))| s == &scope)
+                .map(|(pid, _)| pid.clone())
+                .collect())
         }
     }
 

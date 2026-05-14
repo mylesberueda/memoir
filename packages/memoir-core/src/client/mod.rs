@@ -2,9 +2,11 @@
 
 mod embed;
 mod error;
+mod reconcile;
 mod remember;
 
 pub use error::ClientError;
+pub use reconcile::{ReconcileBuilder, ReconcileSummary};
 pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
 
 use std::sync::Arc;
@@ -259,5 +261,27 @@ impl Client {
         }
 
         Ok(deleted)
+    }
+
+    /// Runs reconciliation: retries `failed` rows and cleans Qdrant orphans.
+    ///
+    /// Returns a per-call builder. Awaiting it runs the configured passes
+    /// and returns a [`ReconcileSummary`]. Both passes run by default;
+    /// narrow with [`ReconcileBuilder::only_retry_failed`] /
+    /// [`ReconcileBuilder::only_clean_orphans`]. Idempotent: running against
+    /// a clean store does nothing and exits cleanly.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use memoir_core::client::Client;
+    /// # async fn example(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// let summary = client.reconcile().await?;
+    /// let _ = summary;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn reconcile(&self) -> ReconcileBuilder<'_> {
+        ReconcileBuilder::new(self)
     }
 }

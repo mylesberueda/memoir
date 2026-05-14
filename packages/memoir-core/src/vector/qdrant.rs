@@ -3,7 +3,8 @@
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::{
     Condition, CreateCollectionBuilder, DeletePointsBuilder, Distance, Filter, PointId, PointStruct,
-    QueryPointsBuilder, UpsertPointsBuilder, Value, VectorParamsBuilder, point_id::PointIdOptions,
+    QueryPointsBuilder, ScrollPointsBuilder, UpsertPointsBuilder, Value, VectorParamsBuilder,
+    point_id::PointIdOptions,
 };
 
 use super::{VectorError, VectorIndex};
@@ -153,6 +154,47 @@ impl VectorIndex for QdrantIndex {
             .await
             .map_err(connection)?;
         Ok(())
+    }
+
+    async fn list_pids_in_scope(
+        &self,
+        scope: Scope,
+        page_size: usize,
+    ) -> Result<Vec<String>, VectorError> {
+        let filter = Filter::must(vec![
+            Condition::matches("agent_id", scope.agent_id),
+            Condition::matches("org_id", scope.org_id),
+            Condition::matches("user_id", scope.user_id),
+        ]);
+
+        let mut pids = Vec::new();
+        let mut offset: Option<PointId> = None;
+
+        loop {
+            let mut request = ScrollPointsBuilder::new(&self.collection)
+                .filter(filter.clone())
+                .limit(page_size as u32)
+                .with_payload(false)
+                .with_vectors(false);
+            if let Some(o) = offset.take() {
+                request = request.offset(o);
+            }
+
+            let response = self.qdrant.scroll(request).await.map_err(connection)?;
+
+            for point in response.result {
+                if let Some(id) = point.id.and_then(point_id_to_string) {
+                    pids.push(id);
+                }
+            }
+
+            match response.next_page_offset {
+                Some(next) => offset = Some(next),
+                None => break,
+            }
+        }
+
+        Ok(pids)
     }
 }
 

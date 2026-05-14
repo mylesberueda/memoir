@@ -116,6 +116,47 @@ pub trait MemoryStore: Send + Sync + 'static {
         pid: &str,
         status: IndexStatus,
     ) -> impl Future<Output = Result<(), StoreError>> + Send;
+
+    /// Returns up to `limit` memories whose index lifecycle is `failed`.
+    ///
+    /// Used by the reconciliation sweep to retry embed + upsert. Returned in
+    /// no specific order; the caller drives retry concurrency.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Database`] for database failures.
+    fn find_failed(
+        &self,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
+
+    /// Returns every distinct scope tuple present in the store.
+    ///
+    /// Used by the reconciliation sweep's orphan-cleanup pass to know which
+    /// scopes need a vector-index scroll. Expected to be cheap for typical
+    /// tenant counts; very large deployments may need pagination later.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Database`] for database failures.
+    fn list_scopes(&self)
+    -> impl Future<Output = Result<Vec<Scope>, StoreError>> + Send;
+
+    /// Returns every indexed pid for the given scope.
+    ///
+    /// Used by the reconciliation sweep's orphan-cleanup pass to compare
+    /// against the vector index's scope contents. Only `indexed` rows are
+    /// returned; `pending`/`failed` rows are not yet expected to have a
+    /// vector index entry.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::InvalidScope`] if any scope field is empty,
+    /// [`StoreError::Database`] for database failures.
+    fn indexed_pids_in_scope(
+        &self,
+        scope: &Scope,
+    ) -> impl Future<Output = Result<Vec<String>, StoreError>> + Send;
 }
 
 #[cfg(test)]
@@ -198,6 +239,32 @@ mod tests {
 
         async fn set_index_status(&self, _pid: &str, _status: IndexStatus) -> Result<(), StoreError> {
             Ok(())
+        }
+
+        async fn find_failed(&self, _limit: usize) -> Result<Vec<Memory>, StoreError> {
+            Ok(Vec::new())
+        }
+
+        async fn list_scopes(&self) -> Result<Vec<Scope>, StoreError> {
+            let scopes: std::collections::HashSet<Scope> = self
+                .memories
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|m| m.scope.clone())
+                .collect();
+            Ok(scopes.into_iter().collect())
+        }
+
+        async fn indexed_pids_in_scope(&self, scope: &Scope) -> Result<Vec<String>, StoreError> {
+            Ok(self
+                .memories
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|m| &m.scope == scope)
+                .map(|m| m.pid.clone())
+                .collect())
         }
     }
 

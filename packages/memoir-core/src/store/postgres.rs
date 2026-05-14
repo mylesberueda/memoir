@@ -151,6 +151,69 @@ impl MemoryStore for PostgresStore {
         }
         Ok(())
     }
+
+    async fn find_failed(&self, limit: usize) -> Result<Vec<Memory>, StoreError> {
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT pid, agent_id, org_id, user_id, content, metadata, kind, created_at
+            FROM memories
+            WHERE qdrant_status = 'failed'
+            LIMIT $1
+            "#,
+            [SeaOrmValue::BigInt(Some(limit as i64))],
+        );
+
+        let rows = self.db.query_all_raw(stmt).await.map_err(database)?;
+        let mut memories = Vec::with_capacity(rows.len());
+        for row in &rows {
+            memories.push(memory_from_row(row)?);
+        }
+        Ok(memories)
+    }
+
+    async fn list_scopes(&self) -> Result<Vec<Scope>, StoreError> {
+        let stmt = Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT DISTINCT agent_id, org_id, user_id FROM memories".to_string(),
+        );
+        let rows = self.db.query_all_raw(stmt).await.map_err(database)?;
+
+        let mut scopes = Vec::with_capacity(rows.len());
+        for row in &rows {
+            scopes.push(Scope {
+                agent_id: row.try_get::<String>("", "agent_id").map_err(database)?,
+                org_id: row.try_get::<String>("", "org_id").map_err(database)?,
+                user_id: row.try_get::<String>("", "user_id").map_err(database)?,
+            });
+        }
+        Ok(scopes)
+    }
+
+    async fn indexed_pids_in_scope(&self, scope: &Scope) -> Result<Vec<String>, StoreError> {
+        validate_scope(scope)?;
+
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT pid FROM memories
+            WHERE agent_id = $1 AND org_id = $2 AND user_id = $3
+              AND qdrant_status = 'indexed'
+            "#,
+            [
+                SeaOrmValue::String(Some(scope.agent_id.clone())),
+                SeaOrmValue::String(Some(scope.org_id.clone())),
+                SeaOrmValue::String(Some(scope.user_id.clone())),
+            ],
+        );
+
+        let rows = self.db.query_all_raw(stmt).await.map_err(database)?;
+        let mut pids = Vec::with_capacity(rows.len());
+        for row in &rows {
+            pids.push(row.try_get::<String>("", "pid").map_err(database)?);
+        }
+        Ok(pids)
+    }
 }
 
 impl PostgresStore {
