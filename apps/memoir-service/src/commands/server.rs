@@ -1,28 +1,32 @@
-#![allow(dead_code, unused_variables)] // DELETEME(_): Delete if not example service
+use std::net::SocketAddr;
+
+use memoir_sdk::memoir::v1::auth_service_server::AuthServiceServer;
+use migration::MigratorTrait as _;
+use tonic::transport::Server;
 
 use crate::AppContext;
-use migration::MigratorTrait as _;
-use std::net::SocketAddr;
-use tonic::transport::Server;
+use crate::services::auth::Auth;
 
 #[derive(clap::Args)]
 pub(crate) struct Arguments {
     #[clap(subcommand)]
     command: Option<Commands>,
-    args: Option<String>,
 }
 
 #[derive(clap::Subcommand)]
 pub(crate) enum Commands {
-    Start { host: Option<String>, port: Option<String> },
-    Noop,
+    Start {
+        #[clap(long)]
+        host: Option<String>,
+        #[clap(long)]
+        port: Option<String>,
+    },
 }
 
 pub(crate) async fn run(args: &Arguments) -> crate::Result<()> {
     if let Some(command) = &args.command {
         match command {
             Commands::Start { host, port } => start(host, port).await,
-            Commands::Noop => todo!(),
         }
     } else {
         Ok(())
@@ -37,11 +41,9 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     migration::Migrator::up(ctx.db.as_ref(), None)
         .await
         .expect("Failed to run migrations");
-    tracing::info!("Migrations ran!");
+    tracing::info!("migrations applied");
 
-    tracing::info!("Initializing services");
-    // let admin_service = crate::AdminService::new(ctx.clone());
-    tracing::info!("Services initialized");
+    let auth_handler = Auth::new(ctx.clone());
 
     let host_env = std::env::var("HOST").ok();
     let port_env = std::env::var("PORT").ok();
@@ -50,16 +52,15 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     let addr: SocketAddr = format!("{host}:{port}").parse()?;
 
     let (health_reporter, health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_serving::<AuthServiceServer<Auth>>()
+        .await;
 
-    // health_reporter
-    //     .set_serving::<AdminServiceServer<crate::AdminService>>()
-    //     .await;
+    tracing::info!(server.address = %addr, "starting gRPC server (auth unauthenticated until interceptor lands)");
 
-    // Auth + middleware wiring will be reintroduced by the local-auth epic.
-    tracing::info!("Starting gRPC server on {addr} (no auth wired yet)");
     Server::builder()
         .add_service(health_service)
-        // .add_service(AdminServiceServer::new(admin_service))
+        .add_service(AuthServiceServer::new(auth_handler))
         .serve(addr)
         .await?;
 
