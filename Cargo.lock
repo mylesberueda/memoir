@@ -2773,6 +2773,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypixel-memoir-core"
+version = "0.1.0"
+
+[[package]]
 name = "polypixel-memoir-sdk"
 version = "0.1.0"
 dependencies = [

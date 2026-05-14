@@ -1,0 +1,17 @@
+[package]
+name = "polypixel-memoir-core"
+version = "0.1.0"
+description = "Memoir memory substrate as an embeddable Rust library"
+authors = ["Myles Berueda <myles@polypixel.io>"]
+edition = "2024"
+
+[lib]
+name = "memoir_core"
+path = "src/lib.rs"
+
+[dependencies]
+
+[features]
+default = []
+integration = []
+unit = []

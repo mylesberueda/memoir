@@ -1,0 +1,46 @@
+{
+	"name": "memoir-core",
+	"$schema": "../../node_modules/nx/schemas/project-schema.json",
+	"projectType": "library",
+	"sourceRoot": "packages/memoir-core/src",
+	"targets": {
+		"cargo": {
+			"command": "cargo",
+			"options": {
+				"cwd": "{projectRoot}"
+			}
+		},
+		"build": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "cargo build --release"
+			},
+			"cache": true,
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/Cargo.toml"],
+			"outputs": ["{projectRoot}/target/release"]
+		},
+		"typecheck": {
+			"command": "cd {projectRoot} && cargo check",
+			"cache": true,
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/Cargo.toml"]
+		},
+		"test": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo test"]
+			}
+		},
+		"test:integration": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo test --release --features integration"]
+			},
+			"cache": true,
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/tests/**/*.rs"]
+		}
+	},
+	"tags": ["scope:shared", "type:lib", "lang:rust"]
+}

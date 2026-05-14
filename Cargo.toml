@@ -4,6 +4,7 @@ members = [
   "apps/memoir-service",
   "apps/memoir-service/migration",
   "packages/common-rs",
+  "packages/memoir-core",
 ]
 
 [workspace.dependencies]
