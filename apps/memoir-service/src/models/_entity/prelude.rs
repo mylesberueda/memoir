@@ -2,4 +2,5 @@
 
 pub use super::api_keys::Entity as ApiKeys;
 pub use super::bootstrap_tokens::Entity as BootstrapTokens;
+pub use super::memories::Entity as Memories;
 pub use super::users::Entity as Users;
