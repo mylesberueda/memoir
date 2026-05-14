@@ -10,7 +10,9 @@ name = "memoir_core"
 path = "src/lib.rs"
 
 [dependencies]
+fastembed = { version = "5.13" }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
