@@ -32,11 +32,12 @@ pub(crate) struct AppContext {
 
 impl AppContext {
     pub(crate) async fn new() -> Result<Arc<Self>, AppContextError> {
-        let schema = Env::get_or("MEMOIR_SCHEMA", migration::DEFAULT_SCHEMA);
-        let db = Db::init(&schema).await?;
-        Db::apply_migrations(&db, &schema).await?;
+        let service_schema = Env::get_or("MEMOIR_SERVICE_SCHEMA", migration::DEFAULT_SCHEMA);
+        let memoir_schema = Env::get_or("MEMOIR_SCHEMA", memoir_core_migration::DEFAULT_SCHEMA);
+        let db = Db::init(&memoir_schema, &service_schema).await?;
+        Db::apply_migrations(&db, &service_schema).await?;
         let qdrant = QdrantBootstrap::init()?;
-        let (memoir, memoir_worker) = Memoir::init(&db, qdrant, &schema).await?;
+        let (memoir, memoir_worker) = Memoir::init(&db, qdrant, &memoir_schema).await?;
 
         Ok(Arc::new(Self {
             db,
@@ -49,12 +50,20 @@ impl AppContext {
 struct Db;
 
 impl Db {
-    async fn init(schema: &str) -> Result<Arc<sea_orm::DatabaseConnection>, AppContextError> {
+    async fn init(
+        memoir_schema: &str,
+        service_schema: &str,
+    ) -> Result<Arc<sea_orm::DatabaseConnection>, AppContextError> {
         let db_url = Env::get("DATABASE_URL")?;
 
-        tracing::info!(schema = %schema, "Connecting to database...");
+        // Search path lists both schemas. memoir-core's tables live in
+        // `memoir_schema`; memoir-service's in `service_schema`. Unqualified
+        // queries from either crate resolve via this path. Listing both keeps
+        // a single shared pool sufficient.
+        let search_path = format!("{memoir_schema},{service_schema},public");
+        tracing::info!(search_path = %search_path, "Connecting to database...");
         let options = ConnectOptions::new(db_url)
-            .set_schema_search_path(format!("{schema},public"))
+            .set_schema_search_path(search_path)
             .to_owned();
         let db = Arc::new(sea_orm::Database::connect(options).await.map_err(AppContextError::Db)?);
         tracing::info!("Database connected!");
@@ -64,10 +73,10 @@ impl Db {
 
     async fn apply_migrations(
         db: &sea_orm::DatabaseConnection,
-        schema: &str,
+        service_schema: &str,
     ) -> Result<(), AppContextError> {
         tracing::info!("Applying memoir-service migrations...");
-        bootstrap_and_migrate(db, schema)
+        bootstrap_and_migrate(db, service_schema)
             .await
             .map_err(AppContextError::ServiceMigration)?;
         tracing::info!("memoir-service migrations applied!");

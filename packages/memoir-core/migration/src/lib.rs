@@ -11,6 +11,7 @@ use sea_orm_migration::sea_orm::{ConnectionTrait, DatabaseConnection};
 
 mod m20000000_000001_create_memories;
 mod m20000000_000002_create_memory_jobs;
+mod m20000000_000003_add_superseded_by;
 
 /// Default Postgres schema for memoir-core's tables.
 pub const DEFAULT_SCHEMA: &str = "memoir";
@@ -36,6 +37,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20000000_000001_create_memories::Migration),
             Box::new(m20000000_000002_create_memory_jobs::Migration),
+            Box::new(m20000000_000003_add_superseded_by::Migration),
         ]
     }
 }

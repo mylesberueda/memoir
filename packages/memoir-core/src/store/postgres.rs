@@ -48,7 +48,7 @@ impl MemoryStore for PostgresStore {
             r#"
             INSERT INTO memories (pid, agent_id, org_id, user_id, content, metadata, kind, source_pid)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, created_at
+            RETURNING pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, superseded_by, created_at
             "#,
             [
                 SeaOrmValue::String(Some(pid)),
@@ -83,7 +83,7 @@ impl MemoryStore for PostgresStore {
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             r#"
-            SELECT pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, created_at
+            SELECT pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, superseded_by, created_at
             FROM memories
             WHERE pid = $1
             "#,
@@ -109,9 +109,9 @@ impl MemoryStore for PostgresStore {
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             r#"
-            SELECT pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, created_at
+            SELECT pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, superseded_by, created_at
             FROM memories
-            WHERE pid = ANY($1) AND qdrant_status = 'indexed'
+            WHERE pid = ANY($1) AND qdrant_status = 'indexed' AND superseded_by IS NULL
             "#,
             [SeaOrmValue::Array(
                 sea_orm::sea_query::ArrayType::String,
@@ -158,7 +158,7 @@ impl MemoryStore for PostgresStore {
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             r#"
-            SELECT pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, created_at
+            SELECT pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, superseded_by, created_at
             FROM memories
             WHERE qdrant_status = 'failed'
             LIMIT $1
@@ -215,6 +215,39 @@ impl MemoryStore for PostgresStore {
             pids.push(row.try_get::<String>("", "pid").map_err(database)?);
         }
         Ok(pids)
+    }
+
+    async fn supersede(&self, pid: &str, by_pid: &str) -> Result<(), StoreError> {
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "UPDATE memories SET superseded_by = $1 WHERE pid = $2",
+            [
+                SeaOrmValue::String(Some(by_pid.to_string())),
+                SeaOrmValue::String(Some(pid.to_string())),
+            ],
+        );
+
+        let result = self.db.execute_raw(stmt).await.map_err(database)?;
+
+        if result.rows_affected() == 0 {
+            return Err(StoreError::NotFound(pid.to_string()));
+        }
+        Ok(())
+    }
+
+    async fn unsupersede(&self, pid: &str) -> Result<(), StoreError> {
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "UPDATE memories SET superseded_by = NULL WHERE pid = $1",
+            [SeaOrmValue::String(Some(pid.to_string()))],
+        );
+
+        let result = self.db.execute_raw(stmt).await.map_err(database)?;
+
+        if result.rows_affected() == 0 {
+            return Err(StoreError::NotFound(pid.to_string()));
+        }
+        Ok(())
     }
 }
 
@@ -276,6 +309,7 @@ fn memory_from_row(row: &sea_orm::QueryResult) -> Result<Memory, StoreError> {
     let metadata: serde_json::Value = row.try_get("", "metadata").map_err(database)?;
     let kind_str: String = row.try_get("", "kind").map_err(database)?;
     let source_pid: Option<String> = row.try_get("", "source_pid").map_err(database)?;
+    let superseded_by: Option<String> = row.try_get("", "superseded_by").map_err(database)?;
     let created_at: DateTime<FixedOffset> = row.try_get("", "created_at").map_err(database)?;
 
     let kind = match kind_str.as_str() {
@@ -295,6 +329,7 @@ fn memory_from_row(row: &sea_orm::QueryResult) -> Result<Memory, StoreError> {
         metadata,
         kind,
         source_pid,
+        superseded_by,
         created_at,
         score: None,
     })

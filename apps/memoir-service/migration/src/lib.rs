@@ -20,10 +20,11 @@ mod m20000000_000005_create_bootstrap_tokens;
 
 /// Default Postgres schema for memoir-service's auth + tenant tables.
 ///
-/// Matches memoir-core's [`memoir_core_migration::DEFAULT_SCHEMA`] so that
-/// the entire memoir installation (auth + memory) lives under a single
-/// operator-visible namespace.
-pub const DEFAULT_SCHEMA: &str = "memoir";
+/// Distinct from memoir-core's `memoir` schema. Each migrator owns its own
+/// `seaql_migrations` ledger, and putting them in the same schema would
+/// cause them to clobber each other's migration history. Same DB, separate
+/// schemas — co-located but isolated.
+pub const DEFAULT_SCHEMA: &str = "memoir_service";
 
 static SCHEMA_NAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z_][a-z0-9_]*$").unwrap());
 

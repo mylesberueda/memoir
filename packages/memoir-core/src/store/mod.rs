@@ -160,6 +160,39 @@ pub trait MemoryStore: Send + Sync + 'static {
         &self,
         scope: &Scope,
     ) -> impl Future<Output = Result<Vec<String>, StoreError>> + Send;
+
+    /// Marks `pid` as superseded by `by_pid`.
+    ///
+    /// Sets the `superseded_by` column to `by_pid` so search paths filter
+    /// the row out. Idempotent: re-superseding an already-superseded row
+    /// overwrites the pointer to the new winner. Internal API — callers
+    /// must come from the contradiction-detection engine, not user code.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
+    /// [`StoreError::Database`] for database failures (including FK
+    /// violations when `by_pid` does not exist).
+    fn supersede(
+        &self,
+        pid: &str,
+        by_pid: &str,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+
+    /// Clears the supersession marker on `pid`, restoring it to active state.
+    ///
+    /// Used by the admin surface when an operator decides a supersession was
+    /// wrong. No-ops at the SQL level if the row was already active
+    /// (`superseded_by IS NULL`); still requires the row to exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
+    /// [`StoreError::Database`] for database failures.
+    fn unsupersede(
+        &self,
+        pid: &str,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
 }
 
 #[cfg(test)]
@@ -189,6 +222,7 @@ mod tests {
                 metadata,
                 kind,
                 source_pid,
+                superseded_by: None,
                 created_at: Utc::now().into(),
                 score: None,
             };
@@ -271,6 +305,26 @@ mod tests {
                 .map(|m| m.pid.clone())
                 .collect())
         }
+
+        async fn supersede(&self, pid: &str, by_pid: &str) -> Result<(), StoreError> {
+            let mut memories = self.memories.lock().unwrap();
+            let target = memories
+                .iter_mut()
+                .find(|m| m.pid == pid)
+                .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
+            target.superseded_by = Some(by_pid.to_string());
+            Ok(())
+        }
+
+        async fn unsupersede(&self, pid: &str) -> Result<(), StoreError> {
+            let mut memories = self.memories.lock().unwrap();
+            let target = memories
+                .iter_mut()
+                .find(|m| m.pid == pid)
+                .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
+            target.superseded_by = None;
+            Ok(())
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -309,5 +363,61 @@ mod tests {
         assert_eq!(IndexStatus::Pending.as_str(), "pending");
         assert_eq!(IndexStatus::Indexed.as_str(), "indexed");
         assert_eq!(IndexStatus::Failed.as_str(), "failed");
+    }
+
+    async fn write(store: &StubStore, content: &str) -> Memory {
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "o".to_string(),
+            user_id: "u".to_string(),
+        };
+        store
+            .remember(scope, content.to_string(), serde_json::json!({}), MemoryKind::Semantic, None)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_set_superseded_by_when_supersede_called() {
+        let store = StubStore::default();
+        let loser = write(&store, "old fact").await;
+        let winner = write(&store, "new fact").await;
+
+        store.supersede(&loser.pid, &winner.pid).await.unwrap();
+
+        let after = store.recall(&loser.pid).await.unwrap();
+        assert_eq!(after.superseded_by.as_deref(), Some(winner.pid.as_str()));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_clear_superseded_by_when_unsupersede_called() {
+        let store = StubStore::default();
+        let loser = write(&store, "old fact").await;
+        let winner = write(&store, "new fact").await;
+        store.supersede(&loser.pid, &winner.pid).await.unwrap();
+
+        store.unsupersede(&loser.pid).await.unwrap();
+
+        let after = store.recall(&loser.pid).await.unwrap();
+        assert_eq!(after.superseded_by, None);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_return_not_found_when_supersede_targets_missing_pid() {
+        let store = StubStore::default();
+        let winner = write(&store, "fact").await;
+
+        let result = store.supersede("does-not-exist", &winner.pid).await;
+
+        assert!(matches!(result, Err(StoreError::NotFound(_))));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_return_not_found_when_unsupersede_targets_missing_pid() {
+        let store = StubStore::default();
+
+        let result = store.unsupersede("does-not-exist").await;
+
+        assert!(matches!(result, Err(StoreError::NotFound(_))));
     }
 }

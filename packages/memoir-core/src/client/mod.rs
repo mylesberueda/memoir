@@ -396,4 +396,32 @@ impl Client {
     pub async fn pending_jobs_count(&self) -> Result<u64, ClientError> {
         Ok(self.inner.jobs.pending_count().await?)
     }
+
+    /// Clears the supersession marker on `pid`, restoring it to active state.
+    ///
+    /// Admin-only counterpart to the internal supersede path. Use when an
+    /// operator decides a future contradiction-detection pass wrongly
+    /// marked a row as outdated. Idempotent at the SQL level for rows that
+    /// were already active, but still errors if no row matches `pid`.
+    ///
+    /// There is no symmetric public `Client::supersede`: supersession is a
+    /// decision made by the (forthcoming) detection engine against verified
+    /// contradicting facts, not by operator hand. Hand-rolled supersession
+    /// would defeat the audit trail the column is meant to preserve.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::NotFound`] when no memory matches `pid`,
+    /// or wrapping a database failure.
+    pub async fn unsupersede(&self, pid: &str) -> Result<(), ClientError> {
+        self.inner.store.unsupersede(pid).await?;
+        tracing::event!(
+            name: "memoir.admin.unsuperseded",
+            tracing::Level::INFO,
+            pid = pid,
+            "unsuperseded memory {{pid}}",
+        );
+        Ok(())
+    }
 }

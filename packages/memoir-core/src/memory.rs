@@ -95,6 +95,14 @@ impl KindSelector {
 /// episodic memory; `None` for episodic rows. The link is enforced at the
 /// database level with `ON DELETE CASCADE`, so forgetting the source
 /// automatically removes derived semantic memories.
+///
+/// `superseded_by` is `Some` when a contradiction-detection pass has marked
+/// this row as outdated, pointing at the winning memory's pid. Superseded
+/// rows are filtered out of `Client::remember` search results but remain
+/// visible via direct `Client::recall` (operators may need to inspect
+/// soft-deleted state). The FK uses `ON DELETE SET NULL`: if the
+/// superseder itself is forgotten, the previously-superseded row becomes
+/// active again.
 #[derive(Debug, Clone)]
 pub struct Memory {
     pub pid: String,
@@ -103,6 +111,7 @@ pub struct Memory {
     pub metadata: serde_json::Value,
     pub kind: MemoryKind,
     pub source_pid: Option<String>,
+    pub superseded_by: Option<String>,
     pub created_at: DateTime<FixedOffset>,
     pub score: Option<f32>,
 }
@@ -189,6 +198,7 @@ mod tests {
             metadata: serde_json::json!({}),
             kind: MemoryKind::Episodic,
             source_pid: None,
+            superseded_by: None,
             created_at: Utc::now().into(),
             score: None,
         }
