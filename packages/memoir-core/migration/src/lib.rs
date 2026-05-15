@@ -10,6 +10,7 @@ use sea_orm_migration::prelude::*;
 use sea_orm_migration::sea_orm::{ConnectionTrait, DatabaseConnection};
 
 mod m20000000_000001_create_memories;
+mod m20000000_000002_create_memory_jobs;
 
 /// Default Postgres schema for memoir-core's tables.
 pub const DEFAULT_SCHEMA: &str = "memoir";
@@ -32,7 +33,10 @@ pub struct Migrator;
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(m20000000_000001_create_memories::Migration)]
+        vec![
+            Box::new(m20000000_000001_create_memories::Migration),
+            Box::new(m20000000_000002_create_memory_jobs::Migration),
+        ]
     }
 }
 
