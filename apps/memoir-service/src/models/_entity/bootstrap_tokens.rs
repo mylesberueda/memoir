@@ -4,7 +4,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "bootstrap_tokens")]
+#[sea_orm(table_name = "bootstrap_tokens", schema_name = "memoir")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,

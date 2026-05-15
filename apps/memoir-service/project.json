@@ -135,7 +135,7 @@
 			"executor": "nx:run-commands",
 			"options": {
 				"cwd": "{projectRoot}",
-				"command": "sea generate entity --with-serde both --enum-extra-derives 'strum::Display,strum::EnumString' --output-dir ./src/models/_entity",
+				"command": "sea generate entity --database-schema memoir --with-serde both --enum-extra-derives 'strum::Display,strum::EnumString' --output-dir ./src/models/_entity",
 				"envFile": "{projectRoot}/.env"
 			},
 			"inputs": ["{projectRoot}/migration/src/**/*.rs"],
