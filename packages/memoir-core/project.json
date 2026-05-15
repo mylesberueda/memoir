@@ -36,7 +36,11 @@
 			"executor": "nx:run-commands",
 			"options": {
 				"cwd": "{projectRoot}",
-				"commands": ["cargo test --release --features integration"]
+				"commands": ["cargo test --release --features integration"],
+				"env": {
+					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_service_test",
+					"QDRANT_URL": "http://localhost:6334"
+				}
 			},
 			"cache": true,
 			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/tests/**/*.rs"]

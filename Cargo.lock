@@ -3663,6 +3663,7 @@ dependencies = [
 name = "polypixel-memoir-core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bon",
  "chrono",
  "fastembed",
@@ -3674,6 +3675,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

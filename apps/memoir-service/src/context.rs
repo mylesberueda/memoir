@@ -7,6 +7,11 @@ use qdrant_client::{Qdrant, QdrantError};
 /// can be passed wherever it's needed in the app.
 pub(crate) struct AppContext {
     pub(crate) db: Arc<sea_orm::DatabaseConnection>,
+    #[expect(
+        dead_code,
+        reason = "Wired into MemoryService handlers in epic 0007; held here so startup\
+                  validates Qdrant connectivity + memoir migrations before serving traffic."
+    )]
     pub(crate) memoir: Arc<MemoirClient>,
 }
 
@@ -41,7 +46,7 @@ impl QdrantBootstrap {
         let url = Env::get("QDRANT_URL")?;
 
         tracing::info!("Connecting to Qdrant...");
-        let qdrant = Qdrant::from_url(&url).build().map_err(AppContextError::Qdrant)?;
+        let qdrant = Qdrant::from_url(&url).build().map_err(Box::new)?;
         tracing::info!("Qdrant connected!");
 
         Ok(qdrant)
@@ -51,10 +56,7 @@ impl QdrantBootstrap {
 struct Memoir;
 
 impl Memoir {
-    async fn init(
-        db: &Arc<sea_orm::DatabaseConnection>,
-        qdrant: Qdrant,
-    ) -> Result<Arc<MemoirClient>, AppContextError> {
+    async fn init(db: &Arc<sea_orm::DatabaseConnection>, qdrant: Qdrant) -> Result<Arc<MemoirClient>, AppContextError> {
         tracing::info!("Building memoir client...");
         let client = MemoirClient::builder()
             .db((**db).clone())
@@ -86,7 +88,7 @@ pub(crate) enum AppContextError {
     #[error("environment variable missing: {0}")]
     EnvironmentVariableMissing(&'static str),
     #[error("qdrant error: {0}")]
-    Qdrant(#[from] QdrantError),
+    Qdrant(#[from] Box<QdrantError>),
     #[error("memoir error: {0}")]
     Memoir(#[from] MemoirClientError),
 }
