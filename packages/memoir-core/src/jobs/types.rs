@@ -1,6 +1,7 @@
 //! Domain types for the write-behind queue.
 
 use chrono::{DateTime, FixedOffset};
+use serde::{Deserialize, Serialize};
 
 /// Kind of work a `memory_jobs` row represents.
 ///
@@ -85,6 +86,42 @@ pub struct Job {
     pub claimed_by: Option<String>,
     pub created_at: DateTime<FixedOffset>,
     pub updated_at: DateTime<FixedOffset>,
+}
+
+/// A failed-state `memory_jobs` row exposed to admin callers.
+///
+/// Deliberately excludes the original `payload` and any content from the
+/// referenced memory: operators triaging a failure see the metadata they
+/// need (kind, source pid, attempt count, failure reason, last update) but
+/// not user content, which avoids leaking PII into operator dashboards.
+/// Operators who need the underlying memory's content can resolve it
+/// separately via [`crate::client::Client::recall`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailedJob {
+    pub id: i64,
+    pub source_pid: String,
+    pub kind: JobKind,
+    pub attempts: i32,
+    pub failure_reason: Option<String>,
+    pub updated_at: DateTime<FixedOffset>,
+}
+
+// Inherit serde behavior for the enums embedded in FailedJob.
+impl Serialize for JobKind {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for JobKind {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        match s.as_str() {
+            "embed" => Ok(Self::Embed),
+            "extract" => Ok(Self::Extract),
+            other => Err(serde::de::Error::custom(format!("unknown job kind: {other}"))),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
 //! High-level facade composing the embedder, store, and vector index.
 
+mod admin;
 mod embed;
 mod error;
 mod extract;
@@ -7,6 +8,7 @@ mod reconcile;
 mod remember;
 mod worker;
 
+pub use admin::RetryBuilder;
 pub use error::ClientError;
 pub use reconcile::{ReconcileBuilder, ReconcileSummary};
 pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
@@ -22,7 +24,7 @@ use qdrant_client::Qdrant;
 use sea_orm::DatabaseConnection;
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
-use crate::jobs::PostgresJobsStore;
+use crate::jobs::{MemoryJobsStore, PostgresJobsStore};
 use crate::llm::LlmRegistry;
 use crate::memory::{ForgetTarget, Memory};
 use crate::store::{MemoryStore, PostgresStore};
@@ -318,5 +320,80 @@ impl Client {
     /// ```
     pub fn spawn_worker(&self) -> WorkerBuilder<'_> {
         WorkerBuilder::new(self)
+    }
+
+    /// Lists failed jobs newest-first, capped at `limit`.
+    ///
+    /// Returns metadata only (id, kind, source pid, attempts, failure
+    /// reason, last update); content from the referenced memory is NOT
+    /// included. Operators who need to inspect the memory's content can
+    /// follow up with [`Self::recall`] against the source pid.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Jobs`] wrapping any database failure.
+    pub async fn failed_jobs(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<crate::jobs::FailedJob>, ClientError> {
+        Ok(self.inner.jobs.list_failed(limit).await?)
+    }
+
+    /// Retries one failed job, clearing the attempt counter.
+    ///
+    /// The attempt counter is reset to zero on operator-initiated retry: a
+    /// human has decided prior failures shouldn't count against the new
+    /// attempt budget. Reconciliation-driven retries leave the counter
+    /// alone (see [`Self::reconcile`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Jobs`] wrapping [`crate::jobs::JobsError::NotFound`]
+    /// when no failed job matches `id`, or wrapping a database failure.
+    pub async fn retry_job(&self, id: i64) -> Result<(), ClientError> {
+        self.inner.jobs.retry_job(id).await?;
+        tracing::event!(
+            name: "memoir.admin.retry_succeeded",
+            tracing::Level::INFO,
+            job_id = id,
+            "retried failed job {{job_id}}",
+        );
+        Ok(())
+    }
+
+    /// Configures a bulk retry. Awaiting the returned builder runs it.
+    ///
+    /// See [`RetryBuilder`] for filter and dry-run options. Returns the
+    /// number of affected (or for `dry_run`, would-affect) rows.
+    pub fn retry_failed_jobs(&self) -> RetryBuilder<'_> {
+        RetryBuilder::new(self)
+    }
+
+    /// Permanently deletes one failed job. The referenced memory is untouched.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Jobs`] wrapping [`crate::jobs::JobsError::NotFound`]
+    /// when no failed job matches `id`, or wrapping a database failure.
+    pub async fn delete_failed_job(&self, id: i64) -> Result<(), ClientError> {
+        self.inner.jobs.delete_failed(id).await?;
+        tracing::event!(
+            name: "memoir.admin.delete_failed",
+            tracing::Level::INFO,
+            job_id = id,
+            "deleted failed job {{job_id}}",
+        );
+        Ok(())
+    }
+
+    /// Returns the number of jobs currently in `pending` state.
+    ///
+    /// Cheap observation for operators monitoring queue depth.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Jobs`] wrapping any database failure.
+    pub async fn pending_jobs_count(&self) -> Result<u64, ClientError> {
+        Ok(self.inner.jobs.pending_count().await?)
     }
 }

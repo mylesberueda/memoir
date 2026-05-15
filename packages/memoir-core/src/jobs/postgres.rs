@@ -3,7 +3,7 @@
 use chrono::{DateTime, FixedOffset};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, Value as SeaOrmValue};
 
-use super::{Job, JobKind, JobState, JobsError, MemoryJobsStore};
+use super::{FailedJob, Job, JobKind, JobState, JobsError, MemoryJobsStore};
 
 /// Default [`MemoryJobsStore`] backed by Postgres.
 ///
@@ -162,6 +162,143 @@ impl MemoryJobsStore for PostgresJobsStore {
         let result = self.db.execute_raw(stmt).await.map_err(database)?;
         Ok(result.rows_affected())
     }
+
+    async fn list_failed(&self, limit: usize) -> Result<Vec<FailedJob>, JobsError> {
+        // Saturate the limit: usize is 64-bit on our targets but Postgres
+        // takes i64, so an absurd usize value gets capped rather than wrapped.
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT id, source_pid, kind, attempts, failure_reason, updated_at
+            FROM memory_jobs
+            WHERE state = 'failed'
+            ORDER BY updated_at DESC
+            LIMIT $1
+            "#,
+            [SeaOrmValue::BigInt(Some(limit))],
+        );
+
+        let rows = self.db.query_all_raw(stmt).await.map_err(database)?;
+        let mut out = Vec::with_capacity(rows.len());
+        for row in &rows {
+            out.push(failed_job_from_row(row)?);
+        }
+        Ok(out)
+    }
+
+    async fn retry_job(&self, id: i64) -> Result<(), JobsError> {
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            UPDATE memory_jobs
+            SET state = 'pending',
+                attempts = 0,
+                failure_reason = NULL,
+                claimed_at = NULL,
+                claimed_by = NULL
+            WHERE id = $1 AND state = 'failed'
+            "#,
+            [SeaOrmValue::BigInt(Some(id))],
+        );
+
+        let result = self.db.execute_raw(stmt).await.map_err(database)?;
+        if result.rows_affected() == 0 {
+            return Err(JobsError::NotFound(id.to_string()));
+        }
+        Ok(())
+    }
+
+    async fn bulk_retry(
+        &self,
+        kind: Option<JobKind>,
+        dry_run: bool,
+    ) -> Result<u64, JobsError> {
+        if dry_run {
+            // Just count.
+            let stmt = if let Some(k) = kind {
+                Statement::from_sql_and_values(
+                    sea_orm::DatabaseBackend::Postgres,
+                    "SELECT COUNT(*)::BIGINT AS n FROM memory_jobs WHERE state = 'failed' AND kind = $1",
+                    [SeaOrmValue::String(Some(k.as_str().to_string()))],
+                )
+            } else {
+                Statement::from_string(
+                    sea_orm::DatabaseBackend::Postgres,
+                    "SELECT COUNT(*)::BIGINT AS n FROM memory_jobs WHERE state = 'failed'".to_string(),
+                )
+            };
+            let row = self
+                .db
+                .query_one_raw(stmt)
+                .await
+                .map_err(database)?
+                .ok_or_else(|| JobsError::Database("count returned no row".to_string()))?;
+            let n: i64 = row.try_get("", "n").map_err(database)?;
+            return Ok(u64::try_from(n).unwrap_or(0));
+        }
+
+        let stmt = if let Some(k) = kind {
+            Statement::from_sql_and_values(
+                sea_orm::DatabaseBackend::Postgres,
+                r#"
+                UPDATE memory_jobs
+                SET state = 'pending',
+                    attempts = 0,
+                    failure_reason = NULL,
+                    claimed_at = NULL,
+                    claimed_by = NULL
+                WHERE state = 'failed' AND kind = $1
+                "#,
+                [SeaOrmValue::String(Some(k.as_str().to_string()))],
+            )
+        } else {
+            Statement::from_string(
+                sea_orm::DatabaseBackend::Postgres,
+                r#"
+                UPDATE memory_jobs
+                SET state = 'pending',
+                    attempts = 0,
+                    failure_reason = NULL,
+                    claimed_at = NULL,
+                    claimed_by = NULL
+                WHERE state = 'failed'
+                "#
+                .to_string(),
+            )
+        };
+
+        let result = self.db.execute_raw(stmt).await.map_err(database)?;
+        Ok(result.rows_affected())
+    }
+
+    async fn delete_failed(&self, id: i64) -> Result<(), JobsError> {
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "DELETE FROM memory_jobs WHERE id = $1 AND state = 'failed'",
+            [SeaOrmValue::BigInt(Some(id))],
+        );
+        let result = self.db.execute_raw(stmt).await.map_err(database)?;
+        if result.rows_affected() == 0 {
+            return Err(JobsError::NotFound(id.to_string()));
+        }
+        Ok(())
+    }
+
+    async fn pending_count(&self) -> Result<u64, JobsError> {
+        let stmt = Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT COUNT(*)::BIGINT AS n FROM memory_jobs WHERE state = 'pending'".to_string(),
+        );
+        let row = self
+            .db
+            .query_one_raw(stmt)
+            .await
+            .map_err(database)?
+            .ok_or_else(|| JobsError::Database("count returned no row".to_string()))?;
+        let n: i64 = row.try_get("", "n").map_err(database)?;
+        Ok(u64::try_from(n).unwrap_or(0))
+    }
 }
 
 fn database<E: std::fmt::Display>(err: E) -> JobsError {
@@ -205,6 +342,30 @@ fn job_from_row(row: &sea_orm::QueryResult) -> Result<Job, JobsError> {
         claimed_at,
         claimed_by,
         created_at,
+        updated_at,
+    })
+}
+
+fn failed_job_from_row(row: &sea_orm::QueryResult) -> Result<FailedJob, JobsError> {
+    let id: i64 = row.try_get("", "id").map_err(database)?;
+    let source_pid: String = row.try_get("", "source_pid").map_err(database)?;
+    let kind_str: String = row.try_get("", "kind").map_err(database)?;
+    let attempts: i32 = row.try_get("", "attempts").map_err(database)?;
+    let failure_reason: Option<String> = row.try_get("", "failure_reason").map_err(database)?;
+    let updated_at: DateTime<FixedOffset> = row.try_get("", "updated_at").map_err(database)?;
+
+    let kind = match kind_str.as_str() {
+        "embed" => JobKind::Embed,
+        "extract" => JobKind::Extract,
+        other => return Err(JobsError::Database(format!("unknown job kind: {other}"))),
+    };
+
+    Ok(FailedJob {
+        id,
+        source_pid,
+        kind,
+        attempts,
+        failure_reason,
         updated_at,
     })
 }
