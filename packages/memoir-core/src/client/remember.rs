@@ -4,6 +4,7 @@ use std::future::{Future, IntoFuture};
 use std::pin::Pin;
 
 use crate::embedding::EmbeddingModel;
+use crate::jobs::MemoryJobsStore;
 use crate::memory::{KindSelector, Memories, MemoryKind, Scope};
 use crate::store::MemoryStore;
 use crate::vector::VectorIndex;
@@ -142,7 +143,19 @@ async fn execute(builder: RememberBuilder<'_>) -> Result<Memories, ClientError> 
         )
         .await?;
 
-    inner.spawn_embed_for_write(written.clone());
+    // Persistent write-behind: enqueue an embed job rather than running
+    // a detached `tokio::spawn`. The configured worker (spawned via
+    // `Client::spawn_worker`) drains the queue. Memories whose `embed`
+    // job hasn't been processed yet stay at `qdrant_status = 'pending'`
+    // and are filtered out of subsequent searches.
+    inner
+        .jobs
+        .enqueue(
+            crate::jobs::JobKind::Embed,
+            written.pid.clone(),
+            serde_json::json!({ "origin": "remember" }),
+        )
+        .await?;
 
     let query_vector = inner.embedder.embed(&prompt).await?;
     let hits = inner.index.search(scope, query_vector, limit, kinds).await?;

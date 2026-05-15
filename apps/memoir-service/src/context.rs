@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use memoir_core::client::{Client as MemoirClient, ClientError as MemoirClientError};
+use memoir_core::client::{
+    Client as MemoirClient, ClientError as MemoirClientError, WorkerHandle as MemoirWorkerHandle,
+};
 use migration::{MigrationError as ServiceMigrationError, bootstrap_and_migrate};
 use qdrant_client::{Qdrant, QdrantError};
 use sea_orm::ConnectOptions;
@@ -11,10 +13,21 @@ pub(crate) struct AppContext {
     pub(crate) db: Arc<sea_orm::DatabaseConnection>,
     #[expect(
         dead_code,
-        reason = "Wired into MemoryService handlers in epic 0007; held here so startup\
+        reason = "Wired into MemoryService handlers in a follow-up; held here so startup \
                   validates Qdrant connectivity + memoir migrations before serving traffic."
     )]
     pub(crate) memoir: Arc<MemoirClient>,
+    /// Memoir's queue worker. Drains `memory_jobs` for the lifetime of the
+    /// service. Held here so the worker stays alive — dropping the handle
+    /// does NOT shut the worker down; explicit shutdown belongs in the
+    /// server's graceful-stop path.
+    #[expect(
+        dead_code,
+        reason = "Worker drains the queue in the background; the handle is held so it isn't \
+                  reclaimed early. Graceful shutdown via `worker.shutdown()` belongs in the \
+                  server's stop path (follow-up)."
+    )]
+    pub(crate) memoir_worker: MemoirWorkerHandle,
 }
 
 impl AppContext {
@@ -23,9 +36,13 @@ impl AppContext {
         let db = Db::init(&schema).await?;
         Db::apply_migrations(&db, &schema).await?;
         let qdrant = QdrantBootstrap::init()?;
-        let memoir = Memoir::init(&db, qdrant, &schema).await?;
+        let (memoir, memoir_worker) = Memoir::init(&db, qdrant, &schema).await?;
 
-        Ok(Arc::new(Self { db, memoir }))
+        Ok(Arc::new(Self {
+            db,
+            memoir,
+            memoir_worker,
+        }))
     }
 }
 
@@ -79,7 +96,7 @@ impl Memoir {
         db: &Arc<sea_orm::DatabaseConnection>,
         qdrant: Qdrant,
         schema: &str,
-    ) -> Result<Arc<MemoirClient>, AppContextError> {
+    ) -> Result<(Arc<MemoirClient>, MemoirWorkerHandle), AppContextError> {
         tracing::info!("Building memoir client...");
         let client = MemoirClient::builder()
             .db((**db).clone())
@@ -91,9 +108,21 @@ impl Memoir {
 
         tracing::info!("Applying memoir-core migrations...");
         client.migrate().await.map_err(AppContextError::Memoir)?;
-        tracing::info!("Memoir client ready!");
 
-        Ok(Arc::new(client))
+        // Memoir's write path is persistent: every Remember enqueues an
+        // embed job into `memory_jobs`. The worker drains that queue. If
+        // we don't spawn it, writes land in Postgres but never reach
+        // Qdrant — every search would return nothing.
+        tracing::info!("Spawning memoir worker...");
+        let worker = client
+            .spawn_worker()
+            .start()
+            .await
+            .map_err(AppContextError::Memoir)?;
+
+        tracing::info!("Memoir client + worker ready!");
+
+        Ok((Arc::new(client), worker))
     }
 }
 

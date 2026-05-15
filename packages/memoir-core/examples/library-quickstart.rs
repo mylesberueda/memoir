@@ -80,6 +80,14 @@ async fn main() -> Result<(), BoxError> {
     println!("→ Applying memoir migrations...");
     client.migrate().await?;
 
+    // Step 3.5 — spawn the worker.
+    // memoir-core's write path is persistent: `Client::remember` enqueues an
+    // embed job rather than running it inline. The worker drains the queue.
+    // Without `spawn_worker`, writes land in the database but never reach
+    // the vector index, so search returns nothing.
+    println!("→ Spawning background worker...");
+    let worker = client.spawn_worker().start().await?;
+
     // Step 4 — write some conversation turns.
     // Scope is the (agent_id, org_id, user_id) partition. memoir-core never
     // returns rows from a different scope. In a real app, derive the scope
@@ -139,6 +147,10 @@ async fn main() -> Result<(), BoxError> {
     println!("→ Cleaning up — forgetting the entire example scope...");
     let deleted = client.forget(ForgetTarget::Scope(scope)).await?;
     println!("Deleted {} memories.", deleted.len());
+
+    // Step 8 — shut the worker down gracefully.
+    println!("→ Shutting down worker...");
+    worker.shutdown().await;
 
     println!();
     println!("Done. To run again, just re-invoke the example — each run uses");

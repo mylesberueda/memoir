@@ -1,17 +1,18 @@
-//! Background embed-on-write substrate for [`super::Client`].
+//! Embed-and-index substrate for [`super::Client`].
 //!
-//! Methods on [`super::ClientInner`] spawn a detached `tokio::spawn` task per
-//! Remember that embeds the row's content, upserts the resulting vector into
-//! the configured index, and flips the row's lifecycle from `pending` to
-//! `indexed` (or `failed` on error).
+//! Memories that need their content embedded and upserted into the vector
+//! index flow through here. Two paths converge on [`ClientInner::embed_and_index`]:
 //!
-//! Failure semantics: a task that fails at any step records the failure on
-//! the row's `qdrant_status` and emits a structured `tracing` event. The
-//! reconciliation sweep (ticket 0012) owns retries; this module does not
-//! retry inline. Tasks do not survive process restarts — rows stuck at
-//! `pending` are also reconciliation's problem.
-
-use std::sync::Arc;
+//! 1. **Worker-driven** ([`ClientInner::run_embed_job`]) — called by the
+//!    queue worker after claiming a `JobKind::Embed` row. This is the only
+//!    path on the happy `Client::remember` → enqueue → worker → indexed
+//!    write loop.
+//! 2. **Reconciliation-driven** ([`super::reconcile`]) — retries `failed`
+//!    rows by hydrating each one and re-running the same pipeline.
+//!
+//! Failure semantics: per-stage errors are recorded on the row's
+//! `qdrant_status` and emitted as structured `tracing` events. The
+//! reconciliation sweep owns retries; this module does not retry inline.
 
 use tracing::{Instrument, Level, event, info_span};
 
@@ -34,22 +35,48 @@ pub(super) enum EmbedOutcome {
 }
 
 impl ClientInner {
-    /// Spawns a detached embed-and-index task for the freshly written row.
+    /// Runs an embed job claimed from the queue.
     ///
-    /// Fire-and-forget: callers do not await it. Progress and outcome are
-    /// observable via the `memoir.embed.*` tracing events.
-    pub(super) fn spawn_embed_for_write(self: &Arc<Self>, written: Memory) {
-        let inner = self.clone();
+    /// Loads the source memory by pid, then delegates to
+    /// [`Self::embed_and_index`]. Returns `Ok(())` for success and the
+    /// no-op cascade-delete-race case (source already forgotten); returns
+    /// `Err` only when a real failure should flip the job to `failed`.
+    pub(super) async fn run_embed_job(
+        &self,
+        source_pid: &str,
+    ) -> Result<(), crate::store::StoreError> {
+        let written = match self.store.recall(source_pid).await {
+            Ok(memory) => memory,
+            Err(crate::store::StoreError::NotFound(_)) => {
+                event!(
+                    name: "memoir.embed.source_missing",
+                    Level::INFO,
+                    pid = %source_pid,
+                    "source memory absent for {{pid}} (cascade delete race); skipping",
+                );
+                return Ok(());
+            }
+            Err(err) => return Err(err),
+        };
+
         let span = info_span!("memoir.embed", pid = %written.pid);
-        tokio::spawn(async move { inner.embed_and_index(written).await }.instrument(span));
+        async move {
+            // embed_and_index returns its own outcome; per-stage failures are
+            // logged via tracing events inside it. Either way the job is
+            // complete from the worker's perspective.
+            let _ = self.embed_and_index(written).await;
+        }
+        .instrument(span)
+        .await;
+
+        Ok(())
     }
 
     /// Embeds the row, upserts the vector, and flips its lifecycle state.
     ///
-    /// Shared between the write-time `tokio::spawn` path
-    /// ([`Self::spawn_embed_for_write`]) and the reconciliation sweep's
-    /// retry pass. Returns whether the row reached `indexed` or got flipped
-    /// to `failed`.
+    /// Shared between the worker-driven path
+    /// ([`Self::run_embed_job`]) and the reconciliation sweep's retry pass.
+    /// Returns whether the row reached `indexed` or got flipped to `failed`.
     pub(super) async fn embed_and_index(&self, written: Memory) -> EmbedOutcome {
         let pid = written.pid.as_str();
 

@@ -18,7 +18,7 @@ use std::ops::Deref;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use memoir_core::client::Client;
+use memoir_core::client::{Client, WorkerHandle};
 use memoir_core::memory::Scope;
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::DeleteCollectionBuilder;
@@ -64,8 +64,25 @@ pub async fn fresh_client() -> Result<TestClient> {
         .context("build memoir Client")?;
     client.migrate().await.context("apply memoir migrations")?;
 
+    // Spawn a worker so the queue actually drains. Without this, every
+    // `Client::remember` would enqueue an embed job and tests would hang
+    // waiting for `wait_until_indexed` to never succeed.
+    //
+    // Short poll interval is appropriate for tests — production deployments
+    // use the default 1-second interval. Short lease so a misbehaving test
+    // doesn't pin a job for a minute.
+    let worker = client
+        .spawn_worker()
+        .poll_interval(Duration::from_millis(50))
+        .lease_duration(Duration::from_secs(10))
+        .drain_timeout(Duration::from_secs(5))
+        .start()
+        .await
+        .context("spawn worker")?;
+
     Ok(TestClient {
         client,
+        worker: Some(worker),
         cleanup_db: Some(db),
         cleanup_qdrant: Some(qdrant),
         schema,
@@ -76,6 +93,7 @@ pub async fn fresh_client() -> Result<TestClient> {
 /// Test-scoped wrapper that owns the partition resources and cleans them up on drop.
 pub struct TestClient {
     client: Client,
+    worker: Option<WorkerHandle>,
     cleanup_db: Option<DatabaseConnection>,
     cleanup_qdrant: Option<Qdrant>,
     pub schema: String,
@@ -96,6 +114,7 @@ impl Drop for TestClient {
         let collection = self.collection.clone();
         let Some(db) = self.cleanup_db.take() else { return };
         let Some(qdrant) = self.cleanup_qdrant.take() else { return };
+        let worker = self.worker.take();
 
         // Cleanup needs async; we synchronously block the current thread on a
         // fresh future. `block_in_place` is only safe inside a multi-thread
@@ -105,6 +124,10 @@ impl Drop for TestClient {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
+                    if let Some(worker) = worker {
+                        worker.shutdown().await;
+                    }
+
                     if let Err(err) = qdrant
                         .delete_collection(DeleteCollectionBuilder::new(&collection))
                         .await

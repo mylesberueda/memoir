@@ -395,12 +395,10 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
             .run_extract(job.clone())
             .await
             .map_err(|err| err.to_string()),
-        // Embed dispatch is the substrate-swap target. Until ticket 0007 lands
-        // the swap, embed jobs are a no-op (the in-process spawn at
-        // `Client::remember` continues to handle freshly-written episodic
-        // rows). Newly-extracted semantic rows enqueue embed jobs that this
-        // arm currently drains without doing real work.
-        JobKind::Embed => Ok(()),
+        JobKind::Embed => inner
+            .run_embed_job(&job.source_pid)
+            .await
+            .map_err(|err| err.to_string()),
     };
 
     match result {
