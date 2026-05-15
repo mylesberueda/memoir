@@ -4,10 +4,15 @@ mod embed;
 mod error;
 mod reconcile;
 mod remember;
+mod worker;
 
 pub use error::ClientError;
 pub use reconcile::{ReconcileBuilder, ReconcileSummary};
 pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
+pub use worker::{
+    DEFAULT_DRAIN_TIMEOUT, DEFAULT_LEASE_DURATION, DEFAULT_MAX_ATTEMPTS, DEFAULT_POLL_INTERVAL,
+    WorkerBuilder, WorkerHandle,
+};
 
 use std::sync::Arc;
 
@@ -16,6 +21,7 @@ use qdrant_client::Qdrant;
 use sea_orm::DatabaseConnection;
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
+use crate::jobs::PostgresJobsStore;
 use crate::memory::{ForgetTarget, Memory};
 use crate::store::{MemoryStore, PostgresStore};
 use crate::vector::{QdrantIndex, VectorIndex};
@@ -25,6 +31,7 @@ pub(crate) struct ClientInner {
     pub(crate) embedder: Arc<OnnxEmbedding>,
     pub(crate) store: PostgresStore,
     pub(crate) index: QdrantIndex,
+    pub(crate) jobs: PostgresJobsStore,
     pub(crate) schema: String,
     pub(crate) system_prompt: Option<String>,
 }
@@ -83,7 +90,8 @@ impl Client {
         #[builder(into)] collection: Option<String>,
     ) -> Result<Client, ClientError> {
         let embedder = OnnxEmbedding::new()?;
-        let store = PostgresStore::new(db);
+        let store = PostgresStore::new(db.clone());
+        let jobs = PostgresJobsStore::new(db);
         let index = match collection {
             Some(name) => QdrantIndex::new(qdrant).with_collection(name),
             None => QdrantIndex::new(qdrant),
@@ -98,6 +106,7 @@ impl Client {
                 embedder: Arc::new(embedder),
                 store,
                 index,
+                jobs,
                 schema,
                 system_prompt,
             }),
@@ -283,5 +292,27 @@ impl Client {
     /// ```
     pub fn reconcile(&self) -> ReconcileBuilder<'_> {
         ReconcileBuilder::new(self)
+    }
+
+    /// Configures the background queue worker; call `.start().await` to launch.
+    ///
+    /// Returns a per-call builder. The worker polls the `memory_jobs` queue,
+    /// dispatches each row to its stage handler (embed in ticket 0007,
+    /// extract in ticket 0006), and runs lease recovery when the queue is
+    /// idle. Cooperative shutdown via [`WorkerHandle::shutdown`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use memoir_core::client::Client;
+    /// # async fn example(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// let worker = client.spawn_worker().start().await?;
+    /// // ... server runs ...
+    /// worker.shutdown().await;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn spawn_worker(&self) -> WorkerBuilder<'_> {
+        WorkerBuilder::new(self)
     }
 }
