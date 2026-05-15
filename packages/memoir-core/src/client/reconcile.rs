@@ -170,8 +170,8 @@ async fn execute(builder: ReconcileBuilder<'_>) -> Result<ReconcileSummary, Clie
                     name: "memoir.reconcile.orphan_delete_failed",
                     Level::WARN,
                     count = count,
-                    error = %err,
-                    "orphan delete failed for {{count}} pid(s) — will retry on next sweep",
+                    error.message = %err,
+                    "orphan delete failed for {{count}} pid(s): {{error.message}} — will retry on next sweep",
                 );
             } else {
                 summary.orphans_deleted += count;

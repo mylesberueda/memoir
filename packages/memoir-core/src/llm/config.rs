@@ -42,6 +42,7 @@ pub enum LlmKind {
 
 impl LlmKind {
     /// Returns the canonical lowercase string used in logs and storage.
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Ollama => "ollama",
@@ -84,6 +85,7 @@ pub enum LlmConfig {
 
 impl LlmConfig {
     /// Builds a config for a local Ollama instance.
+    #[must_use]
     pub fn ollama(url: impl Into<String>, model: impl Into<String>) -> Self {
         Self::Ollama {
             url: url.into(),
@@ -95,6 +97,7 @@ impl LlmConfig {
     ///
     /// Uses the public OpenAI endpoint. For enterprise/proxy setups, use
     /// [`Self::openai_with_base_url`].
+    #[must_use]
     pub fn openai(api_key: impl Into<String>, model: impl Into<String>) -> Self {
         Self::OpenAI {
             api_key: api_key.into(),
@@ -104,6 +107,7 @@ impl LlmConfig {
     }
 
     /// Builds a config for an OpenAI-compatible endpoint at a custom URL.
+    #[must_use]
     pub fn openai_with_base_url(
         api_key: impl Into<String>,
         model: impl Into<String>,
@@ -117,6 +121,7 @@ impl LlmConfig {
     }
 
     /// Builds a config for the Anthropic API.
+    #[must_use]
     pub fn anthropic(api_key: impl Into<String>, model: impl Into<String>) -> Self {
         Self::Anthropic {
             api_key: api_key.into(),
@@ -125,6 +130,7 @@ impl LlmConfig {
     }
 
     /// Returns the variant discriminator.
+    #[must_use]
     pub fn kind(&self) -> LlmKind {
         match self {
             Self::Ollama { .. } => LlmKind::Ollama,
@@ -134,6 +140,7 @@ impl LlmConfig {
     }
 
     /// Returns the configured model identifier.
+    #[must_use]
     pub fn model(&self) -> &str {
         match self {
             Self::Ollama { model, .. }

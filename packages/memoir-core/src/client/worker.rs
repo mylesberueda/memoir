@@ -23,15 +23,32 @@ use crate::jobs::{Job, JobKind, JobState, JobsError, MemoryJobsStore};
 use super::{Client, ClientError, ClientInner};
 
 /// Default interval between empty-queue polls.
+///
+/// One second balances responsiveness against idle CPU. Lower values make
+/// newly-enqueued work pick up faster but waste CPU when the queue is idle;
+/// higher values are friendlier to laptops + cheaper hosts.
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Default lease duration; claims older than this get recovered.
+///
+/// Sixty seconds is long enough that a healthy worker's claim won't be
+/// stolen mid-work, short enough that a crashed worker's claim recovers
+/// quickly. Tune up if extraction LLM calls regularly exceed this; tune
+/// down if rapid recovery matters more than tolerating slow operations.
 pub const DEFAULT_LEASE_DURATION: Duration = Duration::from_secs(60);
 
 /// Default max retry count before a job moves to `failed`.
+///
+/// Three attempts catches transient failures (network blips, momentary LLM
+/// rate limits) without amplifying systemic ones. Operators raise this only
+/// when working with provider tiers that have heavy throttling.
 pub const DEFAULT_MAX_ATTEMPTS: i32 = 3;
 
 /// Default cap on graceful drain after `.shutdown()` is called.
+///
+/// Long enough to let a typical extraction job finish (LLM + DB writes
+/// usually <10s), short enough that a hung worker doesn't block server
+/// shutdown indefinitely.
 pub const DEFAULT_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Per-call builder returned by [`Client::spawn_worker`].
@@ -51,6 +68,7 @@ pub const DEFAULT_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
 /// # Ok(())
 /// # }
 /// ```
+#[derive(Debug)]
 #[must_use = "spawn_worker() returns a builder; call .start() to launch the task"]
 pub struct WorkerBuilder<'a> {
     client: &'a Client,
@@ -165,6 +183,15 @@ pub struct WorkerHandle {
     inner: Arc<WorkerHandleInner>,
 }
 
+impl std::fmt::Debug for WorkerHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkerHandle")
+            .field("is_shutting_down", &self.inner.token.is_cancelled())
+            .field("drain_timeout", &self.inner.drain_timeout)
+            .finish_non_exhaustive()
+    }
+}
+
 struct WorkerHandleInner {
     join: tokio::sync::Mutex<Option<JoinHandle<()>>>,
     token: CancellationToken,
@@ -173,6 +200,7 @@ struct WorkerHandleInner {
 
 impl WorkerHandle {
     /// Returns `true` if the worker has been signaled to stop.
+    #[must_use]
     pub fn is_shutting_down(&self) -> bool {
         self.inner.token.is_cancelled()
     }
@@ -181,6 +209,12 @@ impl WorkerHandle {
     ///
     /// Child tokens are cancelled when the worker itself is shut down. Useful
     /// when downstream subtasks want to share the same shutdown semantics.
+    ///
+    /// `CancellationToken` is leaked here from `tokio-util` deliberately:
+    /// it is the de-facto-standard cooperative cancellation primitive in the
+    /// tokio ecosystem, and exposing it gives consumers direct
+    /// interoperability with the rest of their async code.
+    #[must_use]
     pub fn cancellation_token(&self) -> CancellationToken {
         self.inner.token.child_token()
     }
@@ -207,7 +241,7 @@ impl WorkerHandle {
                     name: "memoir.worker.shutdown",
                     Level::INFO,
                     outcome = "drained",
-                    "worker drained cleanly",
+                    "worker shutdown {{outcome}}",
                 );
             }
             Ok(Err(err)) => {
@@ -215,8 +249,8 @@ impl WorkerHandle {
                     name: "memoir.worker.shutdown",
                     Level::WARN,
                     outcome = "join_failed",
-                    error = %err,
-                    "worker join error during shutdown",
+                    error.message = %err,
+                    "worker shutdown {{outcome}}: {{error.message}}",
                 );
             }
             Err(_) => {
@@ -224,7 +258,7 @@ impl WorkerHandle {
                     name: "memoir.worker.shutdown",
                     Level::WARN,
                     outcome = "timeout",
-                    "worker drain timeout exceeded; task aborted",
+                    "worker shutdown {{outcome}} (drain deadline exceeded; task continues until natural exit)",
                 );
                 // Note: we can't abort here because we already took the
                 // JoinHandle out of the Option. The task continues until it
@@ -246,7 +280,8 @@ impl WorkerHandle {
             event!(
                 name: "memoir.worker.aborted",
                 Level::WARN,
-                "worker task aborted",
+                outcome = "aborted",
+                "worker {{outcome}}",
             );
         }
     }
@@ -261,13 +296,16 @@ struct WorkerConfig {
 }
 
 async fn run_worker(inner: Arc<ClientInner>, config: WorkerConfig, token: CancellationToken) {
+    // `as_millis()` returns u128; cap at u64::MAX since tracing event fields
+    // accept u64 and durations beyond ~584 million years aren't a real concern.
+    let poll_interval_ms = u64::try_from(config.poll_interval.as_millis()).unwrap_or(u64::MAX);
     event!(
         name: "memoir.worker.started",
         Level::INFO,
-        poll_interval_ms = config.poll_interval.as_millis() as u64,
+        poll_interval_ms = poll_interval_ms,
         lease_secs = config.lease_duration.as_secs(),
         max_attempts = config.max_attempts,
-        "worker started",
+        "worker started: poll_interval={{poll_interval_ms}}ms lease={{lease_secs}}s max_attempts={{max_attempts}}",
     );
 
     while !token.is_cancelled() {
@@ -287,15 +325,15 @@ async fn run_worker(inner: Arc<ClientInner>, config: WorkerConfig, token: Cancel
                             name: "memoir.worker.lease_recovered",
                             Level::INFO,
                             count = n,
-                            "recovered {{count}} expired leases",
+                            "recovered {{count}} expired lease(s)",
                         );
                     }
                     Err(err) => {
                         event!(
                             name: "memoir.worker.lease_recovery_failed",
                             Level::WARN,
-                            error = %err,
-                            "lease recovery failed",
+                            error.message = %err,
+                            "lease recovery failed: {{error.message}}",
                         );
                     }
                 }
@@ -306,8 +344,8 @@ async fn run_worker(inner: Arc<ClientInner>, config: WorkerConfig, token: Cancel
                 event!(
                     name: "memoir.worker.claim_failed",
                     Level::WARN,
-                    error = %err,
-                    "claim failed; backing off",
+                    error.message = %err,
+                    "claim failed: {{error.message}}; backing off",
                 );
                 wait_or_cancel(&token, config.poll_interval).await;
             }
@@ -317,7 +355,8 @@ async fn run_worker(inner: Arc<ClientInner>, config: WorkerConfig, token: Cancel
     event!(
         name: "memoir.worker.exited",
         Level::INFO,
-        "worker loop exited",
+        outcome = "exited",
+        "worker loop {{outcome}}",
     );
 }
 
@@ -347,7 +386,8 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
     event!(
         name: "memoir.worker.job_started",
         Level::DEBUG,
-        "job claimed",
+        outcome = "claimed",
+        "job {{outcome}}",
     );
 
     // No-op dispatch: every kind succeeds immediately. Real handlers in
@@ -361,13 +401,14 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
             Ok(()) => event!(
                 name: "memoir.worker.job_succeeded",
                 Level::INFO,
-                "job completed",
+                outcome = "succeeded",
+                "job {{outcome}}",
             ),
             Err(err) => event!(
                 name: "memoir.worker.complete_failed",
                 Level::WARN,
-                error = %err,
-                "complete failed after successful dispatch",
+                error.message = %err,
+                "complete failed after successful dispatch: {{error.message}}",
             ),
         },
         Err(err) => {
@@ -376,15 +417,15 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
                 event!(
                     name: "memoir.worker.fail_failed",
                     Level::WARN,
-                    error = %fail_err,
-                    "fail call itself failed",
+                    error.message = %fail_err,
+                    "fail call itself failed: {{error.message}}",
                 );
             } else {
                 event!(
                     name: "memoir.worker.job_failed",
                     Level::WARN,
-                    error = %err,
-                    "job failed",
+                    error.message = %err,
+                    "job failed: {{error.message}}",
                 );
             }
         }
@@ -394,6 +435,10 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // M-TYPES-SEND: public types must be `Send` so they compose with tokio.
+    const fn assert_send<T: Send>() {}
+    const _: () = assert_send::<WorkerHandle>();
 
     #[test]
     fn should_use_default_constants_for_builder() {

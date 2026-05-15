@@ -31,6 +31,7 @@ pub enum LlmRole {
 
 impl LlmRole {
     /// Returns the canonical lowercase string used in logs.
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Extraction => "extraction",
@@ -56,7 +57,14 @@ pub struct LlmRegistry {
 }
 
 impl LlmRegistry {
+    /// Builds an empty registry.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Returns the provider configured for `role`, if any.
+    #[must_use]
     pub fn get(&self, role: LlmRole) -> Option<&RigLlmProvider> {
         self.providers.get(&role)
     }
@@ -68,6 +76,7 @@ impl LlmRegistry {
     /// alternative — e.g. contradiction detection prefers
     /// [`LlmRole::Contradiction`] but accepts [`LlmRole::Extraction`] if no
     /// dedicated contradiction LLM is configured.
+    #[must_use]
     pub fn get_with_fallback(
         &self,
         primary: LlmRole,
@@ -85,6 +94,7 @@ impl LlmRegistry {
     ///
     /// The worker uses this to skip extract-job dispatch entirely when no
     /// LLM is wired up.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.providers.is_empty()
     }

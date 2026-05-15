@@ -97,6 +97,16 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<u64, JobsError>> + Send;
 }
 
+// M-TYPES-SEND: public types must be `Send` so they compose with tokio.
+const fn assert_send<T: Send>() {}
+const _: () = {
+    assert_send::<Job>();
+    assert_send::<JobKind>();
+    assert_send::<JobState>();
+    assert_send::<JobsError>();
+    assert_send::<PostgresJobsStore>();
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -60,8 +60,8 @@ impl ClientInner {
                     name: "memoir.embed.embed_failed",
                     Level::WARN,
                     pid = %pid,
-                    error = %err,
-                    "embed step failed for {{pid}}",
+                    error.message = %err,
+                    "embed step failed for {{pid}}: {{error.message}}",
                 );
                 self.record_failed(pid).await;
                 return EmbedOutcome::Failed;
@@ -77,8 +77,8 @@ impl ClientInner {
                 name: "memoir.embed.upsert_failed",
                 Level::WARN,
                 pid = %pid,
-                error = %err,
-                "vector upsert failed for {{pid}}",
+                error.message = %err,
+                "vector upsert failed for {{pid}}: {{error.message}}",
             );
             self.record_failed(pid).await;
             return EmbedOutcome::Failed;
@@ -89,8 +89,8 @@ impl ClientInner {
                 name: "memoir.embed.index_status_failed",
                 Level::WARN,
                 pid = %pid,
-                error = %err,
-                "set_index_status(indexed) failed for {{pid}} — row stays pending until reconciliation",
+                error.message = %err,
+                "set_index_status(indexed) failed for {{pid}}: {{error.message}} — row stays pending until reconciliation",
             );
             return EmbedOutcome::Failed;
         }
@@ -110,8 +110,8 @@ impl ClientInner {
                 name: "memoir.embed.index_status_failed",
                 Level::WARN,
                 pid = %pid,
-                error = %err,
-                "set_index_status(failed) failed for {{pid}} — row stays pending until reconciliation",
+                error.message = %err,
+                "set_index_status(failed) failed for {{pid}}: {{error.message}} — row stays pending until reconciliation",
             );
         }
     }

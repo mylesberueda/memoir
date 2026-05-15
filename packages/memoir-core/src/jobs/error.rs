@@ -1,4 +1,7 @@
-/// Failure modes for [`crate::jobs::MemoryJobsStore`] implementations.
+/// Failure modes returned by [`crate::jobs::MemoryJobsStore`] methods.
+///
+/// `NotFound` indicates a logic mismatch (e.g. completing a job another
+/// worker holds); `Database` wraps an upstream sea-orm error.
 #[derive(Debug, thiserror::Error)]
 pub enum JobsError {
     #[error("job not found: {0}")]

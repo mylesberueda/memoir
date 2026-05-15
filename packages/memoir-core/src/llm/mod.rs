@@ -9,6 +9,7 @@
 mod anthropic;
 mod config;
 mod error;
+pub mod extraction;
 mod inner;
 mod ollama;
 mod openai;
@@ -19,6 +20,9 @@ pub use config::{
     LlmConfig, LlmKind,
 };
 pub use error::LlmError;
+pub use extraction::{
+    DEFAULT_EXTRACTION_PROMPT, ExtractionOutput, Fact, MAX_CONTENT_CHARS, parse_extraction,
+};
 pub use role::{LlmRegistry, LlmRole};
 
 use std::future::Future;
@@ -107,11 +111,13 @@ impl RigLlmProvider {
     }
 
     /// Returns the variant discriminator for this provider.
+    #[must_use]
     pub fn kind(&self) -> LlmKind {
         self.inner.kind()
     }
 
     /// Returns the configured model name.
+    #[must_use]
     pub fn model(&self) -> &str {
         &self.model
     }
@@ -147,6 +153,20 @@ impl LlmProvider for RigLlmProvider {
         }
     }
 }
+
+// M-TYPES-SEND: public types must be `Send` so they compose with tokio
+// runtimes and held across `.await` points without infecting futures `!Send`.
+const fn assert_send<T: Send>() {}
+const _: () = {
+    assert_send::<RigLlmProvider>();
+    assert_send::<LlmConfig>();
+    assert_send::<LlmError>();
+    assert_send::<LlmKind>();
+    assert_send::<LlmRegistry>();
+    assert_send::<LlmRole>();
+    assert_send::<Fact>();
+    assert_send::<ExtractionOutput>();
+};
 
 #[cfg(test)]
 mod tests {

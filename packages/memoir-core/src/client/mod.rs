@@ -265,8 +265,8 @@ impl Client {
                 name: "memoir.forget.index_delete_failed",
                 tracing::Level::WARN,
                 pid_count = deleted.len(),
-                error = %err,
-                "vector delete failed for {{pid_count}} pid(s) — reconciliation will clean up orphans",
+                error.message = %err,
+                "vector delete failed for {{pid_count}} pid(s): {{error.message}} — reconciliation will clean up orphans",
             );
         } else {
             tracing::event!(

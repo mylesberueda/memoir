@@ -17,11 +17,13 @@ pub struct PostgresJobsStore {
 
 impl PostgresJobsStore {
     /// Builds a jobs store from an existing Postgres connection.
+    #[must_use]
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
     }
 
     /// Returns the underlying Postgres connection.
+    #[must_use]
     pub fn db(&self) -> &DatabaseConnection {
         &self.db
     }
@@ -140,10 +142,10 @@ impl MemoryJobsStore for PostgresJobsStore {
         &self,
         lease: std::time::Duration,
     ) -> Result<u64, JobsError> {
-        // Postgres `INTERVAL '<n> seconds'` can't take a bound parameter for
-        // the unit, so we interpolate the seconds count as a number — safe
-        // because it's a `u64` from a `Duration`, not user-controlled text.
-        let seconds = lease.as_secs() as i64;
+        // Postgres `make_interval(secs => ...)` needs a numeric bind. `as_secs`
+        // returns u64; Postgres accepts up to i64::MAX seconds in an interval.
+        // Saturate on overflow rather than wrapping silently.
+        let seconds = i64::try_from(lease.as_secs()).unwrap_or(i64::MAX);
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             r#"

@@ -19,6 +19,7 @@ pub enum JobKind {
 
 impl JobKind {
     /// Returns the canonical lowercase string used in storage.
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Embed => "embed",
@@ -54,6 +55,7 @@ pub enum JobState {
 
 impl JobState {
     /// Returns the canonical lowercase string used in storage.
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Pending => "pending",
