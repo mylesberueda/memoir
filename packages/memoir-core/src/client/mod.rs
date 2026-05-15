@@ -2,6 +2,7 @@
 
 mod embed;
 mod error;
+mod extract;
 mod reconcile;
 mod remember;
 mod worker;
@@ -33,11 +34,6 @@ pub(crate) struct ClientInner {
     pub(crate) store: PostgresStore,
     pub(crate) index: QdrantIndex,
     pub(crate) jobs: PostgresJobsStore,
-    #[expect(
-        dead_code,
-        reason = "Read by the extract worker stage in epic 0006 ticket 0006; held here so \
-                  ticket 0010's builder wiring has a place to insert configured providers."
-    )]
     pub(crate) llms: LlmRegistry,
     pub(crate) schema: String,
     pub(crate) system_prompt: Option<String>,

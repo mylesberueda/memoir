@@ -18,7 +18,7 @@ use tokio::time::{sleep, timeout};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Level, event, info_span};
 
-use crate::jobs::{Job, JobKind, JobState, JobsError, MemoryJobsStore};
+use crate::jobs::{Job, JobKind, JobState, MemoryJobsStore};
 
 use super::{Client, ClientError, ClientInner};
 
@@ -390,10 +390,17 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
         "job {{outcome}}",
     );
 
-    // No-op dispatch: every kind succeeds immediately. Real handlers in
-    // tickets 0006/0007.
-    let result: Result<(), JobsError> = match job.kind {
-        JobKind::Embed | JobKind::Extract => Ok(()),
+    let result: Result<(), String> = match job.kind {
+        JobKind::Extract => inner
+            .run_extract(job.clone())
+            .await
+            .map_err(|err| err.to_string()),
+        // Embed dispatch is the substrate-swap target. Until ticket 0007 lands
+        // the swap, embed jobs are a no-op (the in-process spawn at
+        // `Client::remember` continues to handle freshly-written episodic
+        // rows). Newly-extracted semantic rows enqueue embed jobs that this
+        // arm currently drains without doing real work.
+        JobKind::Embed => Ok(()),
     };
 
     match result {
@@ -411,9 +418,8 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
                 "complete failed after successful dispatch: {{error.message}}",
             ),
         },
-        Err(err) => {
-            let reason = err.to_string();
-            if let Err(fail_err) = inner.jobs.fail(job.id, reason, max_attempts).await {
+        Err(reason) => {
+            if let Err(fail_err) = inner.jobs.fail(job.id, reason.clone(), max_attempts).await {
                 event!(
                     name: "memoir.worker.fail_failed",
                     Level::WARN,
@@ -424,7 +430,7 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
                 event!(
                     name: "memoir.worker.job_failed",
                     Level::WARN,
-                    error.message = %err,
+                    error.message = %reason,
                     "job failed: {{error.message}}",
                 );
             }

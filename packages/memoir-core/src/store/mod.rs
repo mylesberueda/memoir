@@ -52,7 +52,9 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Inserts a new memory and returns the persisted row.
     ///
     /// The returned [`Memory`] carries the server-generated `pid`,
-    /// `created_at`, and a `score` of `None`.
+    /// `created_at`, and a `score` of `None`. `source_pid` is `None` for
+    /// episodic rows and `Some(pid)` for semantic rows extracted from an
+    /// episodic memory (the extract worker stage passes this through).
     ///
     /// # Errors
     ///
@@ -64,6 +66,7 @@ pub trait MemoryStore: Send + Sync + 'static {
         content: String,
         metadata: serde_json::Value,
         kind: MemoryKind,
+        source_pid: Option<String>,
     ) -> impl Future<Output = Result<Memory, StoreError>> + Send;
 
     /// Looks up a single memory by pid, returning all lifecycle states.
@@ -177,6 +180,7 @@ mod tests {
             content: String,
             metadata: serde_json::Value,
             kind: MemoryKind,
+            source_pid: Option<String>,
         ) -> Result<Memory, StoreError> {
             let memory = Memory {
                 pid: format!("test-{}", self.memories.lock().unwrap().len()),
@@ -184,6 +188,7 @@ mod tests {
                 content,
                 metadata,
                 kind,
+                source_pid,
                 created_at: Utc::now().into(),
                 score: None,
             };
@@ -283,6 +288,7 @@ mod tests {
                 "content".to_string(),
                 serde_json::json!({}),
                 MemoryKind::Episodic,
+                None,
             )
             .await
             .unwrap();

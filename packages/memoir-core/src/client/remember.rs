@@ -138,6 +138,7 @@ async fn execute(builder: RememberBuilder<'_>) -> Result<Memories, ClientError> 
             prompt.clone(),
             serde_json::json!({}),
             MemoryKind::Episodic,
+            None,
         )
         .await?;
 

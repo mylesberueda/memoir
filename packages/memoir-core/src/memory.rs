@@ -90,6 +90,11 @@ impl KindSelector {
 ///
 /// `score` is `Some` only for memories returned by a similarity search;
 /// memories returned by direct lookup (`Client::recall`) have `score = None`.
+///
+/// `source_pid` is `Some` for `MemoryKind::Semantic` rows extracted from an
+/// episodic memory; `None` for episodic rows. The link is enforced at the
+/// database level with `ON DELETE CASCADE`, so forgetting the source
+/// automatically removes derived semantic memories.
 #[derive(Debug, Clone)]
 pub struct Memory {
     pub pid: String,
@@ -97,6 +102,7 @@ pub struct Memory {
     pub content: String,
     pub metadata: serde_json::Value,
     pub kind: MemoryKind,
+    pub source_pid: Option<String>,
     pub created_at: DateTime<FixedOffset>,
     pub score: Option<f32>,
 }
@@ -182,6 +188,7 @@ mod tests {
             content: content.into(),
             metadata: serde_json::json!({}),
             kind: MemoryKind::Episodic,
+            source_pid: None,
             created_at: Utc::now().into(),
             score: None,
         }
