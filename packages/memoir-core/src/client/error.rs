@@ -1,4 +1,5 @@
 use crate::embedding::EmbeddingError;
+use crate::jobs::JobsError;
 use crate::store::StoreError;
 use crate::vector::VectorError;
 
@@ -13,6 +14,9 @@ pub enum ClientError {
 
     #[error("store failed: {0}")]
     Store(#[from] StoreError),
+
+    #[error("jobs failed: {0}")]
+    Jobs(#[from] JobsError),
 
     #[error("migration failed: {0}")]
     Migration(#[from] memoir_core_migration::MigrationError),

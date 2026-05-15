@@ -2,6 +2,7 @@
 
 pub mod client;
 pub mod embedding;
+pub mod jobs;
 pub mod memory;
 pub mod store;
 pub mod vector;
