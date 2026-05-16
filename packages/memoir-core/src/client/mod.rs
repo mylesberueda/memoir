@@ -25,7 +25,7 @@ use sea_orm::DatabaseConnection;
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
 use crate::jobs::{MemoryJobsStore, PostgresJobsStore};
-use crate::llm::LlmRegistry;
+use crate::llm::{LlmConfig, LlmRegistry, LlmRole, RigLlmProvider};
 use crate::memory::{ForgetTarget, Memory};
 use crate::store::{MemoryStore, PostgresStore};
 use crate::vector::{QdrantIndex, VectorIndex};
@@ -63,11 +63,18 @@ impl std::fmt::Debug for Client {
 impl Client {
     /// Builds a [`Client`] from caller-owned Postgres + Qdrant handles.
     ///
+    /// LLM providers are configured per [`LlmRole`] via the `extraction_llm`
+    /// and `contradiction_llm` setters. A role left unconfigured produces a
+    /// registry with no entry for that role; downstream call sites
+    /// (e.g. the extraction worker stage) skip gracefully when their
+    /// preferred role is absent.
+    ///
     /// # Examples
     ///
     /// ```no_run
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// use memoir_core::client::Client;
+    /// use memoir_core::llm::LlmConfig;
     ///
     /// let db = sea_orm::Database::connect("postgres://...").await?;
     /// let qdrant = qdrant_client::Qdrant::from_url("http://localhost:6334").build()?;
@@ -76,6 +83,7 @@ impl Client {
     ///     .db(db)
     ///     .qdrant(qdrant)
     ///     .schema("memoir")
+    ///     .extraction_llm(LlmConfig::ollama("http://localhost:11434", "llama3.2"))
     ///     .build()
     ///     .await?;
     /// # Ok(())
@@ -84,8 +92,10 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns [`ClientError::Embedding`] if the embedder fails to initialize
-    /// and [`ClientError::Vector`] if `ensure_collection` fails on Qdrant.
+    /// Returns [`ClientError::Embedding`] if the embedder fails to initialize,
+    /// [`ClientError::Vector`] if `ensure_collection` fails on Qdrant, and
+    /// [`ClientError::Llm`] if a configured provider can't be constructed
+    /// (e.g. malformed URL or api-key rejected by rig).
     #[builder(start_fn = builder, finish_fn = build)]
     pub async fn new(
         db: DatabaseConnection,
@@ -93,6 +103,8 @@ impl Client {
         #[builder(into)] schema: Option<String>,
         #[builder(into)] system_prompt: Option<String>,
         #[builder(into)] collection: Option<String>,
+        extraction_llm: Option<LlmConfig>,
+        contradiction_llm: Option<LlmConfig>,
     ) -> Result<Client, ClientError> {
         let embedder = OnnxEmbedding::new()?;
         let store = PostgresStore::new(db.clone());
@@ -106,18 +118,46 @@ impl Client {
 
         let schema = schema.unwrap_or_else(|| memoir_core_migration::DEFAULT_SCHEMA.to_string());
 
+        let mut llms = LlmRegistry::new();
+        if let Some(config) = extraction_llm {
+            install_llm(&mut llms, LlmRole::Extraction, config)?;
+        }
+        if let Some(config) = contradiction_llm {
+            install_llm(&mut llms, LlmRole::Contradiction, config)?;
+        }
+
         Ok(Client {
             inner: Arc::new(ClientInner {
                 embedder: Arc::new(embedder),
                 store,
                 index,
                 jobs,
-                llms: LlmRegistry::default(),
+                llms,
                 schema,
                 system_prompt,
             }),
         })
     }
+}
+
+fn install_llm(
+    registry: &mut LlmRegistry,
+    role: LlmRole,
+    config: LlmConfig,
+) -> Result<(), ClientError> {
+    let kind = config.kind();
+    let provider = RigLlmProvider::new(config)?;
+    registry.insert(role, provider);
+
+    tracing::event!(
+        name: "memoir.client.llm_configured",
+        tracing::Level::INFO,
+        role = role.as_str(),
+        provider = kind.as_str(),
+        "configured {{provider}} provider for {{role}}",
+    );
+
+    Ok(())
 }
 
 impl Client {
@@ -423,5 +463,57 @@ impl Client {
             "unsuperseded memory {{pid}}",
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::LlmKind;
+
+    #[test]
+    fn should_install_extraction_llm_into_empty_registry() {
+        let mut registry = LlmRegistry::new();
+        install_llm(
+            &mut registry,
+            LlmRole::Extraction,
+            LlmConfig::ollama("http://localhost:11434", "llama3.2"),
+        )
+        .unwrap();
+
+        let provider = registry.get(LlmRole::Extraction).expect("extraction provider present");
+        assert_eq!(provider.kind(), LlmKind::Ollama);
+        assert_eq!(provider.model(), "llama3.2");
+    }
+
+    #[test]
+    fn should_install_both_extraction_and_contradiction_llms_independently() {
+        let mut registry = LlmRegistry::new();
+        install_llm(
+            &mut registry,
+            LlmRole::Extraction,
+            LlmConfig::ollama("http://localhost:11434", "extraction-model"),
+        )
+        .unwrap();
+        install_llm(
+            &mut registry,
+            LlmRole::Contradiction,
+            LlmConfig::ollama("http://localhost:11434", "contradiction-model"),
+        )
+        .unwrap();
+
+        assert_eq!(registry.get(LlmRole::Extraction).unwrap().model(), "extraction-model");
+        assert_eq!(
+            registry.get(LlmRole::Contradiction).unwrap().model(),
+            "contradiction-model"
+        );
+    }
+
+    #[test]
+    fn should_leave_registry_empty_when_no_llms_installed() {
+        let registry = LlmRegistry::new();
+        assert!(registry.is_empty());
+        assert!(registry.get(LlmRole::Extraction).is_none());
+        assert!(registry.get(LlmRole::Contradiction).is_none());
     }
 }
