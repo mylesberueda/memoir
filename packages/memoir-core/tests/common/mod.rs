@@ -24,7 +24,7 @@ use memoir_core::llm::LlmConfig;
 use memoir_core::memory::{MemoryKind, Scope};
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::DeleteCollectionBuilder;
-use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
 
 /// Lowercase + digit alphabet for test identifiers.
 ///
@@ -88,21 +88,18 @@ async fn build_test_client(extraction: Option<LlmConfig>) -> Result<TestClient> 
     let schema = format!("test_{suffix}");
     let collection = format!("test_{suffix}");
 
-    // Pin the pool's search_path so every connection — including ones the
-    // sea-orm-migration `Migrator::up` grabs internally — resolves
-    // unqualified table names against the per-test schema. Without this, the
-    // migrator's `seaql_migrations` ledger leaks into `public` and subsequent
-    // test runs see "already migrated" for a brand-new empty schema.
-    let options = ConnectOptions::new(&database_url)
-        .set_schema_search_path(format!("{schema},public"))
-        .to_owned();
-    let db = Database::connect(options)
+    // memoir-core builds its own pool internally from the URL we pass it,
+    // pinned to the per-test schema. The harness keeps a separate, plain
+    // pool here just so `TestClient::drop` can issue `DROP SCHEMA ...
+    // CASCADE` at teardown — the Client's own pool isn't reachable for
+    // that.
+    let db = Database::connect(&database_url)
         .await
-        .context("connect to Postgres")?;
+        .context("connect to Postgres (cleanup pool)")?;
     let qdrant = Qdrant::from_url(&qdrant_url).build().context("build Qdrant client")?;
 
     let client = Client::builder()
-        .db(db.clone())
+        .database_url(database_url.clone())
         .qdrant(qdrant.clone())
         .schema(schema.clone())
         .collection(collection.clone())

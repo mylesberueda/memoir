@@ -7,11 +7,12 @@
 //!
 //! ## Password input
 //!
-//! Two channels by design: `--password-stdin` reads from stdin, and
-//! `--password-file <path>` reads from a file. A `--password <value>` flag
-//! is intentionally NOT provided — passwords on argv leak to `ps`, shell
-//! history, and audit logs. Operators piping from a secret manager use
-//! one of these two channels.
+//! Three mutually-exclusive channels: `--password-stdin` reads from stdin,
+//! `--password-file <path>` reads from a file, and `--password <value>`
+//! takes the password directly on the command line. The first two are the
+//! safe choices — passwords on argv leak to `ps`, shell history, and audit
+//! logs. `--password` exists for one-liner convenience (CI bootstrap,
+//! local dev seeding); operators using it accept that exposure.
 
 use std::io::Read as _;
 use std::path::PathBuf;
@@ -43,15 +44,22 @@ pub(crate) struct CreateArgs {
     #[clap(long, default_value_t = false)]
     admin: bool,
 
+    /// Password passed directly on the command line.
+    ///
+    /// Leaks to `ps`, shell history, and audit logs — use for one-off
+    /// dev / CI seeding only. Mutually exclusive with the other channels.
+    #[clap(long, conflicts_with_all = ["password_stdin", "password_file"])]
+    password: Option<String>,
+
     /// Read the password from stdin (terminated by EOF or newline).
     ///
-    /// Mutually exclusive with --password-file.
+    /// Mutually exclusive with --password-file and --password.
     #[clap(long, conflicts_with = "password_file")]
     password_stdin: bool,
 
     /// Read the password from a file. Trailing whitespace is stripped.
     ///
-    /// Mutually exclusive with --password-stdin.
+    /// Mutually exclusive with --password-stdin and --password.
     #[clap(long)]
     password_file: Option<PathBuf>,
 }
@@ -78,19 +86,21 @@ async fn create(args: &CreateArgs) -> crate::Result<()> {
 }
 
 fn read_password(args: &CreateArgs) -> crate::Result<String> {
-    let raw = match (&args.password_stdin, &args.password_file) {
-        (true, _) => {
-            let mut buf = String::new();
-            std::io::stdin()
-                .read_to_string(&mut buf)
-                .wrap_err("failed to read password from stdin")?;
-            buf
-        }
-        (false, Some(path)) => std::fs::read_to_string(path)
-            .wrap_err_with(|| format!("failed to read password file at {}", path.display()))?,
-        (false, None) => {
-            bail!("must supply either --password-stdin or --password-file");
-        }
+    // The three channels are mutually exclusive at the clap layer; here we
+    // simply pick whichever was supplied.
+    let raw = if let Some(value) = &args.password {
+        value.clone()
+    } else if args.password_stdin {
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .wrap_err("failed to read password from stdin")?;
+        buf
+    } else if let Some(path) = &args.password_file {
+        std::fs::read_to_string(path)
+            .wrap_err_with(|| format!("failed to read password file at {}", path.display()))?
+    } else {
+        bail!("must supply --password, --password-stdin, or --password-file");
     };
 
     let trimmed = raw.trim_end_matches(['\n', '\r']).to_string();

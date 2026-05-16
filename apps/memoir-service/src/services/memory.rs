@@ -7,10 +7,10 @@
 //! `.tasks/0002-cleanup-and-prep/.reference/rig-memory/`.
 //!
 //! Every RPC returns [`tonic::Status::unimplemented`] *after* the request
-//! has been authenticated by [`crate::middleware::auth::authenticate`].
-//! Unauthenticated callers therefore see `Unauthenticated`, not
-//! `Unimplemented` — the auth surface is enforced consistently across
-//! both services.
+//! has been authenticated by the shared
+//! [`crate::middleware::auth::Authenticator`]. Unauthenticated callers
+//! therefore see `Unauthenticated`, not `Unimplemented` — the auth
+//! surface is enforced consistently across both services.
 
 use std::sync::Arc;
 
@@ -22,7 +22,7 @@ use memoir_sdk::memoir::v1::{
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
-use crate::middleware::auth::authenticate;
+use crate::middleware::auth::Authenticator;
 
 /// Message returned by every `MemoryService` RPC until real handlers land.
 const UNIMPLEMENTED_MESSAGE: &str = "memory service not yet implemented";
@@ -39,27 +39,31 @@ impl Memory {
     pub fn new(ctx: Arc<AppContext>) -> Self {
         Self { ctx }
     }
+
+    fn auth(&self) -> &Authenticator {
+        &self.ctx.auth
+    }
 }
 
 #[tonic::async_trait]
 impl MemoryService for Memory {
     async fn search(&self, request: Request<SearchRequest>) -> Result<Response<SearchResponse>, Status> {
-        let _caller = authenticate(self.ctx.db.as_ref(), &request).await?;
+        let _caller = self.auth().authenticate(&request).await?;
         Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
     }
 
     async fn recall(&self, request: Request<RecallRequest>) -> Result<Response<RecallResponse>, Status> {
-        let _caller = authenticate(self.ctx.db.as_ref(), &request).await?;
+        let _caller = self.auth().authenticate(&request).await?;
         Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
     }
 
     async fn remember(&self, request: Request<RememberRequest>) -> Result<Response<RememberResponse>, Status> {
-        let _caller = authenticate(self.ctx.db.as_ref(), &request).await?;
+        let _caller = self.auth().authenticate(&request).await?;
         Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
     }
 
     async fn forget(&self, request: Request<ForgetRequest>) -> Result<Response<ForgetResponse>, Status> {
-        let _caller = authenticate(self.ctx.db.as_ref(), &request).await?;
+        let _caller = self.auth().authenticate(&request).await?;
         Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
     }
 }

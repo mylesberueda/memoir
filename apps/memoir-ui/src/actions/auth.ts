@@ -3,32 +3,31 @@
 import { getAuthProvider } from '@lib/auth';
 import { setOrganizationContext } from '@lib/grpc/transport';
 import { authLogger } from '@lib/logger';
-import { deleteSession, getSession, updateSession } from '@lib/session';
-import { decodeJwt } from 'jose';
+import { createSession, deleteSession, getSession, updateSession } from '@lib/session';
 import { redirect } from 'next/navigation';
-
-const REDIRECT_URI = process.env.NEXT_PUBLIC_APP_URL
-	? `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback`
-	: 'http://localhost:3000/api/auth/callback';
 
 interface LoginResult {
 	success: boolean;
 	error?: string;
 	errorCode?: string;
-	callbackUrl?: string;
 }
 
 /**
- * Server action to handle user login via auth provider.
+ * Server action to handle user login via the configured AuthProvider.
  *
- * The browser starts the flow via /oauth/v2/authorize, which redirects to our login page
- * with an authRequest. We authenticate the user and finalize the auth request, returning
- * a callback URL containing the authorization code.
+ * Flow: provider verifies username + password against memoir-service and
+ * returns a JWT access/refresh pair. We persist the tokens in a server-side
+ * Redis session keyed by an HttpOnly cookie, then signal success so the
+ * client can navigate to the post-login destination.
+ *
+ * The `_authRequest` parameter is preserved for signature compatibility
+ * with the previous Zitadel OIDC flow but is unused — AuthService has no
+ * concept of an authorization-request handoff.
  */
-export async function login(email: string, password: string, authRequest: string): Promise<LoginResult> {
+export async function login(email: string, password: string, _authRequest?: string): Promise<LoginResult> {
 	const provider = getAuthProvider();
 
-	const result = await provider.login(email, password, { authRequest });
+	const result = await provider.login(email, password);
 
 	if (!result.success) {
 		authLogger.error('Login failed', { error: result.error, email });
@@ -39,49 +38,58 @@ export async function login(email: string, password: string, authRequest: string
 		};
 	}
 
-	// Provider returns either redirect URL or tokens directly
-	if (result.data.type === 'redirect') {
+	if (result.data.type !== 'tokens') {
+		// AuthService only returns the direct-token flow; a redirect here
+		// would mean a misconfigured provider.
+		authLogger.error('Unexpected login flow shape from provider', {
+			email,
+			flow: result.data.type,
+		});
 		return {
-			success: true,
-			callbackUrl: result.data.url,
+			success: false,
+			error: 'Unexpected authentication flow.',
+			errorCode: 'LOGIN_FAILED',
 		};
 	}
 
-	// Direct token flow - should not happen with Zitadel, but handle it
-	authLogger.warn('Unexpected direct token flow from provider', { email });
-	return {
-		success: false,
-		error: 'Unexpected authentication flow. Please try again.',
-		errorCode: 'LOGIN_FAILED',
-	};
+	const { tokens, user } = result.data;
+
+	await createSession({
+		accessToken: tokens.accessToken,
+		refreshToken: tokens.refreshToken,
+		// AuthService doesn't issue an ID token. SessionData requires the
+		// field; empty string is the documented "absent" signal here.
+		idToken: tokens.idToken ?? '',
+		userId: user.id,
+		expiresAt: Math.floor(Date.now() / 1000) + tokens.expiresIn,
+	});
+
+	return { success: true };
 }
 
 /**
- * Server action to handle user logout.
- * Removes session from Redis and optionally from Zitadel.
+ * Server action to handle user logout. Clears the Redis session + cookie.
  */
 export async function logout(): Promise<void> {
-	// Note: We could also call deleteZitadelSession here if we stored
-	// the Zitadel session ID, but for now we just clear our Redis session.
 	await deleteSession();
 	await setOrganizationContext(null);
 	redirect('/');
 }
 
-// Refresh buffer: refresh tokens 5 minutes before expiry
+// Refresh buffer: refresh tokens 5 minutes before expiry.
 const REFRESH_BUFFER_SECONDS = 5 * 60;
 
 /**
  * Refresh the session tokens if expired, expiring soon, or force refresh is requested.
  * Returns the (possibly refreshed) access token, or null if refresh failed.
  *
- * Force refresh is triggered by webhook when user metadata changes (e.g., tier update).
- * This ensures the user gets a new JWT with updated claims without logging out.
+ * Force refresh remains in the session shape for back-compat with code that
+ * sets it; AuthService has no equivalent metadata-refresh signal so it's
+ * effectively only triggered by expiry today.
  */
 async function ensureValidToken(): Promise<{ accessToken: string; userId: string } | null> {
 	const session = await getSession();
 	if (!session) {
-		// Session not in Redis (expired/deleted) but cookie still exists - clean it up
 		authLogger.warn('Session not found in Redis, cleaning up orphaned cookie');
 		await deleteSession();
 		return null;
@@ -95,7 +103,6 @@ async function ensureValidToken(): Promise<{ accessToken: string; userId: string
 		return { accessToken: session.accessToken, userId: session.userId };
 	}
 
-	// Token expired/expiring or force refresh requested - attempt refresh
 	if (!session.refreshToken) {
 		authLogger.warn('Token refresh needed but no refresh token available', {
 			userId: session.userId,
@@ -122,10 +129,9 @@ async function ensureValidToken(): Promise<{ accessToken: string; userId: string
 		await updateSession({
 			accessToken: tokens.accessToken,
 			refreshToken: tokens.refreshToken,
-			// id_token may not be returned on refresh, keep existing if not present
 			...(tokens.idToken && { idToken: tokens.idToken }),
 			expiresAt: Math.floor(Date.now() / 1000) + tokens.expiresIn,
-			forceRefresh: false, // Clear the flag after successful refresh
+			forceRefresh: false,
 		});
 
 		return { accessToken: tokens.accessToken, userId: session.userId };
@@ -138,52 +144,26 @@ async function ensureValidToken(): Promise<{ accessToken: string; userId: string
 
 /**
  * Server action to get current authenticated user.
- * Returns user data or null if not authenticated.
- * Automatically refreshes tokens if expired.
  *
- * Self-healing: Clears invalid sessions to prevent redirect loops between
- * proxy middleware (which validates cookie signature) and app layout
- * (which validates session data and claims).
+ * Returns the user's pid if a valid session exists, or null otherwise.
+ * The AuthService JWT carries only `sub` (the user pid); email/name
+ * aren't in the claims and aren't stored in the session, so the
+ * email/name fields are always `null` here.
+ *
+ * Consumers that need the richer user shape should fetch it via
+ * AuthService.GetUser using the access token. The UI layer at
+ * `providers/AuthContextProvider.tsx` and `app/(app)/layout.tsx` currently
+ * gates on `email && name` being non-null; with this return shape they'll
+ * treat any AuthService-authed user as "incomplete profile" until those
+ * consumers are updated to fetch the full user record.
  */
-export async function getCurrentUser() {
+export async function getCurrentUser(): Promise<{ id: string; email: string | null; name: string | null } | null> {
 	try {
 		const result = await ensureValidToken();
 		if (!result) {
 			return null;
 		}
-
-		const session = await getSession();
-		if (!session?.idToken) {
-			authLogger.warn('Session missing idToken', { userId: result.userId });
-			await deleteSession();
-			return null;
-		}
-
-		try {
-			const decoded = decodeJwt(session.idToken);
-			const email = decoded.email as string | undefined;
-			const name = decoded.name as string | undefined;
-
-			if (!email || !name) {
-				authLogger.warn('idToken missing required claims', {
-					userId: result.userId,
-					hasEmail: !!email,
-					hasName: !!name,
-				});
-				await deleteSession();
-				return null;
-			}
-
-			return {
-				id: result.userId,
-				email,
-				name,
-			};
-		} catch (error) {
-			authLogger.error('Failed to decode idToken', { error, userId: result.userId });
-			await deleteSession();
-			return null;
-		}
+		return { id: result.userId, email: null, name: null };
 	} catch (error) {
 		authLogger.error('getCurrentUser failed unexpectedly', { error });
 		await deleteSession();
@@ -206,30 +186,13 @@ export async function getAccessToken(): Promise<string | null> {
 }
 
 /**
- * Get the current session's ID token for identity propagation to microservices.
- * Contains user profile claims (email, name, roles, etc.).
- * Automatically refreshes tokens if expired.
- */
-export async function getIdToken(): Promise<string | null> {
-	try {
-		// Ensure tokens are valid (may trigger refresh)
-		const result = await ensureValidToken();
-		if (!result) {
-			return null;
-		}
-
-		// Get the (possibly refreshed) session to retrieve id_token
-		const session = await getSession();
-		return session?.idToken ?? null;
-	} catch (error) {
-		authLogger.error('getIdToken failed', { error });
-		return null;
-	}
-}
-
-/**
  * Server action to register a new user.
- * Creates the user via auth provider and triggers email verification.
+ *
+ * NOTE: AuthService's CreateUser RPC is admin-gated. memoir-ui's
+ * self-serve registration is therefore not supported in v0.1; this
+ * action returns an error directing operators to use `memoir auth create`
+ * or an admin UI page that calls AuthService.CreateUser directly with an
+ * admin JWT attached.
  */
 export async function register(
 	email: string,
@@ -249,32 +212,7 @@ export async function register(
 
 	return {
 		success: true,
-		message: 'Account created. Please check your email to verify your account.',
+		message: 'Account created.',
 		userId: result.data.userId,
 	};
-}
-
-/**
- * Server action to verify user email.
- * Note: With Zitadel, email verification is typically handled through Zitadel's flows.
- *
- * This is a placeholder that will need to be implemented based on your Zitadel setup.
- */
-export async function verifyEmail(_token: string): Promise<{ success: boolean; error?: string }> {
-	// TODO: Implement using Zitadel User Management API
-	return {
-		success: false,
-		error: 'Email verification is handled through Zitadel. Please check your email for the verification link.',
-	};
-}
-
-/**
- * Get the OIDC authorize URL to start the authentication flow.
- * This should be used when the login page is accessed directly (no authRequest).
- * Stores PKCE code_verifier in cookie for callback handler.
- */
-export async function startOidcFlow(): Promise<string> {
-	const provider = getAuthProvider();
-	const result = await provider.startOidcFlow(REDIRECT_URI);
-	return result.url;
 }

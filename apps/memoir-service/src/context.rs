@@ -7,10 +7,16 @@ use migration::{MigrationError as ServiceMigrationError, bootstrap_and_migrate};
 use qdrant_client::{Qdrant, QdrantError};
 use sea_orm::ConnectOptions;
 
+use crate::middleware::auth::Authenticator;
+use crate::middleware::jwt::{Jwt, JwtError};
+
 /// Contains app context such as the db and memoir handles, in pointers, that
 /// can be passed wherever it's needed in the app.
 pub(crate) struct AppContext {
     pub(crate) db: Arc<sea_orm::DatabaseConnection>,
+    /// Per-process credential verifier shared by every AuthService handler.
+    /// Owns the JWT signer + the DB handle used for API-key verification.
+    pub(crate) auth: Authenticator,
     #[expect(
         dead_code,
         reason = "Wired into MemoryService handlers in a follow-up; held here so startup \
@@ -34,13 +40,27 @@ impl AppContext {
     pub(crate) async fn new() -> Result<Arc<Self>, AppContextError> {
         let service_schema = Env::get_or("MEMOIR_SERVICE_SCHEMA", migration::DEFAULT_SCHEMA);
         let memoir_schema = Env::get_or("MEMOIR_SCHEMA", memoir_core::DEFAULT_SCHEMA);
-        let db = Db::init(&memoir_schema, &service_schema).await?;
-        Db::apply_migrations(&db, &service_schema).await?;
+        let database_url = Env::get("DATABASE_URL")?;
+
+        // memoir-service owns its own pool, pinned to its own schema. memoir-core
+        // builds a separate pool inside `Client::builder` (see below) pinned to
+        // its own schema. The two pools share a Postgres backend but have
+        // disjoint search_paths, so each crate's `seaql_migrations` ledger
+        // lands in its own schema without collision.
+        let db = Db::init_service(&database_url, &service_schema).await?;
+        Db::apply_service_migrations(&db, &service_schema).await?;
+
         let qdrant = QdrantBootstrap::init()?;
-        let (memoir, memoir_worker) = Memoir::init(&db, qdrant, &memoir_schema).await?;
+        let (memoir, memoir_worker) = Memoir::init(&database_url, qdrant, &memoir_schema).await?;
+
+        // JWT signer is constructed before any handler runs so misconfigured
+        // secrets fail loudly at startup rather than on the first Login.
+        let jwt = Jwt::from_env().map_err(AppContextError::Jwt)?;
+        let auth = Authenticator::new((*db).clone(), jwt);
 
         Ok(Arc::new(Self {
             db,
+            auth,
             memoir,
             memoir_worker,
         }))
@@ -50,28 +70,25 @@ impl AppContext {
 struct Db;
 
 impl Db {
-    async fn init(
-        memoir_schema: &str,
+    async fn init_service(
+        database_url: &str,
         service_schema: &str,
     ) -> Result<Arc<sea_orm::DatabaseConnection>, AppContextError> {
-        let db_url = Env::get("DATABASE_URL")?;
-
-        // Search path lists both schemas. memoir-core's tables live in
-        // `memoir_schema`; memoir-service's in `service_schema`. Unqualified
-        // queries from either crate resolve via this path. Listing both keeps
-        // a single shared pool sufficient.
-        let search_path = format!("{memoir_schema},{service_schema},public");
-        tracing::info!(search_path = %search_path, "Connecting to database...");
-        let options = ConnectOptions::new(db_url)
+        // search_path holds *only* memoir-service's schema. memoir-core uses
+        // a separate pool with its own search_path; the two never see each
+        // other's tables.
+        let search_path = format!("{service_schema},public");
+        tracing::info!(search_path = %search_path, "Connecting to database (service pool)...");
+        let options = ConnectOptions::new(database_url.to_owned())
             .set_schema_search_path(search_path)
             .to_owned();
         let db = Arc::new(sea_orm::Database::connect(options).await.map_err(AppContextError::Db)?);
-        tracing::info!("Database connected!");
+        tracing::info!("Service database connected!");
 
         Ok(db)
     }
 
-    async fn apply_migrations(
+    async fn apply_service_migrations(
         db: &sea_orm::DatabaseConnection,
         service_schema: &str,
     ) -> Result<(), AppContextError> {
@@ -102,13 +119,13 @@ struct Memoir;
 
 impl Memoir {
     async fn init(
-        db: &Arc<sea_orm::DatabaseConnection>,
+        database_url: &str,
         qdrant: Qdrant,
         schema: &str,
     ) -> Result<(Arc<MemoirClient>, MemoirWorkerHandle), AppContextError> {
         tracing::info!("Building memoir client...");
         let client = MemoirClient::builder()
-            .db((**db).clone())
+            .database_url(database_url.to_owned())
             .qdrant(qdrant)
             .schema(schema.to_owned())
             .build()
@@ -159,4 +176,6 @@ pub(crate) enum AppContextError {
     Memoir(#[from] MemoirClientError),
     #[error("memoir-service migration error: {0}")]
     ServiceMigration(#[from] ServiceMigrationError),
+    #[error("jwt configuration error: {0}")]
+    Jwt(JwtError),
 }

@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use bon::bon;
 use qdrant_client::Qdrant;
-use sea_orm::DatabaseConnection;
+use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
 use crate::jobs::{MemoryJobsStore, PostgresJobsStore};
@@ -61,7 +61,15 @@ impl std::fmt::Debug for Client {
 
 #[bon]
 impl Client {
-    /// Builds a [`Client`] from caller-owned Postgres + Qdrant handles.
+    /// Builds a [`Client`] from a Postgres connection string + Qdrant handle.
+    ///
+    /// memoir-core owns its own connection pool. The pool's `search_path` is
+    /// pinned to the configured schema so memoir-core's tables and
+    /// migration ledger never collide with the consumer's other Postgres
+    /// state. The consumer never sees a [`DatabaseConnection`] — this is a
+    /// deliberate boundary so the library can manage its own connection
+    /// lifecycle (search_path, pool sizing, future read-replica routing)
+    /// without each consumer reinventing the same plumbing.
     ///
     /// LLM providers are configured per [`LlmRole`] via the `extraction_llm`
     /// and `contradiction_llm` setters. A role left unconfigured produces a
@@ -76,11 +84,10 @@ impl Client {
     /// use memoir_core::client::Client;
     /// use memoir_core::llm::LlmConfig;
     ///
-    /// let db = sea_orm::Database::connect("postgres://...").await?;
     /// let qdrant = qdrant_client::Qdrant::from_url("http://localhost:6334").build()?;
     ///
     /// let client = Client::builder()
-    ///     .db(db)
+    ///     .database_url("postgres://postgres:postgres@localhost:54321/my_app")
     ///     .qdrant(qdrant)
     ///     .schema("memoir")
     ///     .extraction_llm(LlmConfig::ollama("http://localhost:11434", "llama3.2"))
@@ -92,13 +99,14 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Returns [`ClientError::Embedding`] if the embedder fails to initialize,
+    /// Returns [`ClientError::Database`] when the pool cannot connect,
+    /// [`ClientError::Embedding`] if the embedder fails to initialize,
     /// [`ClientError::Vector`] if `ensure_collection` fails on Qdrant, and
     /// [`ClientError::Llm`] if a configured provider can't be constructed
     /// (e.g. malformed URL or api-key rejected by rig).
     #[builder(start_fn = builder, finish_fn = build)]
     pub async fn new(
-        db: DatabaseConnection,
+        #[builder(into)] database_url: String,
         qdrant: Qdrant,
         #[builder(into)] schema: Option<String>,
         #[builder(into)] system_prompt: Option<String>,
@@ -106,6 +114,17 @@ impl Client {
         extraction_llm: Option<LlmConfig>,
         contradiction_llm: Option<LlmConfig>,
     ) -> Result<Client, ClientError> {
+        let schema = schema.unwrap_or_else(|| memoir_core_migration::DEFAULT_SCHEMA.to_string());
+
+        // Pin the pool to memoir-core's schema. Every connection the pool
+        // hands out — including ones sea-orm-migration grabs for
+        // `Migrator::up` — resolves unqualified table names against this
+        // path. Listing `public` second lets shared extensions (pgcrypto,
+        // etc.) resolve.
+        let search_path = format!("{schema},public");
+        let options = ConnectOptions::new(database_url).set_schema_search_path(search_path).to_owned();
+        let db = Database::connect(options).await.map_err(ClientError::Database)?;
+
         let embedder = OnnxEmbedding::new()?;
         let store = PostgresStore::new(db.clone());
         let jobs = PostgresJobsStore::new(db);
@@ -115,8 +134,6 @@ impl Client {
         };
 
         index.ensure_collection(embedder.dimensions()).await?;
-
-        let schema = schema.unwrap_or_else(|| memoir_core_migration::DEFAULT_SCHEMA.to_string());
 
         let mut llms = LlmRegistry::new();
         if let Some(config) = extraction_llm {

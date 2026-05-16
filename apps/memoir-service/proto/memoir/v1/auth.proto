@@ -6,23 +6,42 @@ import "google/protobuf/timestamp.proto";
 
 // AuthService manages the credentials that gate every other Memoir RPC.
 //
-// Two principal types:
+// Two principal credential types:
 //   - User: an operator with username + password. Bootstrap creates the first
-//     admin; subsequent users are created by existing admins.
-//   - ApiKey: a bearer token (string of shape `mk.<key_id>.<secret>`) presented
-//     in request metadata to authenticate calls. Keys have a role
-//     (admin | integration) and optionally bind to an org_id scope.
+//     admin; subsequent users are created by existing admins. Users
+//     authenticate via Login, which returns a pair of JWTs (access + refresh)
+//     that the caller presents as bearer tokens on subsequent RPCs.
+//   - ApiKey: a long-lived bearer token (string of shape
+//     `mk.<key_id>.<secret>`) for service-to-service / integration callers.
+//     Keys have a role (admin | integration) and optionally bind to an
+//     org_id scope.
+//
+// The authenticate middleware accepts either credential in the
+// `authorization: Bearer ...` header. JWTs are routed via signature
+// verification; API keys are routed via Argon2 verification of the secret
+// half against the api_keys row.
 //
 // Bootstrap exception:
 //   ConsumeBootstrapToken runs pre-auth — it consumes the one-time token that
-//   memoir-server logs to stdout on first start when no admin exists. The
-//   gRPC interceptor exempts this RPC from key validation.
+//   memoir-server logs to stdout on first start when no admin exists. Login
+//   and RefreshToken are also pre-auth (they ARE the auth path).
 service AuthService {
   // ── Bootstrap ────────────────────────────────────────────────────────────
 
   // Consume a one-time bootstrap token to create the first admin user.
   // The token is single-use and is invalidated once an admin exists.
   rpc ConsumeBootstrapToken(ConsumeBootstrapTokenRequest) returns (ConsumeBootstrapTokenResponse);
+
+  // ── Sessions (user / JWT auth) ───────────────────────────────────────────
+
+  // Verify username + password and issue an access/refresh JWT pair. The
+  // access token authenticates RPC calls (short TTL); the refresh token is
+  // exchanged via RefreshToken when the access token expires.
+  rpc Login(LoginRequest) returns (LoginResponse);
+
+  // Exchange a valid refresh JWT for a new access JWT. The refresh token
+  // itself is unchanged — clients reuse it until it expires, then re-Login.
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
 
   // ── Users ────────────────────────────────────────────────────────────────
 
@@ -95,6 +114,38 @@ message ConsumeBootstrapTokenRequest {
 
 message ConsumeBootstrapTokenResponse {
   User user = 1;
+}
+
+// ─── Session RPCs ───────────────────────────────────────────────────────────
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  // Short-lived JWT presented as `authorization: Bearer <access_token>` on
+  // subsequent RPCs. TTL is server-configured (default 15 minutes).
+  string access_token = 1;
+
+  // Long-lived JWT exchanged via RefreshToken when the access token expires.
+  // Audience-bound to refresh use; rejected by the authenticate middleware.
+  // TTL is server-configured (default 7 days).
+  string refresh_token = 2;
+
+  // Convenience copy of the authenticated user. Saves a follow-up GetUser
+  // call on a successful login.
+  User user = 3;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResponse {
+  // A freshly-minted access JWT. The refresh token is unchanged — clients
+  // continue to use the original until it expires.
+  string access_token = 1;
 }
 
 // ─── User RPCs ──────────────────────────────────────────────────────────────

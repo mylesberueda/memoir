@@ -21,7 +21,7 @@ pub struct User {
 pub struct ApiKey {
     #[prost(string, tag="1")]
     pub pid: ::prost::alloc::string::String,
-    /// The lookup half of `mk_<key_id>_<secret>`. Non-secret.
+    /// The lookup half of `mk.<key_id>.<secret>`. Non-secret.
     #[prost(string, tag="2")]
     pub key_id: ::prost::alloc::string::String,
     /// Human-readable label set at creation, e.g. "ci-runner".
@@ -57,6 +57,43 @@ pub struct ConsumeBootstrapTokenRequest {
 pub struct ConsumeBootstrapTokenResponse {
     #[prost(message, optional, tag="1")]
     pub user: ::core::option::Option<User>,
+}
+// ─── Session RPCs ───────────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LoginRequest {
+    #[prost(string, tag="1")]
+    pub username: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub password: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LoginResponse {
+    /// Short-lived JWT presented as `authorization: Bearer <access_token>` on
+    /// subsequent RPCs. TTL is server-configured (default 15 minutes).
+    #[prost(string, tag="1")]
+    pub access_token: ::prost::alloc::string::String,
+    /// Long-lived JWT exchanged via RefreshToken when the access token expires.
+    /// Audience-bound to refresh use; rejected by the authenticate middleware.
+    /// TTL is server-configured (default 7 days).
+    #[prost(string, tag="2")]
+    pub refresh_token: ::prost::alloc::string::String,
+    /// Convenience copy of the authenticated user. Saves a follow-up GetUser
+    /// call on a successful login.
+    #[prost(message, optional, tag="3")]
+    pub user: ::core::option::Option<User>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RefreshTokenRequest {
+    #[prost(string, tag="1")]
+    pub refresh_token: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RefreshTokenResponse {
+    /// A freshly-minted access JWT. The refresh token is unchanged — clients
+    /// continue to use the original until it expires.
+    #[prost(string, tag="1")]
+    pub access_token: ::prost::alloc::string::String,
 }
 // ─── User RPCs ──────────────────────────────────────────────────────────────
 
@@ -121,7 +158,7 @@ pub struct CreateApiKeyRequest {
 pub struct CreateApiKeyResponse {
     #[prost(message, optional, tag="1")]
     pub key: ::core::option::Option<ApiKey>,
-    /// The full `mk_<key_id>_<secret>` string. Shown ONCE.
+    /// The full `mk.<key_id>.<secret>` string. Shown ONCE.
     #[prost(string, tag="2")]
     pub plaintext: ::prost::alloc::string::String,
 }
@@ -160,7 +197,7 @@ pub struct RotateApiKeyRequest {
 pub struct RotateApiKeyResponse {
     #[prost(message, optional, tag="1")]
     pub key: ::core::option::Option<ApiKey>,
-    /// The new `mk_<key_id>_<secret>` string. Shown ONCE.
+    /// The new `mk.<key_id>.<secret>` string. Shown ONCE.
     #[prost(string, tag="2")]
     pub plaintext: ::prost::alloc::string::String,
 }

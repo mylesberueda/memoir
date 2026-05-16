@@ -52,12 +52,11 @@ async fn main() -> Result<(), BoxError> {
     let qdrant_url = std::env::var("QDRANT_URL")
         .map_err(|_| "QDRANT_URL must be set (e.g. http://localhost:6334)")?;
 
-    // Step 1 — caller-owned connections.
-    // memoir-core never opens a pool or dials Qdrant itself; the consumer
-    // brings the handles. This is the seam that lets memoir-core embed in
-    // any tokio app without imposing a connection-lifecycle.
-    println!("→ Connecting to Postgres + Qdrant...");
-    let db = sea_orm::Database::connect(&database_url).await?;
+    // Step 1 — bring the Qdrant handle. memoir-core owns its own Postgres
+    // pool internally (built from the connection string we hand it in
+    // step 2); Qdrant is brought by the consumer because the qdrant-client
+    // crate's builder pattern is too useful to hide.
+    println!("→ Connecting to Qdrant...");
     let qdrant = qdrant_client::Qdrant::from_url(&qdrant_url).build()?;
 
     // Step 2 — build the Client.
@@ -67,7 +66,7 @@ async fn main() -> Result<(), BoxError> {
     let example_schema = format!("memoir_example_{}", std::process::id());
     println!("→ Building memoir Client (schema = {example_schema})...");
     let client = Client::builder()
-        .db(db)
+        .database_url(database_url)
         .qdrant(qdrant)
         .schema(example_schema.clone())
         .system_prompt(DEFAULT_SYSTEM_PROMPT)
