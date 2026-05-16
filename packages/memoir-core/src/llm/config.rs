@@ -11,10 +11,12 @@ pub const DEFAULT_OLLAMA_URL: &str = "http://localhost:11434";
 
 /// Default Ollama model.
 ///
-/// Picks a small Llama-family model that's commonly pulled, runs on a CPU,
-/// and produces decent JSON when prompted with examples. Operators with
-/// stronger hardware should override this.
-pub const DEFAULT_OLLAMA_MODEL: &str = "llama3.2";
+/// Picks the 1B llama3.2 variant — small enough to run on a CPU, commonly
+/// pulled, and produces decent JSON when prompted with examples. Tag is
+/// pinned (`:1b`) because Ollama's bare `llama3.2` alias resolves to the 3B
+/// variant which is not always pre-pulled. Operators with stronger hardware
+/// should override this.
+pub const DEFAULT_OLLAMA_MODEL: &str = "llama3.2:1b";
 
 /// Default OpenAI model.
 ///

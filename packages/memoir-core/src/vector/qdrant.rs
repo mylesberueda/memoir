@@ -1,16 +1,28 @@
 //! [`VectorIndex`] implementation backed by Qdrant.
+//!
+//! Qdrant only accepts `u64` or UUID values for point IDs (`PointId`), but
+//! memoir-core pids are nanoid strings — incompatible. Each upsert generates
+//! a fresh UUIDv4 as the point ID and stores the memoir pid in the point's
+//! payload under the `pid` key. Search, scroll, and delete paths all
+//! resolve the memoir pid via the payload; the UUID point ID is an
+//! implementation detail nobody outside this module sees.
+
+use std::collections::HashMap;
 
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::{
-    Condition, CreateCollectionBuilder, DeletePointsBuilder, Distance, Filter, PointId, PointStruct,
+    Condition, CreateCollectionBuilder, DeletePointsBuilder, Distance, Filter, PointStruct,
     QueryPointsBuilder, ScrollPointsBuilder, UpsertPointsBuilder, Value, VectorParamsBuilder,
-    point_id::PointIdOptions,
 };
+use uuid::Uuid;
 
 use super::{VectorError, VectorIndex};
 use crate::memory::{KindSelector, MemoryKind, Scope};
 
 const DEFAULT_COLLECTION: &str = "memoir_memories";
+
+/// Payload key under which each point stores its memoir pid.
+const PID_PAYLOAD_KEY: &str = "pid";
 
 /// Default [`VectorIndex`] backed by Qdrant.
 ///
@@ -79,14 +91,20 @@ impl VectorIndex for QdrantIndex {
         kind: MemoryKind,
         vector: Vec<f32>,
     ) -> Result<(), VectorError> {
-        let payload = [
+        // First delete any prior points carrying this pid in their payload,
+        // since the Qdrant point ID is a fresh UUID per upsert and won't
+        // collide with a previous write's ID.
+        self.delete_by_pids(&[pid]).await?;
+
+        let payload: HashMap<&str, Value> = HashMap::from([
+            (PID_PAYLOAD_KEY, Value::from(pid.to_string())),
             ("agent_id", Value::from(scope.agent_id.clone())),
             ("org_id", Value::from(scope.org_id.clone())),
             ("user_id", Value::from(scope.user_id.clone())),
             ("kind", Value::from(kind.as_str().to_string())),
-        ];
+        ]);
 
-        let point = PointStruct::new(pid.to_string(), vector, payload);
+        let point = PointStruct::new(Uuid::new_v4().to_string(), vector, payload);
 
         self.qdrant
             .upsert_points(UpsertPointsBuilder::new(&self.collection, vec![point]))
@@ -129,15 +147,15 @@ impl VectorIndex for QdrantIndex {
                     .query(query_embedding)
                     .limit(limit as u64)
                     .filter(filter)
-                    .with_payload(false),
+                    .with_payload(true),
             )
             .await
             .map_err(connection)?;
 
         let mut hits = Vec::with_capacity(response.result.len());
         for scored in response.result {
-            if let Some(id) = scored.id.and_then(point_id_to_string) {
-                hits.push((id, scored.score));
+            if let Some(pid) = pid_from_payload(&scored.payload) {
+                hits.push((pid, scored.score));
             }
         }
         Ok(hits)
@@ -148,9 +166,17 @@ impl VectorIndex for QdrantIndex {
             return Ok(());
         }
 
-        let point_ids: Vec<PointId> = pids.iter().map(|p| PointId::from((*p).to_string())).collect();
+        // Pids live in payload, not in the point ID, so delete by payload
+        // filter. Each pid translates to a `match` condition; the wrapper
+        // `Filter::should` (logical OR) covers a batch of pids in one call.
+        let conditions: Vec<Condition> = pids
+            .iter()
+            .map(|p| Condition::matches(PID_PAYLOAD_KEY, (*p).to_string()))
+            .collect();
+        let filter = Filter::should(conditions);
+
         self.qdrant
-            .delete_points(DeletePointsBuilder::new(&self.collection).points(point_ids))
+            .delete_points(DeletePointsBuilder::new(&self.collection).points(filter))
             .await
             .map_err(connection)?;
         Ok(())
@@ -168,13 +194,13 @@ impl VectorIndex for QdrantIndex {
         ]);
 
         let mut pids = Vec::new();
-        let mut offset: Option<PointId> = None;
+        let mut offset: Option<qdrant_client::qdrant::PointId> = None;
 
         loop {
             let mut request = ScrollPointsBuilder::new(&self.collection)
                 .filter(filter.clone())
                 .limit(page_size as u32)
-                .with_payload(false)
+                .with_payload(true)
                 .with_vectors(false);
             if let Some(o) = offset.take() {
                 request = request.offset(o);
@@ -183,8 +209,8 @@ impl VectorIndex for QdrantIndex {
             let response = self.qdrant.scroll(request).await.map_err(connection)?;
 
             for point in response.result {
-                if let Some(id) = point.id.and_then(point_id_to_string) {
-                    pids.push(id);
+                if let Some(pid) = pid_from_payload(&point.payload) {
+                    pids.push(pid);
                 }
             }
 
@@ -202,11 +228,15 @@ fn connection<E: std::fmt::Display>(err: E) -> VectorError {
     VectorError::Connection(err.to_string())
 }
 
-fn point_id_to_string(id: PointId) -> Option<String> {
-    match id.point_id_options? {
-        PointIdOptions::Uuid(s) => Some(s),
-        PointIdOptions::Num(n) => Some(n.to_string()),
-    }
+/// Extracts the memoir pid from a Qdrant point's payload, if present.
+///
+/// Returns `None` when the payload lacks a `pid` key or carries a non-string
+/// value — both should be impossible for points written via [`QdrantIndex::upsert`],
+/// but defending against malformed remote state keeps the search side robust.
+fn pid_from_payload(payload: &HashMap<String, Value>) -> Option<String> {
+    payload
+        .get(PID_PAYLOAD_KEY)
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
 }
 
 #[cfg(test)]
@@ -214,18 +244,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn should_convert_uuid_point_id_to_string() {
-        let id = PointId {
-            point_id_options: Some(PointIdOptions::Uuid("abc123".to_string())),
-        };
-        assert_eq!(point_id_to_string(id), Some("abc123".to_string()));
+    fn should_extract_pid_from_payload_when_present() {
+        let payload = HashMap::from([(PID_PAYLOAD_KEY.to_string(), Value::from("my-pid".to_string()))]);
+        assert_eq!(pid_from_payload(&payload), Some("my-pid".to_string()));
     }
 
     #[test]
-    fn should_convert_numeric_point_id_to_string() {
-        let id = PointId {
-            point_id_options: Some(PointIdOptions::Num(42)),
-        };
-        assert_eq!(point_id_to_string(id), Some("42".to_string()));
+    fn should_return_none_when_pid_absent_from_payload() {
+        let payload = HashMap::from([("other".to_string(), Value::from("x".to_string()))]);
+        assert_eq!(pid_from_payload(&payload), None);
+    }
+
+    #[test]
+    fn should_return_none_when_pid_value_is_not_a_string() {
+        let payload = HashMap::from([(PID_PAYLOAD_KEY.to_string(), Value::from(42i64))]);
+        assert_eq!(pid_from_payload(&payload), None);
     }
 }

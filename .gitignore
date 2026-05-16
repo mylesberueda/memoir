@@ -97,3 +97,5 @@ AGENTS.md
 .gemini/
 .claude/
 .serena/
+
+.fastembed_cache/

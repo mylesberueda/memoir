@@ -157,6 +157,29 @@ async fn execute(builder: RememberBuilder<'_>) -> Result<Memories, ClientError> 
         )
         .await?;
 
+    // Enqueue an extract job only when an extraction LLM is configured.
+    // Without one, the worker's extract handler skips with a WARN and the
+    // job sits in the queue with no path to completion — wasted state.
+    // The check is `is_some()` rather than `is_empty()` so a registry
+    // populated only with a contradiction LLM (and no extraction LLM)
+    // still skips enqueuing extract work.
+    if inner.llms.get(crate::llm::LlmRole::Extraction).is_some() {
+        inner
+            .jobs
+            .enqueue(
+                crate::jobs::JobKind::Extract,
+                written.pid.clone(),
+                serde_json::json!({ "origin": "remember" }),
+            )
+            .await?;
+        tracing::event!(
+            name: "memoir.remember.extract_enqueued",
+            tracing::Level::DEBUG,
+            pid = %written.pid,
+            "extract job enqueued for {{pid}}",
+        );
+    }
+
     let query_vector = inner.embedder.embed(&prompt).await?;
     let hits = inner.index.search(scope, query_vector, limit, kinds).await?;
 

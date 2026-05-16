@@ -13,3 +13,9 @@ pub use client::{Client, DEFAULT_SYSTEM_PROMPT};
 
 #[doc(inline)]
 pub use llm::DEFAULT_EXTRACTION_PROMPT;
+
+/// Default Postgres schema for memoir-core's tables.
+///
+/// Consumers configuring a custom schema via `Client::builder().schema(...)`
+/// can fall back to this when no override is supplied.
+pub use memoir_core_migration::DEFAULT_SCHEMA;

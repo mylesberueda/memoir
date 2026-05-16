@@ -36,10 +36,12 @@
 			"executor": "nx:run-commands",
 			"options": {
 				"cwd": "{projectRoot}",
-				"commands": ["cargo test --release --features integration"],
+				"commands": ["cargo test --release --features integration -- --test-threads 1"],
 				"env": {
 					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_service_test",
-					"QDRANT_URL": "http://localhost:6334"
+					"QDRANT_URL": "http://localhost:6334",
+					"OLLAMA_URL": "http://localhost:11434",
+					"OLLAMA_MODEL": "llama3.2:1b"
 				}
 			},
 			"cache": true,

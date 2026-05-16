@@ -114,7 +114,7 @@ variable "postgres_password" {
 variable "postgres_databases" {
   description = "List of databases to create for services."
   type        = list(string)
-  default     = ["memoir_server", "memoir_server_test"]
+  default     = ["memoir_service", "memoir_service_test"]
 }
 
 # ============================================================================

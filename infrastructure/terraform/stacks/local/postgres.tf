@@ -32,8 +32,8 @@ locals {
   # Pre-cleanup this map associated database name -> service name (e.g.
   # "api_service" -> "api-service") so that downstream consumers could look
   # up the right URL by service name. After 0002's deletes, no services
-  # remain — the future memoir-server epic re-introduces a single
-  # database_name -> service_name binding for memoir_server.
+  # remain — memoir-service now owns its own database_name -> service_name
+  # binding for memoir_service.
   #
   # For Kind pods: use container hostname (memoir-postgres:5432).
   # For local dev: use localhost:54321.

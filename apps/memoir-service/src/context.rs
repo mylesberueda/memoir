@@ -33,7 +33,7 @@ pub(crate) struct AppContext {
 impl AppContext {
     pub(crate) async fn new() -> Result<Arc<Self>, AppContextError> {
         let service_schema = Env::get_or("MEMOIR_SERVICE_SCHEMA", migration::DEFAULT_SCHEMA);
-        let memoir_schema = Env::get_or("MEMOIR_SCHEMA", memoir_core_migration::DEFAULT_SCHEMA);
+        let memoir_schema = Env::get_or("MEMOIR_SCHEMA", memoir_core::DEFAULT_SCHEMA);
         let db = Db::init(&memoir_schema, &service_schema).await?;
         Db::apply_migrations(&db, &service_schema).await?;
         let qdrant = QdrantBootstrap::init()?;
