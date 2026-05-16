@@ -36,19 +36,3 @@ provider "helm" {
   }
 }
 
-# ============================================================================
-# Zitadel Provider (for zitadel module)
-# ============================================================================
-
-provider "zitadel" {
-  domain           = "auth.staging.${var.domain}"
-  port             = "443"
-  insecure         = false
-  jwt_profile_file = var.zitadel_jwt_profile_file
-}
-
-# ============================================================================
-# Stripe Provider (uses STRIPE_API_KEY env var)
-# ============================================================================
-
-provider "stripe" {}

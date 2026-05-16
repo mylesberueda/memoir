@@ -185,8 +185,3 @@ resource "google_compute_global_address" "argocd" {
   name    = "argocd-${var.environment}-ip"
   project = var.project_id
 }
-
-resource "google_compute_global_address" "zitadel" {
-  name    = "zitadel-${var.environment}-ip"
-  project = var.project_id
-}

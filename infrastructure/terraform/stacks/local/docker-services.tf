@@ -20,7 +20,7 @@
 # - Containers must be running on the "kind" network
 
 data "external" "container_ip" {
-  for_each = var.enable_kubernetes ? toset(["memoir-postgres", "memoir-redis", "memoir-zitadel"]) : toset([])
+  for_each = var.enable_kubernetes ? toset(["memoir-postgres", "memoir-redis"]) : toset([])
 
   program = ["bash", "-c", <<-EOF
     IP=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{if eq .NetworkID "'$(docker network inspect kind --format '{{.Id}}')'"}}{{.IPAddress}}{{end}}{{end}}' ${each.value} 2>/dev/null)
@@ -49,10 +49,6 @@ locals {
     "memoir-redis" = {
       ip   = data.external.container_ip["memoir-redis"].result.ip
       port = 6379
-    }
-    "memoir-zitadel" = {
-      ip   = data.external.container_ip["memoir-zitadel"].result.ip
-      port = 8080
     }
   } : {}
 }

@@ -1,0 +1,30 @@
+{
+	"name": "memoir-sdk-rs",
+	"$schema": "../../node_modules/nx/schemas/project-schema.json",
+	"projectType": "library",
+	"sourceRoot": "packages/memoir-sdk-rs/src",
+	"targets": {
+		"cargo": {
+			"command": "cargo",
+			"options": {
+				"cwd": "{projectRoot}"
+			}
+		},
+		"build": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "cargo build --release"
+			},
+			"cache": true,
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/Cargo.toml"],
+			"outputs": ["{projectRoot}/target/release"]
+		},
+		"typecheck": {
+			"command": "cd {projectRoot} && cargo check",
+			"cache": true,
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/Cargo.toml"]
+		}
+	},
+	"tags": ["scope:shared", "type:lib", "lang:rust", "proto"]
+}

@@ -32,11 +32,6 @@ output "argocd_ip" {
   value       = module.gke.argocd_ip
 }
 
-output "zitadel_ip" {
-  description = "Static IP for Zitadel ingress"
-  value       = module.gke.zitadel_ip
-}
-
 # ============================================================================
 # URLs
 # ============================================================================
@@ -44,11 +39,6 @@ output "zitadel_ip" {
 output "argocd_url" {
   description = "ArgoCD URL"
   value       = "https://argocd.${var.domain}"
-}
-
-output "zitadel_url" {
-  description = "Zitadel URL"
-  value       = module.zitadel_gke.external_url
 }
 
 output "app_url" {
@@ -86,9 +76,8 @@ output "cloud_sql_private_ip" {
 output "dns_records_required" {
   description = "DNS A records that need to be created"
   value = {
-    "${var.domain}"        = module.gke.ingress_ip
-    "api.staging.${var.domain}"    = module.gke.ingress_ip
-    "argocd.${var.domain}" = module.gke.argocd_ip
-    "auth.${var.domain}"   = module.gke.zitadel_ip
+    "${var.domain}"                          = module.gke.ingress_ip
+    "api.${local.environment}.${var.domain}" = module.gke.ingress_ip
+    "argocd.${var.domain}"                   = module.gke.argocd_ip
   }
 }

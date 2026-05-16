@@ -12,21 +12,17 @@ chrono = "0.4"
 color-eyre = { workspace = true }
 common-rs = { path = "../../packages/common-rs" }
 dashmap = "6.1"
-platform-rs = { path = "../../packages/platform-rs" }
 example-grpc-service-migration = { path = "./migration" }
 http = { version = "1.4" }
-jsonwebtoken = { version = "10.2", features = ["rust_crypto"] }
 pbjson-types = "0.9.0"
-proto-rs = { path = "../../packages/proto-rs" }
+memoir-sdk = { package = "polypixel-memoir-sdk", path = "../../packages/memoir-sdk-rs" }
 reqwest = { version = "0.12", features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-strum = { version = "0.27", features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tonic = { workspace = true }
 tonic-health = { version = "0.14.2" }
-tower = { version = "0.5" }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 

@@ -64,17 +64,11 @@ variable "target_revision" {
 }
 
 variable "services" {
-  description = "List of services to deploy via ArgoCD"
+  description = "List of services to deploy via ArgoCD. Empty until the memoir-server epic populates this."
   type = list(object({
     name    = string
     enabled = bool
   }))
-  default = [
-    { name = "api-service", enabled = true },
-    { name = "rig-service", enabled = true },
-    { name = "chat-service", enabled = true },
-    { name = "notification-service", enabled = true },
-    { name = "web", enabled = true }
-  ]
+  default = []
 }
 

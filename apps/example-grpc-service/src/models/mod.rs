@@ -1,4 +1,4 @@
-pub(crate) mod _entity;
-
-#[allow(unused_imports)] // DELETEME(_): Delete if not example service
-pub(crate) use _entity::sea_orm_active_enums::*;
+// Empty for now. The future memoir-server epic introduces SeaORM entities
+// generated against the real memoir schema. The template's `_entity/` directory
+// (users, organizations, organization_plans, etc.) was deleted by epic 0002
+// once its source migrations were gone.

@@ -28,42 +28,27 @@ resource "postgresql_database" "service_dbs" {
 # ============================================================================
 
 locals {
-  # Map database names to service names for clearer output
-  # Database name -> Service name (as used in k8s/services)
-  db_to_service = {
-    "api_service"          = "api-service"
-    "chat_service"         = "chat-service"
-    "notification_service" = "notification-service"
-    "rig_service"          = "rig-service"
-  }
-
-  # Build DATABASE_URL for each service as a list
-  # For Kind pods: use container hostname (memoir-postgres:5432)
-  # For local dev: use localhost:54321
+  # Build DATABASE_URL for each database.
+  # Pre-cleanup this map associated database name -> service name (e.g.
+  # "api_service" -> "api-service") so that downstream consumers could look
+  # up the right URL by service name. After 0002's deletes, no services
+  # remain — the future memoir-server epic re-introduces a single
+  # database_name -> service_name binding for memoir_server.
+  #
+  # For Kind pods: use container hostname (memoir-postgres:5432).
+  # For local dev: use localhost:54321.
   database_urls = [
     for db in var.postgres_databases : {
-      service  = lookup(local.db_to_service, db, db)
+      service  = db
       database = db
-      # URL for Kind pods (via Docker network)
-      cluster = "postgres://${var.postgres_user}:${var.postgres_password}@memoir-postgres:5432/${db}"
-      # URL for local development (via port mapping)
-      local = "postgres://${var.postgres_user}:${var.postgres_password}@localhost:${var.postgres_port}/${db}"
+      cluster  = "postgres://${var.postgres_user}:${var.postgres_password}@memoir-postgres:5432/${db}"
+      local    = "postgres://${var.postgres_user}:${var.postgres_password}@localhost:${var.postgres_port}/${db}"
     }
   ]
 
-  # Services that need Redis
-  redis_services = ["api-service", "rig-service", "chat-service", "notification-service", "web"]
-
-  # Build REDIS_URL for each service as a list (same structure as database_urls)
-  # For Kind pods: use container hostname (memoir-redis:6379)
-  # For local dev: use localhost:63791
-  redis_urls = [
-    for service in local.redis_services : {
-      service = service
-      # URL for Kind pods (via Docker network)
-      cluster = "redis://memoir-redis:6379"
-      # URL for local development (via port mapping)
-      local = "redis://localhost:${var.redis_port}"
-    }
-  ]
+  # REDIS_URL per service.
+  # Empty until the memoir-server epic adds memoir-server as a Redis consumer.
+  # Even then, Memoir's deployment-tier model (README: cache profile is opt-in)
+  # means Redis may not be a required consumer for the default profile.
+  redis_urls = []
 }

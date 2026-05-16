@@ -1,7 +1,7 @@
 # Staging Stack
 
 Provisions the complete staging environment on GCP: GKE, Cloud SQL, Artifact
-Registry, ArgoCD, Zitadel, and Stripe.
+Registry, and ArgoCD.
 
 ## Environment Variables
 

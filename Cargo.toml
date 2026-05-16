@@ -1,55 +1,20 @@
 [workspace]
 resolver = "2"
 members = [
-  "cli",
-  "apps/api-service",
-  "apps/api-service/migration",
-  "apps/rig-service",
-  "apps/rig-service/migration",
-  "apps/chat-service",
-  "apps/chat-service/migration",
-  "apps/notification-service",
-  "apps/notification-service/migration",
   "apps/example-grpc-service",
   "apps/example-grpc-service/migration",
   "packages/common-rs",
-  "packages/platform-rs",
 ]
 
 [workspace.dependencies]
-aws-config = { version = "1", features = ["behavior-version-latest"] }
-aws-sdk-s3 = { version = "1", features = ["behavior-version-latest"] }
-aws-smithy-types = { version = "1" }
-bon = { version = "3.9" }
-qdrant-client = { version = "1" }
-chrono = { version = "0.4" }
 color-eyre = { version = "0.6" }
-dashmap = { version = "6.1" }
-fred = { version = "10.1.0" }
-http = { version = "1.4" }
-kameo = { version = "0.19.2" }
-kreuzberg = { version = "4" }
-nanoid = { version = "0.4.0" }
-phf = { version = "0.13" }
-rand = { version = "0.10" }
-reqwest = { version = "0.13", features = ["json"] }
-rig-core = { version = "0.31" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
-snafu = { version = "0.8" }
-strum = { version = "0.28", features = ["derive"] }
 thiserror = { version = "2.0" }
-uuid = { version = "1", features = ["v4"] }
 tokio = { version = "1.49" }
 tonic = { version = "0.14" }
-tower = { version = "0.5" }
-axum = { version = "0.8", features = ["http2"] }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3" }
-
-[workspace.dependencies.sea-orm]
-version = "2.0.0-rc.20"
-features = ["sqlx-postgres", "runtime-tokio-rustls"]
 
 [profile.release]
 lto = "thin"

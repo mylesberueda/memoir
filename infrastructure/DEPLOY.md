@@ -51,7 +51,7 @@ ArgoCD UI → Sync button. Or:
 argocd app sync <project>-<env>
 ```
 
-(App naming convention is `<project>-<env>`, e.g., `api-service-staging`.)
+(App naming convention is `<project>-<env>`, e.g., `memoir-server-staging`.)
 
 ## Forking the template — bot identity
 

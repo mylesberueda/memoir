@@ -10,16 +10,8 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 2.25"
     }
-    zitadel = {
-      source  = "zitadel/zitadel"
-      version = "~> 2.7.0"
-    }
     http = {
       source  = "hashicorp/http"
-      version = "~> 3.4"
-    }
-    stripe = {
-      source  = "lukasaron/stripe"
       version = "~> 3.4"
     }
     local = {

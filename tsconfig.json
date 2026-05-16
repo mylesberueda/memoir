@@ -3,10 +3,10 @@
 	"files": [],
 	"references": [
 		{
-			"path": "./apps/web"
+			"path": "./apps/memoir-ui"
 		},
 		{
-			"path": "./e2e/web"
+			"path": "./e2e/memoir-ui"
 		}
 	],
 	"ts-node": {

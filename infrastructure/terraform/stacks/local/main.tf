@@ -3,8 +3,11 @@
 # One `terraform apply` to stand up everything:
 # - ArgoCD for GitOps deployments
 # - GHCR pull secret (for container images)
-# - Zitadel configuration (auth)
-# - Stripe configuration (billing)
+# - Postgres + Redis Docker bridge to Kubernetes
+#
+# Auth (Zitadel) and billing (Stripe) were removed in epic 0002. The future
+# memoir-server epic introduces local auth as part of memoir-server itself,
+# not as a separate infrastructure service.
 
 # ============================================================================
 # GitHub Container Registry Pull Secret
@@ -104,112 +107,19 @@ resource "kubernetes_deployment" "cloudflared" {
 }
 
 # ============================================================================
-# Zitadel Module
-# ============================================================================
-
-module "zitadel" {
-  source = "../../modules/zitadel"
-
-  environment              = "local"
-  zitadel_domain           = var.zitadel_domain
-  zitadel_port             = var.zitadel_port
-  zitadel_insecure         = var.zitadel_insecure
-  zitadel_jwt_profile_file = var.zitadel_jwt_profile_file
-  zitadel_org_name         = var.zitadel_org_name
-  zitadel_redirect_uri     = var.zitadel_redirect_uri
-  app_login_url            = var.app_login_url
-  app_internal_url         = var.app_internal_url
-  discord_client_id        = var.discord_client_id
-  discord_client_secret    = var.discord_client_secret
-  github_client_id         = var.github_client_id
-  github_client_secret     = var.github_client_secret
-}
-
-# ============================================================================
-# Stripe Module
-# ============================================================================
-
-module "stripe" {
-  source = "../../modules/stripe"
-
-  environment                   = "local"
-  stripe_price_plus_cents       = var.stripe_price_plus_cents
-  stripe_price_pro_cents        = var.stripe_price_pro_cents
-  stripe_price_enterprise_cents = var.stripe_price_enterprise_cents
-  stripe_webhook_url            = var.stripe_webhook_url
-  app_login_url                 = var.app_login_url
-}
-
-# ============================================================================
 # Combined Outputs JSON File
 # ============================================================================
-# Generates the terraform-outputs.json for CLI consumption
+# Generates the terraform-outputs.json for CLI consumption.
+#
+# Pre-cleanup this file contained Zitadel client IDs, Stripe prices, and
+# per-service keys. After 0002's deletes, only postgres + redis URLs remain
+# — and even those will be reshaped by the future memoir-server epic when
+# the database naming is decided.
 
 resource "local_file" "terraform_outputs" {
   filename        = "../../../../.data/terraform/development.json"
   file_permission = "0600"
   content = jsonencode({
-    zitadel_url = module.zitadel.zitadel_url
-    project_id  = module.zitadel.project_id
-    services = {
-      api = {
-        user_id            = module.zitadel.api_user_id
-        key_id             = module.zitadel.api_key_id
-        private_key_base64 = module.zitadel.api_private_key_base64
-        client_id          = module.zitadel.api_client_id
-      }
-      agent_api = {
-        user_id            = module.zitadel.agent_api_user_id
-        key_id             = module.zitadel.agent_api_key_id
-        private_key_base64 = module.zitadel.agent_api_private_key_base64
-        client_id          = module.zitadel.agent_api_client_id
-      }
-      api_service = {
-        user_id            = module.zitadel.api_service_user_id
-        key_id             = module.zitadel.api_service_key_id
-        private_key_base64 = module.zitadel.api_service_private_key_base64
-        client_id          = module.zitadel.api_service_client_id
-      }
-      rig_service = {
-        user_id            = module.zitadel.rig_service_user_id
-        key_id             = module.zitadel.rig_service_key_id
-        private_key_base64 = module.zitadel.rig_service_private_key_base64
-        client_id          = module.zitadel.rig_service_client_id
-      }
-      chat_service = {
-        user_id            = module.zitadel.chat_service_user_id
-        key_id             = module.zitadel.chat_service_key_id
-        private_key_base64 = module.zitadel.chat_service_private_key_base64
-        client_id          = module.zitadel.chat_service_client_id
-      }
-      notification_service = {
-        user_id            = module.zitadel.notification_service_user_id
-        key_id             = module.zitadel.notification_service_key_id
-        private_key_base64 = module.zitadel.notification_service_private_key_base64
-        client_id          = module.zitadel.notification_service_client_id
-      }
-      web = {
-        client_id           = module.zitadel.web_client_id
-        key_details         = module.zitadel.web_key_details
-        service_user_id     = module.zitadel.web_service_user_id
-        service_key_id      = module.zitadel.web_service_key_id
-        service_key_details = module.zitadel.web_service_key_details
-        webhook_signing_key = module.zitadel.zitadel_webhook_signing_key
-      }
-    }
-    api_audiences = {
-      profile_service = module.zitadel.profile_service_client_id
-    }
-    cli = {
-      user_id = module.zitadel.cli_user_id
-      pat     = module.zitadel.cli_pat
-    }
-    roles = module.zitadel.roles
-    stripe = {
-      prices           = module.stripe.prices
-      webhook_secret   = module.stripe.webhook_secret
-      portal_config_id = module.stripe.portal_configuration_id
-    }
     postgres = {
       databases = var.postgres_databases
       urls      = local.database_urls
@@ -217,7 +127,6 @@ resource "local_file" "terraform_outputs" {
     redis = {
       urls = local.redis_urls
     }
-    project_id   = module.zitadel.project_id
     generated_at = timestamp()
   })
 }

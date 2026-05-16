@@ -1,0 +1,49 @@
+{
+	"name": "memoir-ui-e2e",
+	"$schema": "../../node_modules/nx/schemas/project-schema.json",
+	"sourceRoot": "e2e/memoir-ui",
+	"tags": ["scope:memoir-ui", "type:e2e", "lang:node"],
+	"implicitDependencies": ["memoir-ui"],
+	"targets": {
+		"test:e2e": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "playwright test --config=./playwright.config.ts",
+				"cwd": "{projectRoot}"
+			},
+			"outputs": ["{workspaceRoot}/dist/.playwright", "{workspaceRoot}/test-results/{projectRoot}"]
+		},
+		"format": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "biome format",
+				"cwd": "{projectRoot}"
+			},
+			"cache": true
+		},
+		"format:fix": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "biome format --write",
+				"cwd": "{projectRoot}"
+			},
+			"cache": true
+		},
+		"lint": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "biome check --no-errors-on-unmatched --files-ignore-unknown=true ./",
+				"cwd": "{projectRoot}"
+			},
+			"cache": true
+		},
+		"lint:fix": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "biome check --no-errors-on-unmatched --files-ignore-unknown=true --write --unsafe ./",
+				"cwd": "{projectRoot}"
+			},
+			"cache": true
+		}
+	}
+}

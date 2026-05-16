@@ -102,7 +102,7 @@ pub fn init_with_defaults() -> crate::Result<()> {
 /// use common_rs::logging::{init, LoggingConfig, LogFormat};
 ///
 /// let config = LoggingConfig {
-///     service_name: "api-service".to_string(),
+///     service_name: "memoir-server".to_string(),
 ///     format: Some(LogFormat::Json),
 ///     default_level: "debug".to_string(),
 /// };

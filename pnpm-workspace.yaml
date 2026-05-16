@@ -1,4 +1,3 @@
 packages:
-  - "apps/agent-web"
-  - "apps/web"
+  - "apps/memoir-ui"
   - "packages/*"

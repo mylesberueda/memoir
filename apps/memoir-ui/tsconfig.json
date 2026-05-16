@@ -1,0 +1,55 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"jsx": "preserve",
+		"noEmit": true,
+		"emitDeclarationOnly": false,
+		"resolveJsonModule": true,
+		"lib": ["dom", "dom.iterable", "esnext"],
+		"allowJs": true,
+		"plugins": [
+			{
+				"name": "next"
+			}
+		],
+		"paths": {
+			"@/*": ["./src/*"],
+			"@actions": ["./src/actions"],
+			"@actions/*": ["./src/actions/*"],
+			"@components": ["./src/components"],
+			"@components/*": ["./src/components/*"],
+			"@hooks": ["./src/hooks"],
+			"@hooks/*": ["./src/hooks/*"],
+			"@providers": ["./src/providers"],
+			"@providers/*": ["./src/providers/*"],
+			"@lib": ["./src/lib"],
+			"@lib/*": ["./src/lib/*"],
+			"@test-utils": ["./src/test-utils"],
+			"@test-utils/*": ["./src/test-utils/*"]
+		},
+		"types": ["jest", "node"],
+		"outDir": "dist",
+		"rootDir": "src",
+		"tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+	},
+	"include": [
+		"../../apps/memoir-ui/.next/types/**/*.ts",
+		"../../apps/memoir-ui/dist/.next/types/**/*.ts",
+		"../../apps/memoir-ui/dist/app/.next/types/**/*.ts",
+		"../../apps/memoir-ui/dist/build/.next/types/**/*.ts",
+		"../../dist/apps/memoir-ui/.next/types/**/*.ts",
+		".next/types/**/*.ts",
+		"next-env.d.ts",
+		"src/**/*.js",
+		"src/**/*.jsx",
+		"src/**/*.ts",
+		"src/**/*.tsx",
+		"../../apps/memoir-ui/.next/.next/types/**/*.ts"
+	],
+	"exclude": ["out-tsc", "dist", "node_modules", "jest.config.ts", ".next", "**/*.stories.ts", "**/*.stories.js"],
+	"references": [
+		{
+			"path": "./tsconfig.storybook.json"
+		}
+	]
+}

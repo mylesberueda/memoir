@@ -3,7 +3,5 @@
 # mise.local.toml is gitignored and should not be committed
 
 [env]
-# CLI
-# ------------------------------------------------------------------------------
-ZITADEL_URL = "http://localhost:5150"
-GOOGLE_CLOUD_PROJECT = "the-maple-tree"
+# Add per-developer environment overrides here as the memoir-server epic
+# adds them (e.g. JWT_SECRET, LLM provider API keys).

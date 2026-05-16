@@ -2,6 +2,12 @@
 
 Kubernetes manifests and Kustomize overlays for the local Kind cluster.
 
+Pre-cleanup this environment hosted ConfigMaps and Helm value overrides for
+five services (api-service, chat-service, notification-service, rig-service,
+web). Epic 0002 deleted those services and emptied the Kustomize patches +
+Helm values. The memoir-server scaffold and memoir-ui rename epics
+repopulate these.
+
 ## Applying ConfigMaps
 
 ConfigMaps are generated from each service's `.env` file, then patched with
@@ -34,59 +40,44 @@ pnpm k8s:configmap && kubectl apply -k infrastructure/kubernetes/environments/lo
 ## Network Architecture
 
 Services in the Kind cluster connect to infrastructure services (Postgres,
-Redis, Zitadel) running in Docker Compose via the shared `kind` Docker network:
+Redis) running in Docker Compose via the shared `kind` Docker network:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Kind Cluster                            │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
-│  │ api-service │  │ chat-service │  │ notification-svc  │   │
-│  └──────┬──────┘  └──────┬───────┘  └─────────┬─────────┘   │
-│         │                │                    │             │
-│         └────────────────┼────────────────────┘             │
-│                          │                                  │
-└──────────────────────────┼──────────────────────────────────┘
-                           │ kind network
-┌──────────────────────────┼──────────────────────────────────┐
-│                          │      Docker Compose              │
-│  ┌───────────────────┐   │   ┌─────────────────────────┐    │
-│  │ memoir-postgres│◄──┼──►│   memoir-zitadel     │    │
-│  │     :5432         │   │   │        :8080            │    │
-│  └───────────────────┘   │   └─────────────────────────┘    │
-│                          │                                  │
-│  ┌───────────────────┐   │                                  │
-│  │  memoir-redis  │◄──┘                                  │
-│  │      :6379        │                                      │
-│  └───────────────────┘                                      │
+│  ┌─────────────┐                                            │
+│  │ memoir-     │  (populated by the memoir-server epic)     │
+│  │   server    │                                            │
+│  └──────┬──────┘                                            │
+│         │                                                   │
+└─────────┼───────────────────────────────────────────────────┘
+          │ kind network
+┌─────────┼───────────────────────────────────────────────────┐
+│         ▼              Docker Compose                       │
+│  ┌────────────────┐   ┌────────────────┐                    │
+│  │ memoir-postgres│   │  memoir-redis  │                    │
+│  │     :5432      │   │     :6379      │                    │
+│  └────────────────┘   └────────────────┘                    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## URL Mappings
 
-The Kustomize patches override these localhost URLs with K8s-resolvable names:
+The Kustomize patches override these localhost URLs with K8s-resolvable names.
+Empty until the memoir-server epic adds its mapping.
 
 | Local Dev (.env)       | K8s Cluster (patched)           |
 |------------------------|---------------------------------|
-| `localhost:54321`      | `memoir-postgres:5432`       |
-| `localhost:63791`      | `memoir-redis:6379`          |
-| `localhost:5150`       | `memoir-zitadel:8080`        |
-| `localhost:5153`       | `rig-service:5153`              |
-| `localhost:5154`       | `api-service:5154`              |
-| `localhost:5155`       | `chat-service:5155`             |
-| `localhost:5156`       | `notification-service:5156`     |
+| `localhost:54321`      | `memoir-postgres:5432`          |
+| `localhost:63791`      | `memoir-redis:6379`             |
 
 ## Directory Structure
 
 ```
 local/
-├── kustomization.yaml    # Kustomize config with URL patches
+├── kustomization.yaml    # Kustomize config with URL patches (empty post-0002)
 ├── configmaps/           # Generated ConfigMaps (gitignored)
-│   ├── api-service.yaml
-│   ├── chat-service.yaml
-│   └── ...
-├── values/               # Helm values per service
-│   ├── api-service.yaml
-│   └── ...
+├── values/               # Helm values per service (empty post-0002)
 └── kind-config.yaml      # Kind cluster configuration
 ```
 
@@ -95,13 +86,3 @@ local/
 If you need to add or change URL overrides, edit the `patches` section in
 `kustomization.yaml`. Each patch targets a ConfigMap by name and merges
 additional `data` keys.
-
-## Files
-
-| File | Service | Database |
-|------|---------|----------|
-| `configmaps/api-service.yaml` | Main API | `api_service` |
-| `configmaps/chat-service.yaml` | Chat/messaging | `chat_service` |
-| `configmaps/notification-service.yaml` | Notifications | `notification_service` |
-| `configmaps/rig-service.yaml` | AI/LLM service | `rig_service` |
-| `configmaps/web.yaml` | Next.js frontend | - |

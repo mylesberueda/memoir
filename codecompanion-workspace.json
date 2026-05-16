@@ -1,6 +1,6 @@
 {
-  "name": "Pixel Dash",
+  "name": "Memoir",
   "version": "1.0.0",
-  "system_prompt": "Pixel Dash is a template NX-powered monorepo using Rust for backend services, and Nextjs for the ui.",
+  "system_prompt": "Memoir is a single-binary self-hosted memory service for AI agents. NX-powered monorepo with Rust backend (memoir-server, building from the apps/example-grpc-service seed) and Next.js admin UI (apps/memoir-ui).",
   "groups": []
 }
