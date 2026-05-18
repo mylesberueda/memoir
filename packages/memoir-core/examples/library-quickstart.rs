@@ -7,7 +7,7 @@
 //! 2. Build a `memoir_core::Client` from them.
 //! 3. Run migrations to provision memoir-core's schema.
 //! 4. `remember` a few conversation turns under a scope tuple.
-//! 5. Render the returned `Memories` via `Display` for system-prompt injection.
+//! 5. `search` for related memories and render via `Display` for system-prompt injection.
 //! 6. `recall` a specific memory by pid.
 //! 7. `forget` cleanups by Pid and by Scope.
 //!
@@ -106,19 +106,19 @@ async fn main() -> Result<(), BoxError> {
         .remember("the user is building a memory substrate called Memoir", scope.clone())
         .await?;
 
-    // The async embed substrate (ticket 0010) indexes the writes in the
-    // background. For demo purposes we briefly wait before retrieving; in a
-    // real handler you would just send the response and let the next request
-    // pick up the freshly-indexed rows.
+    // The async embed substrate indexes the writes in the background. For
+    // demo purposes we briefly wait before searching; in a real handler you
+    // would just send the response and let the next request pick up the
+    // freshly-indexed rows.
     println!("→ Waiting briefly for the background indexer...");
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    // Step 5 — render Memories via Display.
+    // Step 5 — search for related memories and render via Display.
     // The `Memories` type's `Display` impl emits the configured system prompt
     // (we passed `DEFAULT_SYSTEM_PROMPT`) followed by a bullet list of memory
     // content. Drop this directly into your LLM's system prompt.
     let memories = client
-        .remember("what is the user working on?", scope.clone())
+        .search("what is the user working on?", scope.clone())
         .limit(5)
         .await?;
 
@@ -128,7 +128,7 @@ async fn main() -> Result<(), BoxError> {
 
     // Step 6 — recall a specific memory by pid.
     // `recall` works at any lifecycle state (pending / indexed / failed),
-    // unlike `remember` which only returns indexed rows.
+    // unlike `search` which only returns indexed rows.
     if let Some(first) = memories.list().first() {
         let row = client.recall(&first.pid).await?;
         println!("=== Recalled pid={} ===", row.pid);

@@ -28,9 +28,10 @@ async fn should_extract_semantic_memories_from_episodic_content() -> anyhow::Res
     let _ = client.remember(content, scope.clone()).await?;
 
     // Resolve the just-written episodic pid via the embed substrate.
-    // `Client::remember` returns search hits, not the new row, and the new
-    // row stays `pending` until the embed job lands — so we poll until it
-    // becomes searchable.
+    // We could read `Client::remember`'s return value directly, but the
+    // extraction worker stage only fires after the embed job lands — so
+    // polling until the row becomes searchable also serves as a "worker
+    // has caught up" gate.
     let episodic_pid =
         common::wait_for_first_pid(&client, &scope, content, Duration::from_secs(15)).await?;
 

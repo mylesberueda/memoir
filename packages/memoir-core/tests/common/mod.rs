@@ -111,7 +111,8 @@ async fn build_test_client(extraction: Option<LlmConfig>) -> Result<TestClient> 
 
     // Spawn a worker so the queue actually drains. Without this, every
     // `Client::remember` would enqueue an embed job and tests would hang
-    // waiting for `wait_until_indexed` to never succeed.
+    // waiting for `wait_until_indexed` to never succeed (the row stays
+    // `pending` and `Client::search` filters it out).
     //
     // Short poll interval is appropriate for tests — production deployments
     // use the default 1-second interval. Short lease so a misbehaving test
@@ -223,7 +224,7 @@ pub async fn wait_until_indexed(
 
     while Instant::now() < deadline {
         let hits = client
-            .remember(query, scope.clone())
+            .search(query, scope.clone())
             .limit(50)
             .await
             .context("search probe failed")?;
@@ -239,11 +240,10 @@ pub async fn wait_until_indexed(
 
 /// Polls the scope until at least one indexed row is observable, returning its pid.
 ///
-/// Side effect: each poll iteration issues a `Client::remember`, which writes
-/// a new episodic row in `scope`. Tests that need the pid of the very first
-/// write use this and accept that subsequent polls may produce additional
-/// episodic rows with the same content. Once the embed substrate has
-/// indexed any one of them, polling stops.
+/// Pure observation: each poll iteration issues a `Client::search`, which
+/// reads only. Tests that need the pid of a prior write use this after the
+/// write completes, accepting that the embed substrate may take a moment
+/// to flip the row from `pending` to `indexed`.
 pub async fn wait_for_first_pid(
     client: &Client,
     scope: &Scope,
@@ -254,7 +254,7 @@ pub async fn wait_for_first_pid(
     let mut delay = Duration::from_millis(50);
 
     while Instant::now() < deadline {
-        let hits = client.remember(query, scope.clone()).limit(50).await?;
+        let hits = client.search(query, scope.clone()).limit(50).await?;
         if let Some(first) = hits.list().first() {
             return Ok(first.pid.clone());
         }

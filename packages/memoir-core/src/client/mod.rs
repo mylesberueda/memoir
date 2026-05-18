@@ -6,12 +6,14 @@ mod error;
 mod extract;
 mod reconcile;
 mod remember;
+mod search;
 mod worker;
 
 pub use admin::RetryBuilder;
 pub use error::ClientError;
 pub use reconcile::{ReconcileBuilder, ReconcileSummary};
 pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
+pub use search::{DEFAULT_LIMIT, SearchBuilder};
 pub use worker::{
     DEFAULT_DRAIN_TIMEOUT, DEFAULT_LEASE_DURATION, DEFAULT_MAX_ATTEMPTS, DEFAULT_POLL_INTERVAL,
     WorkerBuilder, WorkerHandle,
@@ -21,7 +23,7 @@ use std::sync::Arc;
 
 use bon::bon;
 use qdrant_client::Qdrant;
-use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+use sea_orm::{ConnectOptions, Database};
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
 use crate::jobs::{MemoryJobsStore, PostgresJobsStore};
@@ -66,7 +68,7 @@ impl Client {
     /// memoir-core owns its own connection pool. The pool's `search_path` is
     /// pinned to the configured schema so memoir-core's tables and
     /// migration ledger never collide with the consumer's other Postgres
-    /// state. The consumer never sees a [`DatabaseConnection`] — this is a
+    /// state. The consumer never sees a [`sea_orm::DatabaseConnection`] — this is a
     /// deliberate boundary so the library can manage its own connection
     /// lifecycle (search_path, pool sizing, future read-replica routing)
     /// without each consumer reinventing the same plumbing.
@@ -222,11 +224,14 @@ impl Client {
         &self.inner.index
     }
 
-    /// Writes `prompt` as an episodic memory and retrieves related memories.
+    /// Writes `prompt` as an episodic memory under `scope`.
     ///
-    /// Returns a per-call builder; await it to run the operation. The kind
-    /// toggles on the builder filter retrieval — the write is always episodic.
-    /// See [`RememberBuilder`] for builder methods.
+    /// Returns a per-call builder; await it to persist the row and enqueue
+    /// its embed (and, if extraction is configured, extract) job. The
+    /// returned [`Memory`] reflects the source-of-truth row; its vector
+    /// index entry is `pending` until the worker drains the embed job.
+    /// Use [`Client::search`] to retrieve memories — `remember` is
+    /// write-only.
     ///
     /// # Examples
     ///
@@ -234,15 +239,55 @@ impl Client {
     /// # use memoir_core::client::Client;
     /// # use memoir_core::memory::Scope;
     /// # async fn example(client: &Client, scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
-    /// let memories = client.remember("hello", scope).await?;
+    /// let written = client.remember("hello", scope).await?;
+    /// println!("wrote pid={}", written.pid);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping a database failure when the
+    /// row cannot be inserted, and [`ClientError::Jobs`] when the embed or
+    /// extract job cannot be enqueued.
+    pub fn remember(&self, prompt: impl Into<String>, scope: crate::memory::Scope) -> RememberBuilder<'_> {
+        RememberBuilder::new(self, prompt.into(), scope)
+    }
+
+    /// Searches indexed memories in `scope` by vector similarity to `query`.
+    ///
+    /// Returns a per-call builder; await it to embed the query, run the
+    /// vector search, and assemble the matching [`Memory`] rows. The kind
+    /// toggles on the builder filter retrieval. See [`SearchBuilder`] for
+    /// builder methods.
+    ///
+    /// Only memories whose vector index entry has reached `indexed` are
+    /// eligible. Rows still in `pending` (recently written via
+    /// [`Client::remember`], not yet drained by the worker) are filtered
+    /// out — they can still be inspected by pid via [`Client::recall`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use memoir_core::client::Client;
+    /// # use memoir_core::memory::Scope;
+    /// # async fn example(client: &Client, scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
+    /// let memories = client.search("hello", scope).limit(5).await?;
     /// for m in memories.list() {
     ///     println!("{}", m.content);
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub fn remember(&self, prompt: impl Into<String>, scope: crate::memory::Scope) -> RememberBuilder<'_> {
-        RememberBuilder::new(self, prompt.into(), scope)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Embedding`] if the query cannot be embedded,
+    /// [`ClientError::Vector`] if the vector index search fails, and
+    /// [`ClientError::Store`] wrapping a database failure when the matched
+    /// pids cannot be hydrated to full rows.
+    pub fn search(&self, query: impl Into<String>, scope: crate::memory::Scope) -> SearchBuilder<'_> {
+        SearchBuilder::new(self, query.into(), scope)
     }
 
     /// Looks up a single memory by its public id, at any lifecycle state.
