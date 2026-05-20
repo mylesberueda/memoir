@@ -37,6 +37,55 @@ async fn should_remember_return_written_episodic_memory() -> anyhow::Result<()> 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_remember_round_trip_metadata_unchanged() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+
+    let metadata = serde_json::json!({
+        "source": "test",
+        "session_id": "abc-123",
+        "tags": ["one", "two"],
+        "nested": { "count": 42, "weight": 0.5 },
+    });
+
+    let written = client
+        .remember("memory with non-trivial metadata", scope.clone())
+        .metadata(metadata.clone())
+        .await?;
+
+    assert_eq!(
+        written.metadata, metadata,
+        "the just-written row's metadata reflects what the builder sent"
+    );
+
+    let recalled = client.recall(&written.pid).await?;
+    assert_eq!(
+        recalled.metadata, metadata,
+        "metadata round-trips through Postgres JSONB without re-shaping"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_remember_default_metadata_to_empty_object_when_unset() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+
+    let written = client
+        .remember("memory without explicit metadata", scope.clone())
+        .await?;
+
+    assert_eq!(
+        written.metadata,
+        serde_json::json!({}),
+        "unset metadata defaults to empty object, matching the column default"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_search_isolate_scopes() -> anyhow::Result<()> {
     let client = common::fresh_client().await?;
     let scope_a = common::fresh_scope();

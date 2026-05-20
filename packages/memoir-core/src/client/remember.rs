@@ -39,7 +39,10 @@ below as a bulleted list of past content. Use them to maintain continuity:
 /// # use memoir_core::client::Client;
 /// # use memoir_core::memory::Scope;
 /// # async fn example(client: &Client, scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
-/// let written = client.remember("the user said hello", scope).await?;
+/// let written = client
+///     .remember("the user said hello", scope)
+///     .metadata(serde_json::json!({ "source": "chat" }))
+///     .await?;
 /// println!("wrote pid={}", written.pid);
 /// # Ok(())
 /// # }
@@ -49,11 +52,30 @@ pub struct RememberBuilder<'a> {
     client: &'a Client,
     prompt: String,
     scope: Scope,
+    metadata: serde_json::Value,
 }
 
 impl<'a> RememberBuilder<'a> {
     pub(super) fn new(client: &'a Client, prompt: String, scope: Scope) -> Self {
-        Self { client, prompt, scope }
+        Self {
+            client,
+            prompt,
+            scope,
+            metadata: serde_json::json!({}),
+        }
+    }
+
+    /// Attaches arbitrary JSON metadata to the written memory.
+    ///
+    /// The value is stored verbatim in the `memories.metadata` JSONB column
+    /// and surfaces unchanged through [`Client::recall`] and
+    /// [`Client::search`]. Operators viewing memories via the admin surface
+    /// see the same value — do not put secrets in metadata.
+    ///
+    /// Defaults to `{}` when unset, matching the column's schema default.
+    pub fn metadata(mut self, metadata: serde_json::Value) -> Self {
+        self.metadata = metadata;
+        self
     }
 }
 
@@ -67,12 +89,12 @@ impl<'a> IntoFuture for RememberBuilder<'a> {
 }
 
 async fn execute(builder: RememberBuilder<'_>) -> Result<Memory, ClientError> {
-    let RememberBuilder { client, prompt, scope } = builder;
+    let RememberBuilder { client, prompt, scope, metadata } = builder;
     let inner = client.inner.clone();
 
     let written = inner
         .store
-        .remember(scope, prompt, serde_json::json!({}), MemoryKind::Episodic, None)
+        .remember(scope, prompt, metadata, MemoryKind::Episodic, None)
         .await?;
 
     // Persistent write-behind: enqueue an embed job rather than running

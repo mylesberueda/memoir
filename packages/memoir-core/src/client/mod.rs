@@ -233,13 +233,19 @@ impl Client {
     /// Use [`Client::search`] to retrieve memories — `remember` is
     /// write-only.
     ///
+    /// Attach optional JSON metadata via [`RememberBuilder::metadata`];
+    /// without it the column defaults to `{}`.
+    ///
     /// # Examples
     ///
     /// ```no_run
     /// # use memoir_core::client::Client;
     /// # use memoir_core::memory::Scope;
     /// # async fn example(client: &Client, scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
-    /// let written = client.remember("hello", scope).await?;
+    /// let written = client
+    ///     .remember("hello", scope)
+    ///     .metadata(serde_json::json!({ "source": "chat" }))
+    ///     .await?;
     /// println!("wrote pid={}", written.pid);
     /// # Ok(())
     /// # }
