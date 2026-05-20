@@ -295,8 +295,17 @@ pub struct Memory {
     pub metadata: ::core::option::Option<::pbjson_types::Struct>,
     #[prost(message, optional, tag="5")]
     pub created_at: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Set when the worker has fully processed the memory (embedding + any
+    /// extraction). As of memoir-core v0.1 the library does not yet populate
+    /// a dedicated `processed_at` column — the field stays unset for now;
+    /// consumers should rely on `status == MEMORY_STATUS_PROCESSED` as the
+    /// canonical "ready" signal. The proto field is preserved so a future
+    /// library schema migration can backfill it without a proto bump.
     #[prost(message, optional, tag="6")]
     pub processed_at: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Lifecycle state. Maps from memoir-core's `memories.qdrant_status`
+    /// column (`pending` / `indexed` / `failed`) to PENDING / PROCESSED /
+    /// FAILED at the handler boundary.
     #[prost(enumeration="MemoryStatus", tag="7")]
     pub status: i32,
 }
@@ -305,7 +314,11 @@ pub struct Memory {
 pub struct SearchHit {
     #[prost(message, optional, tag="1")]
     pub memory: ::core::option::Option<Memory>,
-    /// Vector similarity score, higher is closer.
+    /// Cosine similarity, higher = closer. Range \[-1.0, 1.0\]; in practice
+    /// memoir-core's embedding model yields scores in \[0.0, 1.0\] for typical
+    /// semantic content. memoir-core's vector index returns this value
+    /// verbatim (no rank normalization), sourced from Qdrant's `query`
+    /// response per `packages/memoir-core/src/vector/qdrant.rs`.
     #[prost(float, tag="2")]
     pub score: f32,
 }
@@ -317,10 +330,18 @@ pub struct SearchRequest {
     pub scope: ::core::option::Option<Scope>,
     #[prost(string, tag="2")]
     pub query: ::prost::alloc::string::String,
+    /// Maximum hits to return. memoir-core treats `limit = 0` as "use library
+    /// default" (currently 10, per `packages/memoir-core/src/client/search.rs`
+    /// `DEFAULT_LIMIT`). The handler in memoir-service enforces a soft cap on
+    /// very large values — agents typically request 5-50. No cursor-based
+    /// pagination in v0.1.
     #[prost(int32, tag="3")]
     pub limit: i32,
     /// Optional metadata filter — JSON-encoded Qdrant payload filter.
-    /// Exact shape is implementation-defined and may evolve.
+    /// Exact shape is implementation-defined and may evolve. NOTE: as of
+    /// memoir-core v0.1 the library does not consume this field; handler
+    /// implementations may return Unimplemented or drop it until the library
+    /// gains a metadata-filter builder option.
     #[prost(message, optional, tag="4")]
     pub metadata_filter: ::core::option::Option<::pbjson_types::Struct>,
 }
@@ -350,6 +371,10 @@ pub struct RememberRequest {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RememberResponse {
+    /// The persisted memory. `status` is always `MEMORY_STATUS_PENDING` at
+    /// write time — the worker drains the embed (and, if configured, extract)
+    /// queue asynchronously. Consumers needing job-state visibility use the
+    /// `AdminService` (see `admin.proto`) rather than additional fields here.
     #[prost(message, optional, tag="1")]
     pub memory: ::core::option::Option<Memory>,
 }
@@ -375,8 +400,13 @@ pub mod forget_request {
         Scope(super::Scope),
     }
 }
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ForgetResponse {
+    /// The pids that were actually removed from the source of truth. Empty
+    /// when the target matched no rows (not an error). Mirrors the library's
+    /// `Client::forget` return shape (`Vec<String>`).
+    #[prost(string, repeated, tag="1")]
+    pub deleted_pids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
