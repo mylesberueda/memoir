@@ -1,36 +1,49 @@
-//! `MemoryService` stub handler.
+//! `MemoryService` gRPC handler.
 //!
-//! The proto surface is defined in `memoir.v1.MemoryService` to lock in the
-//! SDK shape for consumers. The actual memory implementation (Qdrant vector
-//! search, write-behind queue, contradiction detection) lands in the memory
-//! epic; reference material is at
-//! `.tasks/0002-cleanup-and-prep/.reference/rig-memory/`.
+//! Thin adapter over `memoir_core::Client`. Each RPC follows the same
+//! five-step skeleton:
 //!
-//! Every RPC returns [`tonic::Status::unimplemented`] *after* the request
-//! has been authenticated by the shared
-//! [`crate::middleware::auth::Authenticator`]. Unauthenticated callers
-//! therefore see `Unauthenticated`, not `Unimplemented` — the auth
-//! surface is enforced consistently across both services.
+//! 1. Authenticate the request via [`Authenticator::authenticate`] —
+//!    surfaces `Unauthenticated` for missing/invalid credentials.
+//! 2. Unwrap the proto request into library types via
+//!    [`crate::services::conversions`] — surfaces `InvalidArgument`
+//!    for malformed input (empty scope fields, missing oneof target,
+//!    metadata that can't round-trip through JSON).
+//! 3. Call the corresponding `ctx.memoir.<method>` per ticket 0009's
+//!    library-method-to-RPC mapping.
+//! 4. Map any [`memoir_core::client::ClientError`] to a `tonic::Status`
+//!    via [`crate::services::conversions::client_error_to_status`].
+//! 5. Wrap the library return value in the proto response shape.
+//!
+//! ## Caller identity & scope
+//!
+//! v0.1 trusts an authenticated caller to choose any scope they write to
+//! or read from. Per-scope role / scope-binding policy is an
+//! auth-hardening concern and lives in a future epic. Today the caller's
+//! pid is logged for audit but not threaded into memoir-core (which has
+//! no caller concept by design — the host process is the trust boundary
+//! for library users).
 
 use std::sync::Arc;
 
 use memoir_sdk::memoir::v1::memory_service_server::MemoryService;
 use memoir_sdk::memoir::v1::{
-    ForgetRequest, ForgetResponse, RecallRequest, RecallResponse, RememberRequest, RememberResponse, SearchRequest,
-    SearchResponse,
+    ForgetRequest, ForgetResponse, RecallRequest, RecallResponse, RememberRequest, RememberResponse, SearchHit,
+    SearchRequest, SearchResponse,
 };
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
-use crate::middleware::auth::Authenticator;
-
-/// Message returned by every `MemoryService` RPC until real handlers land.
-const UNIMPLEMENTED_MESSAGE: &str = "memory service not yet implemented";
+use crate::middleware::auth::{Authenticator, Principal};
+use crate::services::conversions::{
+    client_error_to_status, forget_target_from_proto, memory_to_proto, metadata_from_proto, scope_from_proto,
+};
 
 /// `MemoryService` RPC handler.
 ///
-/// Holds an [`AppContext`] reference so future real handlers have a DB
-/// connection at the call site without an API change.
+/// Holds an [`AppContext`] reference so each handler can reach
+/// `ctx.memoir` (the library [`memoir_core::client::Client`]) and
+/// `ctx.auth` (the [`Authenticator`]).
 pub struct Memory {
     ctx: Arc<AppContext>,
 }
@@ -45,33 +58,182 @@ impl Memory {
     }
 }
 
+/// Returns the pid of the principal as a borrowed string for tracing.
+fn principal_pid(principal: &Principal) -> &str {
+    match principal {
+        Principal::User { pid } => pid,
+        Principal::ApiKey { pid } => pid,
+    }
+}
+
 #[tonic::async_trait]
 impl MemoryService for Memory {
+    /// Searches indexed memories under a scope by vector similarity.
+    ///
+    /// `limit = 0` falls back to the library default (10). The proto's
+    /// `metadata_filter` is accepted on the wire but **not threaded into
+    /// the library** in v0.1 — memoir-core's `SearchBuilder` has no
+    /// metadata-filter knob yet (deferred from ticket 0004). Callers
+    /// passing `metadata_filter` get a successful search that ignores
+    /// the field; a follow-up will plumb it through once the library
+    /// supports it.
     async fn search(&self, request: Request<SearchRequest>) -> Result<Response<SearchResponse>, Status> {
-        let _caller = self.auth().authenticate(&request).await?;
-        Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let SearchRequest { scope, query, limit, metadata_filter: _ } = request.into_inner();
+
+        let scope = scope_from_proto(scope)?;
+
+        tracing::event!(
+            name: "memoir.service.memory.search.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            scope.agent_id = %scope.agent_id,
+            scope.org_id = %scope.org_id,
+            scope.user_id = %scope.user_id,
+            query.len = query.len(),
+            limit = limit,
+            "MemoryService.Search invoked",
+        );
+
+        let mut builder = self.ctx.memoir.search(query, scope);
+        if limit > 0 {
+            builder = builder.limit(limit as usize);
+        }
+        let memories = builder.await.map_err(client_error_to_status)?;
+
+        let hits = memories
+            .list()
+            .iter()
+            .cloned()
+            .map(|memory| {
+                let score = memory.score.unwrap_or(0.0);
+                SearchHit {
+                    memory: Some(memory_to_proto(memory)),
+                    score,
+                }
+            })
+            .collect();
+
+        Ok(Response::new(SearchResponse { hits }))
     }
 
+    /// Looks up a memory by pid at any lifecycle state.
     async fn recall(&self, request: Request<RecallRequest>) -> Result<Response<RecallResponse>, Status> {
-        let _caller = self.auth().authenticate(&request).await?;
-        Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let RecallRequest { pid: memory_pid } = request.into_inner();
+
+        if memory_pid.is_empty() {
+            return Err(Status::invalid_argument("pid: required"));
+        }
+
+        tracing::event!(
+            name: "memoir.service.memory.recall.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            memory.pid = %memory_pid,
+            "MemoryService.Recall invoked",
+        );
+
+        let memory = self.ctx.memoir.recall(&memory_pid).await.map_err(client_error_to_status)?;
+
+        Ok(Response::new(RecallResponse {
+            memory: Some(memory_to_proto(memory)),
+        }))
     }
 
+    /// Writes content as an episodic memory; returns the persisted row with `status = PENDING`.
+    ///
+    /// The write is queue-backed — the embed (and, if extraction is
+    /// configured, extract) job is enqueued before the response returns.
+    /// The worker drains the queue asynchronously; the returned memory's
+    /// vector index entry remains in `pending` state until processing
+    /// completes.
     async fn remember(&self, request: Request<RememberRequest>) -> Result<Response<RememberResponse>, Status> {
-        let _caller = self.auth().authenticate(&request).await?;
-        Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let RememberRequest { scope, content, metadata } = request.into_inner();
+
+        if content.is_empty() {
+            return Err(Status::invalid_argument("content: required"));
+        }
+        let scope = scope_from_proto(scope)?;
+        let metadata = metadata_from_proto(metadata)?;
+
+        tracing::event!(
+            name: "memoir.service.memory.remember.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            scope.agent_id = %scope.agent_id,
+            scope.org_id = %scope.org_id,
+            scope.user_id = %scope.user_id,
+            content.len = content.len(),
+            "MemoryService.Remember invoked",
+        );
+
+        let written = self
+            .ctx
+            .memoir
+            .remember(content, scope)
+            .metadata(metadata)
+            .await
+            .map_err(client_error_to_status)?;
+
+        Ok(Response::new(RememberResponse {
+            memory: Some(memory_to_proto(written)),
+        }))
     }
 
+    /// Deletes one memory by pid or every memory matching a scope tuple.
+    ///
+    /// `hard_delete` is accepted on the wire for forward compatibility
+    /// but **ignored** — memoir-core's `forget` is currently always a
+    /// hard delete (no soft-delete substrate exists). When the library
+    /// gains soft-delete support, this handler will start respecting the
+    /// flag.
     async fn forget(&self, request: Request<ForgetRequest>) -> Result<Response<ForgetResponse>, Status> {
-        let _caller = self.auth().authenticate(&request).await?;
-        Err(Status::unimplemented(UNIMPLEMENTED_MESSAGE))
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let request = request.into_inner();
+        let hard_delete = request.hard_delete;
+        let target = forget_target_from_proto(request)?;
+
+        tracing::event!(
+            name: "memoir.service.memory.forget.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            target = ?target,
+            hard_delete = hard_delete,
+            "MemoryService.Forget invoked",
+        );
+
+        let deleted_pids = self.ctx.memoir.forget(target).await.map_err(client_error_to_status)?;
+
+        Ok(Response::new(ForgetResponse { deleted_pids }))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    // Integration-level tests (real DB, real auth interceptor) belong in the
-    // service's integration suite. Stub-only unit tests against in-memory
-    // mocks would test the mocking rig, not the surface — skipped per
-    // CLAUDE.md's behavior-first testing rule.
+    // Integration-level tests (real DB, real auth, real Qdrant) belong in
+    // the service's integration suite — ticket 0012. Per CLAUDE.md's
+    // behavior-first testing rule, the conversion shims in
+    // `services/conversions.rs` carry the unit-test burden for boundary
+    // logic; the handler bodies are too thin to mock-test meaningfully.
+
+    use super::*;
+
+    #[test]
+    fn should_extract_user_pid_from_principal() {
+        let principal = Principal::User { pid: "user-abc".into() };
+        assert_eq!(principal_pid(&principal), "user-abc");
+    }
+
+    #[test]
+    fn should_extract_api_key_pid_from_principal() {
+        let principal = Principal::ApiKey { pid: "key-xyz".into() };
+        assert_eq!(principal_pid(&principal), "key-xyz");
+    }
 }
+

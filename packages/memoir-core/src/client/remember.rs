@@ -89,7 +89,12 @@ impl<'a> IntoFuture for RememberBuilder<'a> {
 }
 
 async fn execute(builder: RememberBuilder<'_>) -> Result<Memory, ClientError> {
-    let RememberBuilder { client, prompt, scope, metadata } = builder;
+    let RememberBuilder {
+        client,
+        prompt,
+        scope,
+        metadata,
+    } = builder;
     let inner = client.inner.clone();
 
     let written = inner

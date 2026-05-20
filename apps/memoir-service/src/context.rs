@@ -17,11 +17,10 @@ pub(crate) struct AppContext {
     /// Per-process credential verifier shared by every AuthService handler.
     /// Owns the JWT signer + the DB handle used for API-key verification.
     pub(crate) auth: Authenticator,
-    #[expect(
-        dead_code,
-        reason = "Wired into MemoryService handlers in a follow-up; held here so startup \
-                  validates Qdrant connectivity + memoir migrations before serving traffic."
-    )]
+    /// Library client wired into the MemoryService handlers (`services/memory.rs`).
+    /// Held behind `Arc` so handler clones are cheap. Startup also uses the
+    /// client to validate Qdrant connectivity + apply memoir-core migrations
+    /// before the gRPC server starts accepting traffic.
     pub(crate) memoir: Arc<MemoirClient>,
     /// Memoir's queue worker. Drains `memory_jobs` for the lifetime of the
     /// service. Held here so the worker stays alive — dropping the handle

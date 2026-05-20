@@ -1,0 +1,183 @@
+syntax = "proto3";
+
+package memoir.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// AdminService exposes operator-only triage of the write-behind queue.
+//
+// ⚠ Admin-only. Every RPC on this service is gated server-side on
+// `caller.is_admin == true` from the existing AuthService middleware
+// (see `apps/memoir-service/src/middleware/auth.rs`). Non-admin callers
+// receive `PermissionDenied`. The proto carries no permission annotation;
+// the handler is the enforcement point — do not wire AdminService under a
+// handler that skips the admin check.
+//
+// Surface mirrors the library admin methods in
+// `packages/memoir-core/src/client/mod.rs:443-505` and
+// `packages/memoir-core/src/client/admin.rs`. memoir-service is a thin
+// adapter; new admin functionality lands in memoir-core first.
+//
+// Excluded by design (operator PII boundary):
+//   - The original job payload and any content from the referenced memory
+//     are NEVER included in admin responses. Operators inspecting failures
+//     follow up via `MemoryService.Recall` against the source pid when they
+//     need the underlying memory's content.
+service AdminService {
+  // ── Queue inspection ─────────────────────────────────────────────────────
+
+  // List failed jobs newest-first, capped at `limit`. Metadata only — no
+  // payload, no memory content. Pagination is limit-only in v0.1.
+  rpc ListFailedJobs(ListFailedJobsRequest) returns (ListFailedJobsResponse);
+
+  // Return the number of jobs currently in `pending` state. Cheap counter
+  // for queue-depth dashboards.
+  rpc PendingJobsCount(PendingJobsCountRequest) returns (PendingJobsCountResponse);
+
+  // ── Per-job triage ───────────────────────────────────────────────────────
+
+  // Retry one failed job by id, clearing the attempt counter (operator
+  // intent overrides prior failure budget).
+  rpc RetryJob(RetryJobRequest) returns (RetryJobResponse);
+
+  // Permanently delete one failed job by id. The referenced memory row is
+  // untouched. Destructive — once a failed job is deleted, the memory's
+  // processing state is unrecoverable except by re-running `Remember`.
+  rpc DeleteFailedJob(DeleteFailedJobRequest) returns (DeleteFailedJobResponse);
+
+  // ── Bulk operations ──────────────────────────────────────────────────────
+
+  // Bulk retry every failed job, optionally filtered by kind. Set
+  // `dry_run = true` to preview the affected count without modifying any
+  // rows — a wide retry against many failed extract jobs can DoS the
+  // configured LLM provider.
+  rpc RetryFailedJobs(RetryFailedJobsRequest) returns (RetryFailedJobsResponse);
+
+  // ── Memory lifecycle ─────────────────────────────────────────────────────
+
+  // Clear the supersession marker on a memory, restoring it to active
+  // state. Operator-only counterpart to the internal supersede path
+  // performed by the contradiction-detection pass. Document for operators:
+  // do not call in normal flow.
+  rpc Unsupersede(UnsupersedeRequest) returns (UnsupersedeResponse);
+
+  // ── Maintenance ──────────────────────────────────────────────────────────
+
+  // Run the reconciliation passes: retry failed rows + clean orphan vectors
+  // out of the index. Heavyweight — may take many seconds on large stores.
+  // Unary, not streaming. memoir-ui should not poll this RPC; it's a
+  // human-initiated maintenance action.
+  rpc Reconcile(ReconcileRequest) returns (ReconcileResponse);
+}
+
+// ─── Core types ─────────────────────────────────────────────────────────────
+
+// JobKind mirrors `memoir_core::jobs::JobKind`. The set is closed by the
+// CHECK constraint on `memory_jobs.kind`; extending it requires a
+// follow-up library migration first, then a proto bump.
+enum JobKind {
+  JOB_KIND_UNSPECIFIED = 0;
+  JOB_KIND_EMBED = 1;     // Embed a memory's content + upsert its vector.
+  JOB_KIND_EXTRACT = 2;   // Run LLM extraction against an episodic memory.
+}
+
+// FailedJob mirrors `memoir_core::jobs::FailedJob` exactly. Deliberately
+// excludes the original `payload` and any content from the referenced
+// memory — see the service-level PII boundary in AdminService's doc
+// comment.
+message FailedJob {
+  int64 id = 1;
+  string source_pid = 2;            // The memory pid this job processes.
+  JobKind kind = 3;
+  int32 attempts = 4;
+  optional string failure_reason = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+// ─── ListFailedJobs RPC ─────────────────────────────────────────────────────
+
+message ListFailedJobsRequest {
+  // Maximum rows to return. `limit = 0` means "use library default" (the
+  // implementer maps to whatever cap `Client::failed_jobs` accepts at
+  // ticket-time). Pagination is limit-only in v0.1 — no cursor.
+  int32 limit = 1;
+}
+
+message ListFailedJobsResponse {
+  repeated FailedJob jobs = 1;
+}
+
+// ─── PendingJobsCount RPC ───────────────────────────────────────────────────
+
+message PendingJobsCountRequest {}
+
+message PendingJobsCountResponse {
+  // Number of jobs currently in `pending` state. Library returns `u64`;
+  // wire is `int64` for TS-compat (JS `number` is f64, safe to 2^53-1).
+  int64 count = 1;
+}
+
+// ─── RetryJob RPC ───────────────────────────────────────────────────────────
+
+message RetryJobRequest {
+  int64 id = 1;
+}
+
+message RetryJobResponse {}
+
+// ─── DeleteFailedJob RPC ────────────────────────────────────────────────────
+
+// No `hard_delete` flag: the library's `Client::delete_failed_job` is
+// unconditional. The referenced memory row is untouched either way.
+message DeleteFailedJobRequest {
+  int64 id = 1;
+}
+
+message DeleteFailedJobResponse {}
+
+// ─── RetryFailedJobs (bulk) RPC ─────────────────────────────────────────────
+
+message RetryFailedJobsRequest {
+  // When set, only retry jobs of this kind. Unset = retry all kinds.
+  optional JobKind of_kind = 1;
+
+  // When true, return the affected count without touching any rows.
+  bool dry_run = 2;
+}
+
+message RetryFailedJobsResponse {
+  // Number of jobs the operation affected (or, in `dry_run` mode, would
+  // have affected). Mirrors `RetryBuilder`'s `u64` return.
+  int64 affected = 1;
+
+  // Echo of the request's `dry_run` for caller clarity — confirms that the
+  // count reflects a preview, not a real retry.
+  bool dry_run = 2;
+}
+
+// ─── Unsupersede RPC ────────────────────────────────────────────────────────
+
+message UnsupersedeRequest {
+  string pid = 1;
+}
+
+message UnsupersedeResponse {}
+
+// ─── Reconcile RPC ──────────────────────────────────────────────────────────
+
+message ReconcileRequest {
+  // When true, run only the failed-row retry pass; skip orphan cleanup.
+  bool only_retry_failed = 1;
+
+  // When true, run only the orphan-cleanup pass; skip retry. Set BOTH
+  // flags to false (or omit both) to run both passes.
+  bool only_clean_orphans = 2;
+}
+
+message ReconcileResponse {
+  // Mirrors `memoir_core::client::ReconcileSummary`. Counts reflect work
+  // performed, not work attempted — see the library docs.
+  int64 failed_retried = 1;    // Rows the retry pass attempted to re-embed.
+  int64 failed_recovered = 2;  // Rows the retry pass moved into `indexed`.
+  int64 orphans_deleted = 3;   // Orphan vectors deleted from the index.
+}
