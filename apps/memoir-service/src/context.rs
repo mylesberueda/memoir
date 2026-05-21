@@ -139,11 +139,7 @@ impl Memoir {
         // we don't spawn it, writes land in Postgres but never reach
         // Qdrant — every search would return nothing.
         tracing::info!("Spawning memoir worker...");
-        let worker = client
-            .spawn_worker()
-            .start()
-            .await
-            .map_err(AppContextError::Memoir)?;
+        let worker = client.spawn_worker().start().await.map_err(AppContextError::Memoir)?;
 
         tracing::info!("Memoir client + worker ready!");
 

@@ -3,8 +3,8 @@
 use memoir_core::store::MemoryStore as _;
 use memoir_sdk::memoir::v1::admin_service_client::AdminServiceClient;
 use memoir_sdk::memoir::v1::{
-    DeleteFailedJobRequest, JobKind, ListFailedJobsRequest, PendingJobsCountRequest, ReconcileRequest,
-    RememberRequest, RetryJobRequest, UnsupersedeRequest,
+    DeleteFailedJobRequest, JobKind, ListFailedJobsRequest, PendingJobsCountRequest, ReconcileRequest, RememberRequest,
+    RetryJobRequest, UnsupersedeRequest,
 };
 use tonic::transport::Channel;
 use tonic::{Code, Request};
@@ -39,8 +39,15 @@ async fn should_list_failed_jobs_when_admin() {
         .await
         .expect("seed failed job");
 
-    let library_view = harness.memoir.failed_jobs(50).await.expect("library failed_jobs sanity");
-    assert!(library_view.iter().any(|j| j.id == job_id), "library should see the seeded job");
+    let library_view = harness
+        .memoir
+        .failed_jobs(50)
+        .await
+        .expect("library failed_jobs sanity");
+    assert!(
+        library_view.iter().any(|j| j.id == job_id),
+        "library should see the seeded job"
+    );
 
     let mut admin = build_admin_client(&harness);
     let resp = admin

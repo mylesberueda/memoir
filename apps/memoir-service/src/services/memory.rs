@@ -80,7 +80,12 @@ impl MemoryService for Memory {
     async fn search(&self, request: Request<SearchRequest>) -> Result<Response<SearchResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         let pid = principal_pid(&caller.principal).to_owned();
-        let SearchRequest { scope, query, limit, metadata_filter: _ } = request.into_inner();
+        let SearchRequest {
+            scope,
+            query,
+            limit,
+            metadata_filter: _,
+        } = request.into_inner();
 
         let scope = scope_from_proto(scope)?;
 
@@ -136,7 +141,12 @@ impl MemoryService for Memory {
             "MemoryService.Recall invoked",
         );
 
-        let memory = self.ctx.memoir.recall(&memory_pid).await.map_err(client_error_to_status)?;
+        let memory = self
+            .ctx
+            .memoir
+            .recall(&memory_pid)
+            .await
+            .map_err(client_error_to_status)?;
 
         Ok(Response::new(RecallResponse {
             memory: Some(memory_to_proto(memory)),
@@ -153,7 +163,11 @@ impl MemoryService for Memory {
     async fn remember(&self, request: Request<RememberRequest>) -> Result<Response<RememberResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         let pid = principal_pid(&caller.principal).to_owned();
-        let RememberRequest { scope, content, metadata } = request.into_inner();
+        let RememberRequest {
+            scope,
+            content,
+            metadata,
+        } = request.into_inner();
 
         if content.is_empty() {
             return Err(Status::invalid_argument("content: required"));
@@ -236,4 +250,3 @@ mod tests {
         assert_eq!(principal_pid(&principal), "key-xyz");
     }
 }
-

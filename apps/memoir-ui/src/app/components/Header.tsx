@@ -91,8 +91,8 @@ export default function Header() {
 									</div>
 								</Avatar>
 								<div className="flex flex-[1_0_auto] flex-col gap-1">
-									<span className="text-2xl">{user.name}</span>
-									<span>{user.email}</span>
+									<span className="text-2xl">{user.name ?? user.id}</span>
+									<span>{user.email ?? '—'}</span>
 									<span className="text-gray-700 italic dark:text-gray-400">Founder</span>
 								</div>
 							</div>

@@ -97,8 +97,7 @@ fn read_password(args: &CreateArgs) -> crate::Result<String> {
             .wrap_err("failed to read password from stdin")?;
         buf
     } else if let Some(path) = &args.password_file {
-        std::fs::read_to_string(path)
-            .wrap_err_with(|| format!("failed to read password file at {}", path.display()))?
+        std::fs::read_to_string(path).wrap_err_with(|| format!("failed to read password file at {}", path.display()))?
     } else {
         bail!("must supply --password, --password-stdin, or --password-file");
     };

@@ -133,7 +133,9 @@ pub(crate) fn forget_target_from_proto(request: ForgetRequest) -> Result<ForgetT
         .target
         .ok_or_else(|| Status::invalid_argument("target: required (set either pid or scope)"))?;
     match target {
-        forget_request::Target::Pid(pid) if pid.is_empty() => Err(Status::invalid_argument("target.pid: must be non-empty")),
+        forget_request::Target::Pid(pid) if pid.is_empty() => {
+            Err(Status::invalid_argument("target.pid: must be non-empty"))
+        }
         forget_request::Target::Pid(pid) => Ok(ForgetTarget::Pid(pid)),
         forget_request::Target::Scope(scope) => {
             let lib_scope = scope_from_proto(Some(scope))?;
@@ -304,7 +306,12 @@ pub(crate) fn reconcile_summary_to_proto(summary: ReconcileSummary) -> Reconcile
 /// schema corruption that produces an absurd count).
 pub(crate) fn u64_count_to_proto(count: u64, field: &'static str) -> Result<i64, Status> {
     i64::try_from(count).map_err(|_| {
-        tracing::error!(error.kind = "count.overflow", field = field, count = count, "u64 count exceeds i64::MAX — wire conversion failed");
+        tracing::error!(
+            error.kind = "count.overflow",
+            field = field,
+            count = count,
+            "u64 count exceeds i64::MAX — wire conversion failed"
+        );
         Status::internal("internal error")
     })
 }
@@ -314,7 +321,12 @@ fn usize_to_i64_saturating(value: usize, field: &'static str) -> i64 {
     match i64::try_from(value) {
         Ok(v) => v,
         Err(_) => {
-            tracing::warn!(error.kind = "count.overflow", field = field, value = value, "usize counter exceeds i64::MAX — wire conversion saturated to 0");
+            tracing::warn!(
+                error.kind = "count.overflow",
+                field = field,
+                value = value,
+                "usize counter exceeds i64::MAX — wire conversion saturated to 0"
+            );
             0
         }
     }
@@ -396,7 +408,10 @@ mod tests {
 
     #[test]
     fn should_reject_forget_request_with_unset_target() {
-        let request = ForgetRequest { target: None, hard_delete: false };
+        let request = ForgetRequest {
+            target: None,
+            hard_delete: false,
+        };
         let err = forget_target_from_proto(request).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
     }
@@ -451,7 +466,9 @@ mod tests {
 
     #[test]
     fn should_never_echo_database_error_detail_to_status_message() {
-        let err = ClientError::Store(StoreError::Database("connection string: postgres://user:s3cret@host/db".into()));
+        let err = ClientError::Store(StoreError::Database(
+            "connection string: postgres://user:s3cret@host/db".into(),
+        ));
         let status = client_error_to_status(err);
         let message = status.message();
         assert!(!message.contains("s3cret"));

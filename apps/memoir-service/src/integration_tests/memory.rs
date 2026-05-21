@@ -94,7 +94,9 @@ async fn should_recall_by_pid() {
         .expect("memory present");
 
     let recalled = memory
-        .recall(harness.authed(RecallRequest { pid: written.pid.clone() }))
+        .recall(harness.authed(RecallRequest {
+            pid: written.pid.clone(),
+        }))
         .await
         .expect("recall rpc")
         .into_inner()
@@ -240,5 +242,9 @@ async fn should_handle_concurrent_remembers_in_same_scope() {
     }
 
     let unique: std::collections::HashSet<_> = pids.iter().collect();
-    assert_eq!(unique.len(), pids.len(), "every concurrent write must produce a unique pid; got {pids:?}");
+    assert_eq!(
+        unique.len(),
+        pids.len(),
+        "every concurrent write must produce a unique pid; got {pids:?}"
+    );
 }

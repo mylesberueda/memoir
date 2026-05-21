@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createClient, type Client } from '@connectrpc/connect';
+import { type Client, createClient } from '@connectrpc/connect';
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { AuthService } from '@polypixel/memoir-sdk/memoir/v1/auth_pb';
 

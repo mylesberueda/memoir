@@ -34,8 +34,8 @@ use crate::services::memory::Memory;
 /// Alphabet for test identifiers. The schema regex in both migrators rejects
 /// hyphens and uppercase, so nanoid's default alphabet is unsafe here.
 const TEST_ID_ALPHABET: [char; 36] = [
-    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i',
-    'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+    'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 
 const ADMIN_USERNAME: &str = "harness_admin";
@@ -43,8 +43,11 @@ const ADMIN_PASSWORD: &str = "harness_admin_password_long_enough";
 const DUPLEX_BUFFER_BYTES: usize = 1024 * 1024;
 
 /// Per-test harness owning every resource the suite touches.
-#[allow(dead_code, reason = "Several fields are reserved for ticket 0013's AdminService suite \
-                             which reuses this harness.")]
+#[allow(
+    dead_code,
+    reason = "Several fields are reserved for ticket 0013's AdminService suite \
+                             which reuses this harness."
+)]
 pub struct TestHarness {
     pub admin_jwt: String,
     pub admin_pid: String,
@@ -73,10 +76,9 @@ impl TestHarness {
     pub async fn start() -> Result<Self> {
         init_tracing();
 
-        let database_url = std::env::var("DATABASE_URL")
-            .context("DATABASE_URL env var must be set for integration tests")?;
-        let qdrant_url = std::env::var("QDRANT_URL")
-            .context("QDRANT_URL env var must be set for integration tests")?;
+        let database_url =
+            std::env::var("DATABASE_URL").context("DATABASE_URL env var must be set for integration tests")?;
+        let qdrant_url = std::env::var("QDRANT_URL").context("QDRANT_URL env var must be set for integration tests")?;
 
         let id = nanoid::nanoid!(8, &TEST_ID_ALPHABET);
         let service_schema = format!("test_{id}_service");
@@ -86,18 +88,14 @@ impl TestHarness {
         // The service pool gets its search_path pinned and is owned by the
         // running handlers; this separate pool is what cleanup uses to
         // DROP SCHEMA cross-search-path at teardown.
-        let cleanup_db = Database::connect(&database_url)
-            .await
-            .context("connect cleanup pool")?;
+        let cleanup_db = Database::connect(&database_url).await.context("connect cleanup pool")?;
 
         let service_db = build_service_pool(&database_url, &service_schema).await?;
         migration::bootstrap_and_migrate(&service_db, &service_schema)
             .await
             .context("apply memoir-service migrations")?;
 
-        let qdrant = Qdrant::from_url(&qdrant_url)
-            .build()
-            .context("build Qdrant client")?;
+        let qdrant = Qdrant::from_url(&qdrant_url).build().context("build Qdrant client")?;
         let memoir = MemoirClient::builder()
             .database_url(database_url.clone())
             .qdrant(qdrant.clone())
@@ -181,7 +179,9 @@ impl TestHarness {
 
     pub fn authed<T>(&self, body: T) -> Request<T> {
         let mut req = Request::new(body);
-        let value = format!("Bearer {}", self.admin_jwt).parse().expect("bearer header is ascii");
+        let value = format!("Bearer {}", self.admin_jwt)
+            .parse()
+            .expect("bearer header is ascii");
         req.metadata_mut().insert("authorization", value);
         req
     }
@@ -205,7 +205,10 @@ impl TestHarness {
             .map_err(|e| anyhow::anyhow!("seed non-admin user failed: {e:?}"))?;
         let mut auth = self.auth.clone();
         let login = auth
-            .login(Request::new(LoginRequest { username, password: password.to_owned() }))
+            .login(Request::new(LoginRequest {
+                username,
+                password: password.to_owned(),
+            }))
             .await
             .context("non-admin login")?
             .into_inner();
@@ -275,7 +278,11 @@ impl TestHarness {
                 metadata_filter: None,
             });
             let resp = self.memory.search(req).await.context("search probe")?.into_inner();
-            if resp.hits.iter().any(|h| h.memory.as_ref().is_some_and(|m| m.pid == pid)) {
+            if resp
+                .hits
+                .iter()
+                .any(|h| h.memory.as_ref().is_some_and(|m| m.pid == pid))
+            {
                 return Ok(());
             }
             tokio::time::sleep(delay).await;
@@ -291,7 +298,9 @@ impl Drop for TestHarness {
         let core_schema = self.core_schema.clone();
         let collection = self.collection.clone();
         let Some(db) = self.cleanup_db.take() else { return };
-        let Some(qdrant) = self.cleanup_qdrant.take() else { return };
+        let Some(qdrant) = self.cleanup_qdrant.take() else {
+            return;
+        };
         let shutdown_tx = self.shutdown_tx.take();
         let server_task = self.server_task.take();
 
@@ -310,7 +319,10 @@ impl Drop for TestHarness {
                     if let Some(task) = server_task {
                         let _ = task.await;
                     }
-                    if let Err(err) = qdrant.delete_collection(DeleteCollectionBuilder::new(&collection)).await {
+                    if let Err(err) = qdrant
+                        .delete_collection(DeleteCollectionBuilder::new(&collection))
+                        .await
+                    {
                         eprintln!("[TestHarness::drop] qdrant delete_collection({collection}) failed: {err}");
                     }
                     for schema in [&service_schema, &core_schema] {
@@ -352,8 +364,8 @@ fn spawn_in_process_server(
     // DuplexStream natively implements tokio's AsyncRead/Write plus tonic's
     // Connected trait, so it goes through unwrapped. TokioIo would convert
     // it to hyper's IO traits — the wrong direction for the server side.
-    let incoming = tokio_stream::wrappers::UnboundedReceiverStream::new(incoming_rx)
-        .map(Ok::<DuplexStream, std::io::Error>);
+    let incoming =
+        tokio_stream::wrappers::UnboundedReceiverStream::new(incoming_rx).map(Ok::<DuplexStream, std::io::Error>);
     tokio::spawn(async move {
         Server::builder()
             .add_service(AdminServiceServer::new(admin_handler))
@@ -366,9 +378,7 @@ fn spawn_in_process_server(
     })
 }
 
-async fn build_in_process_channel(
-    incoming_tx: tokio::sync::mpsc::UnboundedSender<DuplexStream>,
-) -> Result<Channel> {
+async fn build_in_process_channel(incoming_tx: tokio::sync::mpsc::UnboundedSender<DuplexStream>) -> Result<Channel> {
     let uri = Uri::from_static("http://in-process.test");
     let channel = Endpoint::from(uri)
         .connect_with_connector(service_fn(move |_: Uri| {
@@ -393,9 +403,8 @@ static TRACING_INIT: Once = Once::new();
 
 fn init_tracing() {
     TRACING_INIT.call_once(|| {
-        let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            tracing_subscriber::EnvFilter::new("info,sqlx=warn,sea_orm=warn,hyper=warn,h2=warn")
-        });
+        let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,sqlx=warn,sea_orm=warn,hyper=warn,h2=warn"));
         let _ = tracing_subscriber::fmt()
             .with_env_filter(filter)
             .with_test_writer()

@@ -149,7 +149,12 @@ impl AdminService for Admin {
             "AdminService.PendingJobsCount invoked",
         );
 
-        let count = self.ctx.memoir.pending_jobs_count().await.map_err(client_error_to_status)?;
+        let count = self
+            .ctx
+            .memoir
+            .pending_jobs_count()
+            .await
+            .map_err(client_error_to_status)?;
         let wire_count = u64_count_to_proto(count, "pending_jobs_count")?;
         Ok(Response::new(PendingJobsCountResponse { count: wire_count }))
     }
@@ -197,7 +202,11 @@ impl AdminService for Admin {
             "AdminService.DeleteFailedJob invoked",
         );
 
-        self.ctx.memoir.delete_failed_job(id).await.map_err(client_error_to_status)?;
+        self.ctx
+            .memoir
+            .delete_failed_job(id)
+            .await
+            .map_err(client_error_to_status)?;
         Ok(Response::new(DeleteFailedJobResponse {}))
     }
 
@@ -249,10 +258,7 @@ impl AdminService for Admin {
     /// contradiction-detection pass against verified contradicting facts.
     /// Reversing it should only happen when an operator has confirmed the
     /// supersession was a false positive.
-    async fn unsupersede(
-        &self,
-        request: Request<UnsupersedeRequest>,
-    ) -> Result<Response<UnsupersedeResponse>, Status> {
+    async fn unsupersede(&self, request: Request<UnsupersedeRequest>) -> Result<Response<UnsupersedeResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
         let admin_pid = principal_pid(&caller.principal).to_owned();
@@ -270,7 +276,11 @@ impl AdminService for Admin {
             "AdminService.Unsupersede invoked",
         );
 
-        self.ctx.memoir.unsupersede(&pid).await.map_err(client_error_to_status)?;
+        self.ctx
+            .memoir
+            .unsupersede(&pid)
+            .await
+            .map_err(client_error_to_status)?;
         Ok(Response::new(UnsupersedeResponse {}))
     }
 
@@ -286,7 +296,10 @@ impl AdminService for Admin {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
         let admin_pid = principal_pid(&caller.principal).to_owned();
-        let ReconcileRequest { only_retry_failed, only_clean_orphans } = request.into_inner();
+        let ReconcileRequest {
+            only_retry_failed,
+            only_clean_orphans,
+        } = request.into_inner();
 
         if only_retry_failed && only_clean_orphans {
             return Err(Status::invalid_argument(

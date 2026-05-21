@@ -20,11 +20,7 @@ import type { AuthContext, AuthUser, LoginResult, TokenResponse } from '../types
  * silently misbehaving.
  */
 export class AuthServiceAuthProvider extends AuthProvider {
-	override async login(
-		email: string,
-		password: string,
-		_context?: AuthContext,
-	): Promise<ActionResult<LoginResult>> {
+	override async login(email: string, password: string, _context?: AuthContext): Promise<ActionResult<LoginResult>> {
 		try {
 			const response = await authClient().login({
 				username: email,
@@ -83,8 +79,8 @@ export class AuthServiceAuthProvider extends AuthProvider {
 	}
 
 	override async createUser(
-		email: string,
-		password: string,
+		_email: string,
+		_password: string,
 		_displayName: string,
 	): Promise<ActionResult<{ userId: string }>> {
 		// CreateUser is admin-gated on the backend. memoir-ui's "create
@@ -100,7 +96,8 @@ export class AuthServiceAuthProvider extends AuthProvider {
 		// directly with the admin's JWT attached).
 		return {
 			success: false,
-			error: 'createUser from the AuthServiceAuthProvider is not yet implemented; use `memoir auth create` or call AuthService.CreateUser directly with an admin JWT',
+			error:
+				'createUser from the AuthServiceAuthProvider is not yet implemented; use `memoir auth create` or call AuthService.CreateUser directly with an admin JWT',
 		};
 	}
 

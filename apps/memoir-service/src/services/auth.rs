@@ -201,22 +201,14 @@ impl AuthService for Auth {
             return Err(Status::unauthenticated("invalid credentials"));
         }
 
-        let access_token = self
-            .auth()
-            .jwt()
-            .issue(&user.pid, TokenKind::Access)
-            .map_err(|err| {
-                tracing::error!(error.message = %err, "access token issue failed");
-                Status::internal("internal error")
-            })?;
-        let refresh_token = self
-            .auth()
-            .jwt()
-            .issue(&user.pid, TokenKind::Refresh)
-            .map_err(|err| {
-                tracing::error!(error.message = %err, "refresh token issue failed");
-                Status::internal("internal error")
-            })?;
+        let access_token = self.auth().jwt().issue(&user.pid, TokenKind::Access).map_err(|err| {
+            tracing::error!(error.message = %err, "access token issue failed");
+            Status::internal("internal error")
+        })?;
+        let refresh_token = self.auth().jwt().issue(&user.pid, TokenKind::Refresh).map_err(|err| {
+            tracing::error!(error.message = %err, "refresh token issue failed");
+            Status::internal("internal error")
+        })?;
 
         tracing::info!(user.pid = %user.pid, "user logged in");
 
@@ -240,14 +232,10 @@ impl AuthService for Auth {
             .verify(&req.refresh_token, TokenKind::Refresh)
             .map_err(|_| Status::unauthenticated("invalid refresh token"))?;
 
-        let access_token = self
-            .auth()
-            .jwt()
-            .issue(&claims.sub, TokenKind::Access)
-            .map_err(|err| {
-                tracing::error!(error.message = %err, "access token issue failed during refresh");
-                Status::internal("internal error")
-            })?;
+        let access_token = self.auth().jwt().issue(&claims.sub, TokenKind::Access).map_err(|err| {
+            tracing::error!(error.message = %err, "access token issue failed during refresh");
+            Status::internal("internal error")
+        })?;
 
         tracing::debug!(user.pid = %claims.sub, "access token refreshed");
 

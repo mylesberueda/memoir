@@ -66,9 +66,7 @@ pub(crate) enum JwtError {
     #[error("MEMOIR_JWT_SECRET is not valid base64: {0}")]
     SecretBase64(base64::DecodeError),
 
-    #[error(
-        "MEMOIR_JWT_SECRET decodes to {actual} bytes; minimum is {min} for HS256"
-    )]
+    #[error("MEMOIR_JWT_SECRET decodes to {actual} bytes; minimum is {min} for HS256")]
     SecretTooShort { actual: usize, min: usize },
 
     #[error("token signing failed: {0}")]
@@ -281,6 +279,9 @@ mod tests {
         let debug = format!("{jwt:?}");
         // No way to leak 32 zero bytes through Debug; the assertion that
         // matters is that the field name "_secret" is absent.
-        assert!(!debug.contains("secret"), "Debug must not surface secret field; got {debug}");
+        assert!(
+            !debug.contains("secret"),
+            "Debug must not surface secret field; got {debug}"
+        );
     }
 }

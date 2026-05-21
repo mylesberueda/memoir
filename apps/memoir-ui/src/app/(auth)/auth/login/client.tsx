@@ -79,8 +79,8 @@ export default function LoginClient({ authRequest, initialMode, verified, error:
 
 				const result = await login(data.email, data.password, authRequest);
 
-				if (result.success && result.callbackUrl) {
-					window.location.href = result.callbackUrl;
+				if (result.success) {
+					window.location.href = '/';
 				} else {
 					setError(result.error || 'Login failed');
 				}
