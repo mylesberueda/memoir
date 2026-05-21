@@ -32,6 +32,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tonic = { workspace = true }
 tonic-health = { version = "0.14.2" }
+tonic-reflection = { version = "0.14.2" }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 

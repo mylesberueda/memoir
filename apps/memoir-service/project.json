@@ -151,7 +151,11 @@
 			"executor": "nx:run-commands",
 			"options": {
 				"cwd": "{projectRoot}",
-				"command": "buf generate"
+				"commands": [
+					"buf generate",
+					"buf build -o ../../packages/memoir-sdk-rs/src/memoir/v1/file_descriptor_set.bin"
+				],
+				"parallel": false
 			},
 			"inputs": ["{projectRoot}/proto/**/*.proto"],
 			"outputs": []
