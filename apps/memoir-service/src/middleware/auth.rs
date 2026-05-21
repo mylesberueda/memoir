@@ -23,8 +23,8 @@ use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use tonic::{Request, Status};
 
 use super::jwt::{Jwt, TokenKind};
-use crate::models::ApiKeys;
-use crate::models::_entity::api_keys;
+use crate::models::_entity::{api_keys, users};
+use crate::models::{ApiKeys, Users};
 
 /// HTTP/gRPC metadata header that carries the user JWT.
 ///
@@ -139,7 +139,7 @@ impl Authenticator {
             return self.verify_api_key(api_key).await;
         }
         if let Some(jwt) = extract_jwt(request)? {
-            return self.verify_jwt(jwt);
+            return self.verify_jwt(jwt).await;
         }
         Err(Status::unauthenticated("missing credentials"))
     }
@@ -187,22 +187,31 @@ impl Authenticator {
         })
     }
 
-    fn verify_jwt(&self, token: &str) -> Result<CallerIdentity, Status> {
+    async fn verify_jwt(&self, token: &str) -> Result<CallerIdentity, Status> {
         let claims = self
             .jwt
             .verify(token, TokenKind::Access)
             .map_err(|_| Status::unauthenticated("invalid credentials"))?;
 
-        tracing::debug!(user.pid = %claims.sub, "request authenticated via jwt");
+        // is_admin is NOT carried in the JWT to keep role changes effective
+        // within one access-token cycle rather than at refresh time. We
+        // look it up here against the live `users` row so a freshly
+        // demoted user loses admin access on their next request.
+        let row = Users::find()
+            .filter(users::Column::Pid.eq(&claims.sub))
+            .one(&self.db)
+            .await
+            .map_err(|err| {
+                tracing::error!(error.message = %err, "db error resolving is_admin during authenticate");
+                Status::internal("internal error")
+            })?
+            .ok_or_else(|| Status::unauthenticated("invalid credentials"))?;
 
-        // is_admin is NOT carried in the JWT — handlers that need it look
-        // up the users row by `claims.sub`. Keeping the claim minimal means
-        // role changes take effect within one access-token cycle rather
-        // than at token expiry. Default to false here; admin-gated handlers
-        // call CallerIdentity::require_admin after a fresh DB check.
+        tracing::debug!(user.pid = %row.pid, user.is_admin = row.is_admin, "request authenticated via jwt");
+
         Ok(CallerIdentity {
-            principal: Principal::User { pid: claims.sub },
-            is_admin: false,
+            principal: Principal::User { pid: row.pid },
+            is_admin: row.is_admin,
         })
     }
 }

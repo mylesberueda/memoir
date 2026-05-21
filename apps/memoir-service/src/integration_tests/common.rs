@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context as _, Result};
 use hyper_util::rt::TokioIo;
 use memoir_core::client::Client as MemoirClient;
+use memoir_sdk::memoir::v1::admin_service_server::AdminServiceServer;
 use memoir_sdk::memoir::v1::auth_service_client::AuthServiceClient;
 use memoir_sdk::memoir::v1::auth_service_server::AuthServiceServer;
 use memoir_sdk::memoir::v1::memory_service_client::MemoryServiceClient;
@@ -26,6 +27,7 @@ use tower::service_fn;
 use crate::AppContext;
 use crate::middleware::auth::Authenticator;
 use crate::middleware::jwt::Jwt;
+use crate::services::admin::Admin;
 use crate::services::auth::{Auth, create_user};
 use crate::services::memory::Memory;
 
@@ -48,10 +50,17 @@ pub struct TestHarness {
     pub admin_pid: String,
     pub memory: MemoryServiceClient<Channel>,
     pub auth: AuthServiceClient<Channel>,
+    /// Shared in-process channel. Use to build additional service clients
+    /// (e.g. `AdminServiceClient::new(harness.channel.clone())`).
+    pub channel: Channel,
     pub memoir: Arc<MemoirClient>,
     pub service_schema: String,
     pub core_schema: String,
     pub collection: String,
+
+    /// Service pool used to seed users (search_path-pinned to the per-test
+    /// schemas so entity-driven inserts hit the right `users` table).
+    service_db: DatabaseConnection,
 
     worker_cancel: CancellationToken,
     shutdown_tx: Option<oneshot::Sender<()>>,
@@ -119,6 +128,7 @@ impl TestHarness {
             memoir_worker,
         });
 
+        let admin_handler = Admin::new(ctx.clone());
         let auth_handler = Auth::new(ctx.clone());
         let memory_handler = Memory::new(ctx.clone());
 
@@ -134,11 +144,12 @@ impl TestHarness {
         // after a call completes, which would strand a one-shot duplex.
         let (incoming_tx, incoming_rx) = tokio::sync::mpsc::unbounded_channel::<DuplexStream>();
         let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-        let server_task = spawn_in_process_server(auth_handler, memory_handler, incoming_rx, shutdown_rx);
+        let server_task =
+            spawn_in_process_server(admin_handler, auth_handler, memory_handler, incoming_rx, shutdown_rx);
 
         let channel = build_in_process_channel(incoming_tx).await?;
         let mut auth_client = AuthServiceClient::new(channel.clone());
-        let memory_client = MemoryServiceClient::new(channel);
+        let memory_client = MemoryServiceClient::new(channel.clone());
 
         let login = auth_client
             .login(Request::new(LoginRequest {
@@ -154,10 +165,12 @@ impl TestHarness {
             admin_pid,
             memory: memory_client,
             auth: auth_client,
+            channel,
             memoir,
             service_schema,
             core_schema,
             collection,
+            service_db: service_db.clone(),
             worker_cancel,
             shutdown_tx: Some(shutdown_tx),
             server_task: Some(server_task),
@@ -180,6 +193,74 @@ impl TestHarness {
             org_id: format!("org_{suffix}"),
             user_id: format!("user_{suffix}"),
         }
+    }
+
+    /// Creates a fresh non-admin user, logs them in, returns their access token.
+    pub async fn login_non_admin(&self) -> Result<String> {
+        let suffix = nanoid::nanoid!(8, &TEST_ID_ALPHABET);
+        let username = format!("nonadmin_{suffix}");
+        let password = "nonadmin_password_long_enough";
+        create_user(&self.service_db, username.clone(), password, false)
+            .await
+            .map_err(|e| anyhow::anyhow!("seed non-admin user failed: {e:?}"))?;
+        let mut auth = self.auth.clone();
+        let login = auth
+            .login(Request::new(LoginRequest { username, password: password.to_owned() }))
+            .await
+            .context("non-admin login")?
+            .into_inner();
+        Ok(login.access_token)
+    }
+
+    /// Wraps `body` in a Request carrying `Bearer <token>` instead of the admin JWT.
+    pub fn authed_with<T>(&self, body: T, token: &str) -> Request<T> {
+        let mut req = Request::new(body);
+        let value = format!("Bearer {token}").parse().expect("bearer header is ascii");
+        req.metadata_mut().insert("authorization", value);
+        req
+    }
+
+    /// Inserts a `memory_jobs` row in `failed` state pointing at `source_pid`.
+    ///
+    /// memoir-core exposes no public API for fabricating job state — production
+    /// jobs originate only via the write path. Tests need to short-circuit that
+    /// to exercise the admin surface against a known-failed row.
+    pub async fn seed_failed_job(&self, source_pid: &str, kind: &str, reason: &str) -> Result<i64> {
+        let db = self.cleanup_db.as_ref().context("cleanup pool already dropped")?;
+        let stmt = sea_orm::Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            format!(
+                r#"INSERT INTO "{schema}".memory_jobs (source_pid, kind, state, attempts, failure_reason)
+                   VALUES ($1, $2, 'failed', 3, $3) RETURNING id"#,
+                schema = self.core_schema
+            ),
+            [source_pid.into(), kind.into(), reason.into()],
+        );
+        let row = db
+            .query_one_raw(stmt)
+            .await
+            .context("seed_failed_job: insert")?
+            .context("seed_failed_job: no row returned")?;
+        row.try_get::<i64>("", "id").context("seed_failed_job: read id")
+    }
+
+    /// Counts rows in the per-test `memory_jobs` table matching `state`.
+    pub async fn count_jobs_with_state(&self, state: &str) -> Result<i64> {
+        let db = self.cleanup_db.as_ref().context("cleanup pool already dropped")?;
+        let stmt = sea_orm::Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            format!(
+                r#"SELECT COUNT(*)::BIGINT AS n FROM "{schema}".memory_jobs WHERE state = $1"#,
+                schema = self.core_schema
+            ),
+            [state.into()],
+        );
+        let row = db
+            .query_one_raw(stmt)
+            .await
+            .context("count_jobs_with_state: query")?
+            .context("count_jobs_with_state: no row")?;
+        row.try_get::<i64>("", "n").context("count_jobs_with_state: read n")
     }
 
     pub async fn wait_until_searchable(&mut self, pid: &str, scope: ProtoScope, query: &str) -> Result<()> {
@@ -262,6 +343,7 @@ async fn build_service_pool(database_url: &str, schema: &str) -> Result<Database
 }
 
 fn spawn_in_process_server(
+    admin_handler: Admin,
     auth_handler: Auth,
     memory_handler: Memory,
     incoming_rx: tokio::sync::mpsc::UnboundedReceiver<DuplexStream>,
@@ -274,6 +356,7 @@ fn spawn_in_process_server(
         .map(Ok::<DuplexStream, std::io::Error>);
     tokio::spawn(async move {
         Server::builder()
+            .add_service(AdminServiceServer::new(admin_handler))
             .add_service(AuthServiceServer::new(auth_handler))
             .add_service(MemoryServiceServer::new(memory_handler))
             .serve_with_incoming_shutdown(incoming, async {
