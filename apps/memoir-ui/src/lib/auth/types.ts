@@ -46,11 +46,13 @@ export type LoginResult =
 
 /**
  * Optional context for provider-specific login parameters.
- * Allows Zitadel to pass authRequest without polluting other providers.
+ *
+ * Empty in the current AuthService-backed flow; preserved as an extension
+ * point so a future provider with extra login state (PKCE codes, SSO
+ * handoffs, etc.) can attach it without changing the `AuthProvider`
+ * interface signature.
  */
 export interface AuthContext {
-	/** Zitadel auth request ID from authorize redirect */
-	authRequest?: string;
 	/** Additional provider-specific parameters */
 	[key: string]: unknown;
 }

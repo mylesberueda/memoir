@@ -18,14 +18,15 @@ export abstract class AuthProvider {
 	 *
 	 * @param email - User's email address
 	 * @param password - User's password
-	 * @param context - Optional provider-specific context (e.g., Zitadel authRequest)
+	 * @param context - Optional provider-specific context (extension point;
+	 *   unused by the current AuthService provider)
 	 * @returns LoginResult (either redirect URL or tokens directly)
 	 *
-	 * Example (Zitadel - redirect flow):
-	 *   { success: true, data: { type: 'redirect', url: 'https://...' } }
-	 *
-	 * Example (Supabase - direct flow):
+	 * Example (direct-token flow, used by AuthServiceAuthProvider):
 	 *   { success: true, data: { type: 'tokens', tokens: {...}, user: {...} } }
+	 *
+	 * Example (redirect flow, available for future SSO providers):
+	 *   { success: true, data: { type: 'redirect', url: 'https://...' } }
 	 */
 	abstract login(email: string, password: string, context?: AuthContext): Promise<ActionResult<LoginResult>>;
 
