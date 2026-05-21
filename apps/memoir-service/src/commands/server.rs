@@ -6,7 +6,6 @@ use common_rs::crypto::hashing::{generate_bootstrap_token, hash_password};
 use memoir_sdk::memoir::v1::admin_service_server::AdminServiceServer;
 use memoir_sdk::memoir::v1::auth_service_server::AuthServiceServer;
 use memoir_sdk::memoir::v1::memory_service_server::MemoryServiceServer;
-use migration::MigratorTrait as _;
 use sea_orm::{ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, PaginatorTrait, QueryFilter};
 use tonic::transport::Server;
 
@@ -61,11 +60,6 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     common_rs::logging::init_with_defaults()?;
 
     let ctx = AppContext::new().await?;
-
-    migration::Migrator::up(ctx.db.as_ref(), None)
-        .await
-        .wrap_err("failed to run migrations")?;
-    tracing::info!("migrations applied");
 
     bootstrap_admin(ctx.clone()).await?;
 
