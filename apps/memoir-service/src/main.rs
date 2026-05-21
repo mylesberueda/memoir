@@ -58,9 +58,4 @@ mod tests {
 }
 
 #[cfg(all(test, feature = "integration"))]
-mod integration_tests {
-    #[tokio::test]
-    async fn placeholder() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+mod integration_tests;

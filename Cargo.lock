@@ -2892,6 +2892,7 @@ dependencies = [
 name = "memoir-service"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "base64 0.22.1",
  "chrono",
  "clap 4.6.0 (git+https://github.com/clap-rs/clap?branch=master)",
@@ -2900,8 +2901,10 @@ dependencies = [
  "dashmap",
  "dotenvy",
  "http",
+ "hyper-util",
  "jsonwebtoken",
  "memoir-service-migration",
+ "nanoid",
  "pbjson-types",
  "polypixel-memoir-core",
  "polypixel-memoir-sdk",
@@ -2914,8 +2917,11 @@ dependencies = [
  "test-context",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-stream",
+ "tokio-util",
  "tonic 0.14.5",
  "tonic-health",
+ "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
 ]

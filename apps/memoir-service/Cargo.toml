@@ -50,5 +50,11 @@ integration = []
 unit = []
 
 [dev-dependencies]
+anyhow = "1"
+hyper-util = { version = "0.1", features = ["tokio"] }
+nanoid = "0.4"
 serial_test = "3.1.1"
 test-context = "0.5"
+tokio-stream = "0.1"
+tokio-util = { version = "0.7" }
+tower = { version = "0.5", features = ["util"] }
