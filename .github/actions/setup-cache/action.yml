@@ -65,29 +65,17 @@ runs:
           echo "🏃 Detected GitHub-hosted runner"
         fi
 
-    - name: Setup MinIO credentials for self-hosted runners
+    - name: Setup S3 cache backend for self-hosted runners
       id: setup-minio
       if: steps.detect-runner.outputs.runner-type == 'self-hosted'
       shell: bash
       run: |
-        # Set up MinIO credentials for self-hosted runners
-        echo "Setting up MinIO credentials for cache access..."
-
-        # MinIO service endpoint (adjust based on your cluster setup)
-        if [[ "${ENVIRONMENT:-local}" == "local" ]]; then
-          MINIO_ENDPOINT="http://minio.minio-system.svc.cluster.local:9000"
-        else
-          MINIO_ENDPOINT="http://minio.minio-system.svc.cluster.local:9000"
-        fi
-
-        echo "AWS_ACCESS_KEY_ID=admin" >> $GITHUB_ENV
-        echo "AWS_SECRET_ACCESS_KEY=minio123" >> $GITHUB_ENV
-        echo "AWS_ENDPOINT_URL=${MINIO_ENDPOINT}" >> $GITHUB_ENV
+        # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_ENDPOINT_URL_S3 /
+        # AWS_REGION come from the runner pod's envFrom on rustfs-creds.
+        # Re-export AWS_ENDPOINT_URL (note: no _S3 suffix) for runs-on/cache.
+        echo "AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL_S3}" >> $GITHUB_ENV
         echo "AWS_S3_FORCE_PATH_STYLE=true" >> $GITHUB_ENV
         echo "RUNS_ON_S3_BUCKET_CACHE=github-actions-cache" >> $GITHUB_ENV
-        echo "AWS_REGION=us-east-1" >> $GITHUB_ENV
-
-        echo "✅ MinIO credentials configured"
 
     - name: Enhance cache keys with commit SHA
       id: enhance-keys
@@ -169,7 +157,7 @@ runs:
         else
           CACHE_HIT="${{ steps.cache-action.outputs.cache-hit }}"
           CACHE_KEY="${{ steps.cache-action.outputs.cache-matched-key }}"
-          BACKEND="MinIO S3 Cache"
+          BACKEND="rustfs S3 Cache"
         fi
 
         echo "📊 Cache Summary:"
