@@ -6,9 +6,11 @@
 //! [`crate::store::MemoryStore`]; this trait covers only the vector index.
 
 mod error;
+mod filter;
 pub mod qdrant;
 
 pub use error::VectorError;
+pub use filter::{FilterCondition, MatchValue, MatchValues, MemoryFilter, NumericRange};
 pub use qdrant::QdrantIndex;
 
 use std::future::Future;
@@ -62,6 +64,11 @@ pub trait VectorIndex: Send + Sync + 'static {
     /// hydrates these into full [`crate::memory::Memory`] values via
     /// [`crate::store::MemoryStore::find_by_pids`].
     ///
+    /// `extra_filter` AND-joins with the scope + kind filter — caller-supplied
+    /// conditions cannot widen scope. An empty filter (or `None`) is inert.
+    /// `min_similarity` sets a score floor; hits below it are dropped by the
+    /// backend before they reach the result. `None` applies no floor.
+    ///
     /// # Errors
     ///
     /// Returns [`VectorError::Connection`] on backend errors and
@@ -73,6 +80,8 @@ pub trait VectorIndex: Send + Sync + 'static {
         query_embedding: Vec<f32>,
         limit: usize,
         kinds: KindSelector,
+        extra_filter: Option<MemoryFilter>,
+        min_similarity: Option<f32>,
     ) -> impl Future<Output = Result<Vec<(String, f32)>, VectorError>> + Send;
 
     /// Deletes vectors for the given pids.
@@ -140,6 +149,8 @@ mod tests {
             _query_embedding: Vec<f32>,
             limit: usize,
             _kinds: KindSelector,
+            _extra_filter: Option<MemoryFilter>,
+            _min_similarity: Option<f32>,
         ) -> Result<Vec<(String, f32)>, VectorError> {
             Ok(self
                 .points
@@ -191,7 +202,7 @@ mod tests {
             .unwrap();
 
         let hits = index
-            .search(scope, vec![0.1, 0.2, 0.3, 0.4], 5, KindSelector::default())
+            .search(scope, vec![0.1, 0.2, 0.3, 0.4], 5, KindSelector::default(), None, None)
             .await
             .unwrap();
         assert_eq!(hits.len(), 1);

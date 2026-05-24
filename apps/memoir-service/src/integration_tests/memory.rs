@@ -2,8 +2,10 @@
 
 use memoir_sdk::memoir::v1::forget_request::Target as ForgetTargetProto;
 use memoir_sdk::memoir::v1::{
-    ForgetRequest, MemoryStatus, RecallRequest, RememberRequest, Scope as ProtoScope, SearchRequest,
+    FilterCondition, ForgetRequest, MatchValue, MemoryFilter, MemoryStatus, RecallRequest, RememberRequest,
+    Scope as ProtoScope, SearchRequest, filter_condition, match_value,
 };
+use pbjson_types::{Struct, Value, value::Kind};
 use tonic::{Code, Request};
 
 use super::common::TestHarness;
@@ -61,6 +63,7 @@ async fn should_search_and_return_indexed_memories() {
             query: "hiking".to_owned(),
             limit: 10,
             metadata_filter: None,
+            min_similarity: None,
         }))
         .await
         .expect("search rpc")
@@ -246,5 +249,155 @@ async fn should_handle_concurrent_remembers_in_same_scope() {
         unique.len(),
         pids.len(),
         "every concurrent write must produce a unique pid; got {pids:?}"
+    );
+}
+
+/// Writes three memories with conversation_id metadata 1/1/2, then searches
+/// with a must_not filter on conversation_id=1 and asserts only the
+/// conversation-2 row survives. Mirrors rig-service's "exclude current
+/// conversation" requirement end-to-end through the gRPC surface.
+#[tokio::test(flavor = "multi_thread")]
+async fn should_exclude_memories_via_must_not_metadata_filter() {
+    let mut harness = TestHarness::start().await.expect("harness");
+    let scope = harness.fresh_scope();
+
+    let write = |conversation_id: i64, content: &str| {
+        let mut metadata_fields = std::collections::HashMap::new();
+        metadata_fields.insert(
+            "conversation_id".to_owned(),
+            Value {
+                kind: Some(Kind::NumberValue(conversation_id as f64)),
+            },
+        );
+        let metadata = Struct {
+            fields: metadata_fields,
+        };
+        RememberRequest {
+            scope: Some(scope.clone()),
+            content: content.to_owned(),
+            metadata: Some(metadata),
+        }
+    };
+
+    let mut memory = harness.memory.clone();
+    let keep = memory
+        .remember(harness.authed(write(2, "deployment runbook lives in confluence")))
+        .await
+        .expect("remember rpc")
+        .into_inner()
+        .memory
+        .expect("memory present");
+    let _ = memory
+        .remember(harness.authed(write(1, "deployment runbook is being updated")))
+        .await
+        .expect("remember rpc");
+    let _ = memory
+        .remember(harness.authed(write(1, "deployment runbook draft in progress")))
+        .await
+        .expect("remember rpc");
+
+    harness
+        .wait_until_searchable(&keep.pid, scope.clone(), "deployment runbook")
+        .await
+        .expect("wait_until_searchable");
+
+    let must_not_conversation_1 = MemoryFilter {
+        must_not: vec![FilterCondition {
+            field: "conversation_id".to_owned(),
+            condition: Some(filter_condition::Condition::Equals(MatchValue {
+                value: Some(match_value::Value::Integer(1)),
+            })),
+        }],
+        ..Default::default()
+    };
+
+    let hits = harness
+        .memory
+        .search(harness.authed(SearchRequest {
+            scope: Some(scope),
+            query: "deployment runbook".to_owned(),
+            limit: 50,
+            metadata_filter: Some(must_not_conversation_1),
+            min_similarity: None,
+        }))
+        .await
+        .expect("search rpc")
+        .into_inner()
+        .hits;
+
+    let pids: Vec<String> = hits
+        .iter()
+        .filter_map(|h| h.memory.as_ref().map(|m| m.pid.clone()))
+        .collect();
+    assert_eq!(
+        pids,
+        vec![keep.pid],
+        "must_not filter should leave only the conversation-2 row; got {pids:?}"
+    );
+}
+
+/// Asserts min_similarity is applied — an absurdly high floor drops every hit
+/// while a permissive floor preserves them. Confirms the wire field actually
+/// reaches the vector backend's score_threshold knob.
+#[tokio::test(flavor = "multi_thread")]
+async fn should_apply_min_similarity_floor() {
+    let mut harness = TestHarness::start().await.expect("harness");
+    let scope = harness.fresh_scope();
+
+    let written = harness
+        .memory
+        .remember(harness.authed(RememberRequest {
+            scope: Some(scope.clone()),
+            content: "the project uses postgres for source of truth".to_owned(),
+            metadata: None,
+        }))
+        .await
+        .expect("remember rpc")
+        .into_inner()
+        .memory
+        .expect("memory present");
+
+    harness
+        .wait_until_searchable(&written.pid, scope.clone(), "postgres source of truth")
+        .await
+        .expect("wait_until_searchable");
+
+    let strict = harness
+        .memory
+        .search(harness.authed(SearchRequest {
+            scope: Some(scope.clone()),
+            query: "postgres source of truth".to_owned(),
+            limit: 50,
+            metadata_filter: None,
+            min_similarity: Some(0.999_999),
+        }))
+        .await
+        .expect("search rpc")
+        .into_inner()
+        .hits;
+    assert!(
+        strict.is_empty(),
+        "min_similarity = 0.999999 should drop every hit; got {} results",
+        strict.len()
+    );
+
+    let permissive = harness
+        .memory
+        .search(harness.authed(SearchRequest {
+            scope: Some(scope),
+            query: "postgres source of truth".to_owned(),
+            limit: 50,
+            metadata_filter: None,
+            min_similarity: Some(-1.0),
+        }))
+        .await
+        .expect("search rpc")
+        .into_inner()
+        .hits;
+    assert!(
+        permissive
+            .iter()
+            .any(|h| h.memory.as_ref().is_some_and(|m| m.pid == written.pid)),
+        "min_similarity = -1.0 should preserve the just-written hit"
     );
 }

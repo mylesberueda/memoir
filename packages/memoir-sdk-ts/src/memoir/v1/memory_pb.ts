@@ -12,7 +12,7 @@ import type { JsonObject, Message } from "@bufbuild/protobuf";
  * Describes the file memoir/v1/memory.proto.
  */
 export const file_memoir_v1_memory: GenFile = /*@__PURE__*/
-  fileDesc("ChZtZW1vaXIvdjEvbWVtb3J5LnByb3RvEgltZW1vaXIudjEiOgoFU2NvcGUSEAoIYWdlbnRfaWQYASABKAkSDgoGb3JnX2lkGAIgASgJEg8KB3VzZXJfaWQYAyABKAkikwIKBk1lbW9yeRILCgNwaWQYASABKAkSHwoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgDIAEoCRIpCghtZXRhZGF0YRgEIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoMcHJvY2Vzc2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgAiAEBEicKBnN0YXR1cxgHIAEoDjIXLm1lbW9pci52MS5NZW1vcnlTdGF0dXNCDwoNX3Byb2Nlc3NlZF9hdCI9CglTZWFyY2hIaXQSIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeRINCgVzY29yZRgCIAEoAiKZAQoNU2VhcmNoUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRINCgVxdWVyeRgCIAEoCRINCgVsaW1pdBgDIAEoBRI1Cg9tZXRhZGF0YV9maWx0ZXIYBCABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0SACIAQFCEgoQX21ldGFkYXRhX2ZpbHRlciI0Cg5TZWFyY2hSZXNwb25zZRIiCgRoaXRzGAEgAygLMhQubWVtb2lyLnYxLlNlYXJjaEhpdCIcCg1SZWNhbGxSZXF1ZXN0EgsKA3BpZBgBIAEoCSIzCg5SZWNhbGxSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5IoABCg9SZW1lbWJlclJlcXVlc3QSHwoFc2NvcGUYASABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgCIAEoCRIuCghtZXRhZGF0YRgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3RIAIgBAUILCglfbWV0YWRhdGEiNQoQUmVtZW1iZXJSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5ImAKDUZvcmdldFJlcXVlc3QSDQoDcGlkGAEgASgJSAASIQoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGVIABITCgtoYXJkX2RlbGV0ZRgDIAEoCEIICgZ0YXJnZXQiJgoORm9yZ2V0UmVzcG9uc2USFAoMZGVsZXRlZF9waWRzGAEgAygJKn8KDE1lbW9yeVN0YXR1cxIdChlNRU1PUllfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGQoVTUVNT1JZX1NUQVRVU19QRU5ESU5HEAESGwoXTUVNT1JZX1NUQVRVU19QUk9DRVNTRUQQAhIYChRNRU1PUllfU1RBVFVTX0ZBSUxFRBADMpECCg1NZW1vcnlTZXJ2aWNlEj0KBlNlYXJjaBIYLm1lbW9pci52MS5TZWFyY2hSZXF1ZXN0GhkubWVtb2lyLnYxLlNlYXJjaFJlc3BvbnNlEj0KBlJlY2FsbBIYLm1lbW9pci52MS5SZWNhbGxSZXF1ZXN0GhkubWVtb2lyLnYxLlJlY2FsbFJlc3BvbnNlEkMKCFJlbWVtYmVyEhoubWVtb2lyLnYxLlJlbWVtYmVyUmVxdWVzdBobLm1lbW9pci52MS5SZW1lbWJlclJlc3BvbnNlEj0KBkZvcmdldBIYLm1lbW9pci52MS5Gb3JnZXRSZXF1ZXN0GhkubWVtb2lyLnYxLkZvcmdldFJlc3BvbnNlYgZwcm90bzM", [file_google_protobuf_struct, file_google_protobuf_timestamp]);
+  fileDesc("ChZtZW1vaXIvdjEvbWVtb3J5LnByb3RvEgltZW1vaXIudjEiOgoFU2NvcGUSEAoIYWdlbnRfaWQYASABKAkSDgoGb3JnX2lkGAIgASgJEg8KB3VzZXJfaWQYAyABKAkikwIKBk1lbW9yeRILCgNwaWQYASABKAkSHwoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgDIAEoCRIpCghtZXRhZGF0YRgEIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoMcHJvY2Vzc2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgAiAEBEicKBnN0YXR1cxgHIAEoDjIXLm1lbW9pci52MS5NZW1vcnlTdGF0dXNCDwoNX3Byb2Nlc3NlZF9hdCI9CglTZWFyY2hIaXQSIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeRINCgVzY29yZRgCIAEoAiLJAQoNU2VhcmNoUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRINCgVxdWVyeRgCIAEoCRINCgVsaW1pdBgDIAEoBRI1Cg9tZXRhZGF0YV9maWx0ZXIYBCABKAsyFy5tZW1vaXIudjEuTWVtb3J5RmlsdGVySACIAQESGwoObWluX3NpbWlsYXJpdHkYBSABKAJIAYgBAUISChBfbWV0YWRhdGFfZmlsdGVyQhEKD19taW5fc2ltaWxhcml0eSKSAQoMTWVtb3J5RmlsdGVyEigKBG11c3QYASADKAsyGi5tZW1vaXIudjEuRmlsdGVyQ29uZGl0aW9uEiwKCG11c3Rfbm90GAIgAygLMhoubWVtb2lyLnYxLkZpbHRlckNvbmRpdGlvbhIqCgZzaG91bGQYAyADKAsyGi5tZW1vaXIudjEuRmlsdGVyQ29uZGl0aW9uIq0BCg9GaWx0ZXJDb25kaXRpb24SDQoFZmllbGQYASABKAkSJwoGZXF1YWxzGAIgASgLMhUubWVtb2lyLnYxLk1hdGNoVmFsdWVIABIrCglpbl92YWx1ZXMYAyABKAsyFi5tZW1vaXIudjEuTWF0Y2hWYWx1ZXNIABIoCgVyYW5nZRgEIAEoCzIXLm1lbW9pci52MS5OdW1lcmljUmFuZ2VIAEILCgljb25kaXRpb24iTgoKTWF0Y2hWYWx1ZRIRCgdrZXl3b3JkGAEgASgJSAASEQoHaW50ZWdlchgCIAEoA0gAEhEKB2Jvb2xlYW4YAyABKAhIAEIHCgV2YWx1ZSJvCgtNYXRjaFZhbHVlcxIqCghrZXl3b3JkcxgBIAEoCzIWLm1lbW9pci52MS5LZXl3b3JkTGlzdEgAEioKCGludGVnZXJzGAIgASgLMhYubWVtb2lyLnYxLkludGVnZXJMaXN0SABCCAoGdmFsdWVzIh0KC0tleXdvcmRMaXN0Eg4KBnZhbHVlcxgBIAMoCSIdCgtJbnRlZ2VyTGlzdBIOCgZ2YWx1ZXMYASADKAMicgoMTnVtZXJpY1JhbmdlEg8KAmx0GAEgASgBSACIAQESEAoDbHRlGAIgASgBSAGIAQESDwoCZ3QYAyABKAFIAogBARIQCgNndGUYBCABKAFIA4gBAUIFCgNfbHRCBgoEX2x0ZUIFCgNfZ3RCBgoEX2d0ZSI0Cg5TZWFyY2hSZXNwb25zZRIiCgRoaXRzGAEgAygLMhQubWVtb2lyLnYxLlNlYXJjaEhpdCIcCg1SZWNhbGxSZXF1ZXN0EgsKA3BpZBgBIAEoCSIzCg5SZWNhbGxSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5IoABCg9SZW1lbWJlclJlcXVlc3QSHwoFc2NvcGUYASABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgCIAEoCRIuCghtZXRhZGF0YRgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3RIAIgBAUILCglfbWV0YWRhdGEiNQoQUmVtZW1iZXJSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5ImAKDUZvcmdldFJlcXVlc3QSDQoDcGlkGAEgASgJSAASIQoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGVIABITCgtoYXJkX2RlbGV0ZRgDIAEoCEIICgZ0YXJnZXQiJgoORm9yZ2V0UmVzcG9uc2USFAoMZGVsZXRlZF9waWRzGAEgAygJKn8KDE1lbW9yeVN0YXR1cxIdChlNRU1PUllfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGQoVTUVNT1JZX1NUQVRVU19QRU5ESU5HEAESGwoXTUVNT1JZX1NUQVRVU19QUk9DRVNTRUQQAhIYChRNRU1PUllfU1RBVFVTX0ZBSUxFRBADMpECCg1NZW1vcnlTZXJ2aWNlEj0KBlNlYXJjaBIYLm1lbW9pci52MS5TZWFyY2hSZXF1ZXN0GhkubWVtb2lyLnYxLlNlYXJjaFJlc3BvbnNlEj0KBlJlY2FsbBIYLm1lbW9pci52MS5SZWNhbGxSZXF1ZXN0GhkubWVtb2lyLnYxLlJlY2FsbFJlc3BvbnNlEkMKCFJlbWVtYmVyEhoubWVtb2lyLnYxLlJlbWVtYmVyUmVxdWVzdBobLm1lbW9pci52MS5SZW1lbWJlclJlc3BvbnNlEj0KBkZvcmdldBIYLm1lbW9pci52MS5Gb3JnZXRSZXF1ZXN0GhkubWVtb2lyLnYxLkZvcmdldFJlc3BvbnNlYgZwcm90bzM", [file_google_protobuf_struct, file_google_protobuf_timestamp]);
 
 /**
  * Scope uniquely identifies a memory partition. Memories written under one
@@ -159,15 +159,22 @@ export type SearchRequest = Message<"memoir.v1.SearchRequest"> & {
   limit: number;
 
   /**
-   * Optional metadata filter — JSON-encoded Qdrant payload filter.
-   * Exact shape is implementation-defined and may evolve. NOTE: as of
-   * memoir-core v0.1 the library does not consume this field; handler
-   * implementations may return Unimplemented or drop it until the library
-   * gains a metadata-filter builder option.
+   * Optional caller-supplied metadata filter, AND-joined with the scope
+   * and kind conditions enforced by the library. Caller-supplied conditions
+   * cannot widen scope. See `MemoryFilter` for shape.
    *
-   * @generated from field: optional google.protobuf.Struct metadata_filter = 4;
+   * @generated from field: optional memoir.v1.MemoryFilter metadata_filter = 4;
    */
-  metadataFilter?: JsonObject;
+  metadataFilter?: MemoryFilter;
+
+  /**
+   * Optional similarity floor in [-1.0, 1.0]. Hits with score below this
+   * value are dropped by the vector backend before they reach the response.
+   * Unset = no floor.
+   *
+   * @generated from field: optional float min_similarity = 5;
+   */
+  minSimilarity?: number;
 };
 
 /**
@@ -176,6 +183,229 @@ export type SearchRequest = Message<"memoir.v1.SearchRequest"> & {
  */
 export const SearchRequestSchema: GenMessage<SearchRequest> = /*@__PURE__*/
   messageDesc(file_memoir_v1_memory, 3);
+
+/**
+ * Caller-supplied filter applied at search time. Mirrors Qdrant's payload
+ * filter structure one-to-one but is a memoir-owned type so consumers do not
+ * take a transitive Qdrant dependency. Sections combine as:
+ *   - `must` — AND
+ *   - `must_not` — AND-NOT
+ *   - `should` — OR (at least one)
+ * An empty filter (all sections empty) is inert.
+ *
+ * @generated from message memoir.v1.MemoryFilter
+ */
+export type MemoryFilter = Message<"memoir.v1.MemoryFilter"> & {
+  /**
+   * @generated from field: repeated memoir.v1.FilterCondition must = 1;
+   */
+  must: FilterCondition[];
+
+  /**
+   * @generated from field: repeated memoir.v1.FilterCondition must_not = 2;
+   */
+  mustNot: FilterCondition[];
+
+  /**
+   * @generated from field: repeated memoir.v1.FilterCondition should = 3;
+   */
+  should: FilterCondition[];
+};
+
+/**
+ * Describes the message memoir.v1.MemoryFilter.
+ * Use `create(MemoryFilterSchema)` to create a new message.
+ */
+export const MemoryFilterSchema: GenMessage<MemoryFilter> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 4);
+
+/**
+ * One field-targeted condition inside a [`MemoryFilter`].
+ *
+ * @generated from message memoir.v1.FilterCondition
+ */
+export type FilterCondition = Message<"memoir.v1.FilterCondition"> & {
+  /**
+   * Payload field name to apply the condition against.
+   *
+   * @generated from field: string field = 1;
+   */
+  field: string;
+
+  /**
+   * @generated from oneof memoir.v1.FilterCondition.condition
+   */
+  condition: {
+    /**
+     * Field equals a single value.
+     *
+     * @generated from field: memoir.v1.MatchValue equals = 2;
+     */
+    value: MatchValue;
+    case: "equals";
+  } | {
+    /**
+     * Field equals any value in the list — `IN (...)` semantics.
+     *
+     * @generated from field: memoir.v1.MatchValues in_values = 3;
+     */
+    value: MatchValues;
+    case: "inValues";
+  } | {
+    /**
+     * Field is a number within the range.
+     *
+     * @generated from field: memoir.v1.NumericRange range = 4;
+     */
+    value: NumericRange;
+    case: "range";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message memoir.v1.FilterCondition.
+ * Use `create(FilterConditionSchema)` to create a new message.
+ */
+export const FilterConditionSchema: GenMessage<FilterCondition> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 5);
+
+/**
+ * Concrete value for equality matching. Mirrors memoir-core's `MatchValue`.
+ *
+ * @generated from message memoir.v1.MatchValue
+ */
+export type MatchValue = Message<"memoir.v1.MatchValue"> & {
+  /**
+   * @generated from oneof memoir.v1.MatchValue.value
+   */
+  value: {
+    /**
+     * @generated from field: string keyword = 1;
+     */
+    value: string;
+    case: "keyword";
+  } | {
+    /**
+     * @generated from field: int64 integer = 2;
+     */
+    value: bigint;
+    case: "integer";
+  } | {
+    /**
+     * @generated from field: bool boolean = 3;
+     */
+    value: boolean;
+    case: "boolean";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message memoir.v1.MatchValue.
+ * Use `create(MatchValueSchema)` to create a new message.
+ */
+export const MatchValueSchema: GenMessage<MatchValue> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 6);
+
+/**
+ * List of values for `IN (...)` matching. Mirrors memoir-core's `MatchValues`.
+ *
+ * @generated from message memoir.v1.MatchValues
+ */
+export type MatchValues = Message<"memoir.v1.MatchValues"> & {
+  /**
+   * @generated from oneof memoir.v1.MatchValues.values
+   */
+  values: {
+    /**
+     * @generated from field: memoir.v1.KeywordList keywords = 1;
+     */
+    value: KeywordList;
+    case: "keywords";
+  } | {
+    /**
+     * @generated from field: memoir.v1.IntegerList integers = 2;
+     */
+    value: IntegerList;
+    case: "integers";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message memoir.v1.MatchValues.
+ * Use `create(MatchValuesSchema)` to create a new message.
+ */
+export const MatchValuesSchema: GenMessage<MatchValues> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 7);
+
+/**
+ * @generated from message memoir.v1.KeywordList
+ */
+export type KeywordList = Message<"memoir.v1.KeywordList"> & {
+  /**
+   * @generated from field: repeated string values = 1;
+   */
+  values: string[];
+};
+
+/**
+ * Describes the message memoir.v1.KeywordList.
+ * Use `create(KeywordListSchema)` to create a new message.
+ */
+export const KeywordListSchema: GenMessage<KeywordList> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 8);
+
+/**
+ * @generated from message memoir.v1.IntegerList
+ */
+export type IntegerList = Message<"memoir.v1.IntegerList"> & {
+  /**
+   * @generated from field: repeated int64 values = 1;
+   */
+  values: bigint[];
+};
+
+/**
+ * Describes the message memoir.v1.IntegerList.
+ * Use `create(IntegerListSchema)` to create a new message.
+ */
+export const IntegerListSchema: GenMessage<IntegerList> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 9);
+
+/**
+ * Half-open or closed numeric range. All bounds optional; an entirely-unbounded
+ * range matches every numeric value (and is a no-op — prefer omitting the
+ * condition).
+ *
+ * @generated from message memoir.v1.NumericRange
+ */
+export type NumericRange = Message<"memoir.v1.NumericRange"> & {
+  /**
+   * @generated from field: optional double lt = 1;
+   */
+  lt?: number;
+
+  /**
+   * @generated from field: optional double lte = 2;
+   */
+  lte?: number;
+
+  /**
+   * @generated from field: optional double gt = 3;
+   */
+  gt?: number;
+
+  /**
+   * @generated from field: optional double gte = 4;
+   */
+  gte?: number;
+};
+
+/**
+ * Describes the message memoir.v1.NumericRange.
+ * Use `create(NumericRangeSchema)` to create a new message.
+ */
+export const NumericRangeSchema: GenMessage<NumericRange> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 10);
 
 /**
  * @generated from message memoir.v1.SearchResponse
@@ -192,7 +422,7 @@ export type SearchResponse = Message<"memoir.v1.SearchResponse"> & {
  * Use `create(SearchResponseSchema)` to create a new message.
  */
 export const SearchResponseSchema: GenMessage<SearchResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 4);
+  messageDesc(file_memoir_v1_memory, 11);
 
 /**
  * @generated from message memoir.v1.RecallRequest
@@ -209,7 +439,7 @@ export type RecallRequest = Message<"memoir.v1.RecallRequest"> & {
  * Use `create(RecallRequestSchema)` to create a new message.
  */
 export const RecallRequestSchema: GenMessage<RecallRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 5);
+  messageDesc(file_memoir_v1_memory, 12);
 
 /**
  * @generated from message memoir.v1.RecallResponse
@@ -226,7 +456,7 @@ export type RecallResponse = Message<"memoir.v1.RecallResponse"> & {
  * Use `create(RecallResponseSchema)` to create a new message.
  */
 export const RecallResponseSchema: GenMessage<RecallResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 6);
+  messageDesc(file_memoir_v1_memory, 13);
 
 /**
  * @generated from message memoir.v1.RememberRequest
@@ -253,7 +483,7 @@ export type RememberRequest = Message<"memoir.v1.RememberRequest"> & {
  * Use `create(RememberRequestSchema)` to create a new message.
  */
 export const RememberRequestSchema: GenMessage<RememberRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 7);
+  messageDesc(file_memoir_v1_memory, 14);
 
 /**
  * @generated from message memoir.v1.RememberResponse
@@ -275,7 +505,7 @@ export type RememberResponse = Message<"memoir.v1.RememberResponse"> & {
  * Use `create(RememberResponseSchema)` to create a new message.
  */
 export const RememberResponseSchema: GenMessage<RememberResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 8);
+  messageDesc(file_memoir_v1_memory, 15);
 
 /**
  * @generated from message memoir.v1.ForgetRequest
@@ -314,7 +544,7 @@ export type ForgetRequest = Message<"memoir.v1.ForgetRequest"> & {
  * Use `create(ForgetRequestSchema)` to create a new message.
  */
 export const ForgetRequestSchema: GenMessage<ForgetRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 9);
+  messageDesc(file_memoir_v1_memory, 16);
 
 /**
  * @generated from message memoir.v1.ForgetResponse
@@ -335,7 +565,7 @@ export type ForgetResponse = Message<"memoir.v1.ForgetResponse"> & {
  * Use `create(ForgetResponseSchema)` to create a new message.
  */
 export const ForgetResponseSchema: GenMessage<ForgetResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 10);
+  messageDesc(file_memoir_v1_memory, 17);
 
 /**
  * @generated from enum memoir.v1.MemoryStatus

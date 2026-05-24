@@ -501,13 +501,114 @@ pub struct SearchRequest {
     /// pagination in v0.1.
     #[prost(int32, tag="3")]
     pub limit: i32,
-    /// Optional metadata filter — JSON-encoded Qdrant payload filter.
-    /// Exact shape is implementation-defined and may evolve. NOTE: as of
-    /// memoir-core v0.1 the library does not consume this field; handler
-    /// implementations may return Unimplemented or drop it until the library
-    /// gains a metadata-filter builder option.
+    /// Optional caller-supplied metadata filter, AND-joined with the scope
+    /// and kind conditions enforced by the library. Caller-supplied conditions
+    /// cannot widen scope. See `MemoryFilter` for shape.
     #[prost(message, optional, tag="4")]
-    pub metadata_filter: ::core::option::Option<::pbjson_types::Struct>,
+    pub metadata_filter: ::core::option::Option<MemoryFilter>,
+    /// Optional similarity floor in \[-1.0, 1.0\]. Hits with score below this
+    /// value are dropped by the vector backend before they reach the response.
+    /// Unset = no floor.
+    #[prost(float, optional, tag="5")]
+    pub min_similarity: ::core::option::Option<f32>,
+}
+/// Caller-supplied filter applied at search time. Mirrors Qdrant's payload
+/// filter structure one-to-one but is a memoir-owned type so consumers do not
+/// take a transitive Qdrant dependency. Sections combine as:
+///    - `must` — AND
+///    - `must_not` — AND-NOT
+///    - `should` — OR (at least one)
+/// An empty filter (all sections empty) is inert.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MemoryFilter {
+    #[prost(message, repeated, tag="1")]
+    pub must: ::prost::alloc::vec::Vec<FilterCondition>,
+    #[prost(message, repeated, tag="2")]
+    pub must_not: ::prost::alloc::vec::Vec<FilterCondition>,
+    #[prost(message, repeated, tag="3")]
+    pub should: ::prost::alloc::vec::Vec<FilterCondition>,
+}
+/// One field-targeted condition inside a \[`MemoryFilter`\].
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct FilterCondition {
+    /// Payload field name to apply the condition against.
+    #[prost(string, tag="1")]
+    pub field: ::prost::alloc::string::String,
+    #[prost(oneof="filter_condition::Condition", tags="2, 3, 4")]
+    pub condition: ::core::option::Option<filter_condition::Condition>,
+}
+/// Nested message and enum types in `FilterCondition`.
+pub mod filter_condition {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Condition {
+        /// Field equals a single value.
+        #[prost(message, tag="2")]
+        Equals(super::MatchValue),
+        /// Field equals any value in the list — `IN (...)` semantics.
+        #[prost(message, tag="3")]
+        InValues(super::MatchValues),
+        /// Field is a number within the range.
+        #[prost(message, tag="4")]
+        Range(super::NumericRange),
+    }
+}
+/// Concrete value for equality matching. Mirrors memoir-core's `MatchValue`.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MatchValue {
+    #[prost(oneof="match_value::Value", tags="1, 2, 3")]
+    pub value: ::core::option::Option<match_value::Value>,
+}
+/// Nested message and enum types in `MatchValue`.
+pub mod match_value {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Value {
+        #[prost(string, tag="1")]
+        Keyword(::prost::alloc::string::String),
+        #[prost(int64, tag="2")]
+        Integer(i64),
+        #[prost(bool, tag="3")]
+        Boolean(bool),
+    }
+}
+/// List of values for `IN (...)` matching. Mirrors memoir-core's `MatchValues`.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MatchValues {
+    #[prost(oneof="match_values::Values", tags="1, 2")]
+    pub values: ::core::option::Option<match_values::Values>,
+}
+/// Nested message and enum types in `MatchValues`.
+pub mod match_values {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Values {
+        #[prost(message, tag="1")]
+        Keywords(super::KeywordList),
+        #[prost(message, tag="2")]
+        Integers(super::IntegerList),
+    }
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct KeywordList {
+    #[prost(string, repeated, tag="1")]
+    pub values: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct IntegerList {
+    #[prost(int64, repeated, tag="1")]
+    pub values: ::prost::alloc::vec::Vec<i64>,
+}
+/// Half-open or closed numeric range. All bounds optional; an entirely-unbounded
+/// range matches every numeric value (and is a no-op — prefer omitting the
+/// condition).
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct NumericRange {
+    #[prost(double, optional, tag="1")]
+    pub lt: ::core::option::Option<f64>,
+    #[prost(double, optional, tag="2")]
+    pub lte: ::core::option::Option<f64>,
+    #[prost(double, optional, tag="3")]
+    pub gt: ::core::option::Option<f64>,
+    #[prost(double, optional, tag="4")]
+    pub gte: ::core::option::Option<f64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SearchResponse {
