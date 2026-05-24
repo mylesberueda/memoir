@@ -5,6 +5,7 @@ pub mod embedding;
 pub mod jobs;
 pub mod llm;
 pub mod memory;
+pub mod migration;
 pub mod store;
 pub mod vector;
 
@@ -18,4 +19,4 @@ pub use llm::DEFAULT_EXTRACTION_PROMPT;
 ///
 /// Consumers configuring a custom schema via `Client::builder().schema(...)`
 /// can fall back to this when no override is supplied.
-pub use memoir_core_migration::DEFAULT_SCHEMA;
+pub use migration::DEFAULT_SCHEMA;

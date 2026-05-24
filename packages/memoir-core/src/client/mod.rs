@@ -116,7 +116,7 @@ impl Client {
         extraction_llm: Option<LlmConfig>,
         contradiction_llm: Option<LlmConfig>,
     ) -> Result<Client, ClientError> {
-        let schema = schema.unwrap_or_else(|| memoir_core_migration::DEFAULT_SCHEMA.to_string());
+        let schema = schema.unwrap_or_else(|| crate::migration::DEFAULT_SCHEMA.to_string());
 
         // Pin the pool to memoir-core's schema. Every connection the pool
         // hands out — including ones sea-orm-migration grabs for
@@ -190,7 +190,7 @@ impl Client {
     /// Returns [`ClientError::Migration`] if the schema name is invalid or
     /// if any migration fails to apply.
     pub async fn migrate(&self) -> Result<(), ClientError> {
-        memoir_core_migration::bootstrap_and_migrate(self.inner.store.db(), &self.inner.schema).await?;
+        crate::migration::bootstrap_and_migrate(self.inner.store.db(), &self.inner.schema).await?;
         Ok(())
     }
 

@@ -4,20 +4,36 @@ version = "0.1.0"
 description = "Memoir memory substrate as an embeddable Rust library"
 authors = ["Myles Berueda <myles@polypixel.io>"]
 edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mylesberueda/memoir"
+homepage = "https://github.com/mylesberueda/memoir"
+documentation = "https://docs.rs/polypixel-memoir-core"
+readme = "README.md"
+keywords = ["memory", "ai", "agent", "vector", "embedding"]
+categories = ["database", "asynchronous", "api-bindings"]
 
 [lib]
 name = "memoir_core"
 path = "src/lib.rs"
 
+[[bin]]
+name = "memoir_core_migrate"
+path = "src/bin/memoir_core_migrate.rs"
+
 [dependencies]
+async-trait = "0.1"
 bon = { version = "3.9" }
 chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15"
 fastembed = { version = "5.13" }
-memoir-core-migration = { package = "polypixel-memoir-core-migration", path = "./migration" }
 nanoid = { version = "0.4" }
+once_cell = "1.20"
 qdrant-client = { version = "1.18" }
+regex = "1.12"
 rig-core = { version = "0.31" }
 sea-orm = { version = "2.0.0-rc.20", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
+sea-orm-migration = { version = "2.0.0-rc.20", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

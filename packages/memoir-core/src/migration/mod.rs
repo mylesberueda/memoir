@@ -2,7 +2,7 @@
 //!
 //! Migrations run in a configurable Postgres schema (default `memoir`),
 //! isolating memoir-core's tables from the caller's `public` schema.
-//! Call [`bootstrap_and_migrate`] from `memoir_core::Client::migrate`.
+//! Call [`bootstrap_and_migrate`] from `Client::migrate`.
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -54,10 +54,7 @@ impl MigratorTrait for Migrator {
 /// Returns [`MigrationError::InvalidSchema`] if `schema` fails validation,
 /// [`MigrationError::Database`] for any Postgres failure during schema
 /// creation, search-path configuration, or migration application.
-pub async fn bootstrap_and_migrate(
-    db: &DatabaseConnection,
-    schema: &str,
-) -> Result<(), MigrationError> {
+pub async fn bootstrap_and_migrate(db: &DatabaseConnection, schema: &str) -> Result<(), MigrationError> {
     validate_schema_name(schema)?;
 
     db.execute_unprepared(&format!("CREATE SCHEMA IF NOT EXISTS {schema}"))
