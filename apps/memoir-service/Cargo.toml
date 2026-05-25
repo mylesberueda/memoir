@@ -23,7 +23,7 @@ memoir-service-migration = { path = "./migration" }
 http = { version = "1.4" }
 jsonwebtoken = { version = "9.3" }
 pbjson-types = "0.9.0"
-memoir-sdk = { package = "polypixel-memoir-sdk", path = "../../packages/memoir-sdk-rs" }
+memoir-sdk = { package = "polypixel-memoir-sdk", path = "../../packages/memoir-sdk-rs", features = ["reflection"] }
 qdrant-client = { version = "1.18" }
 reqwest = { version = "0.12", features = ["json"] }
 serde = { workspace = true, features = ["derive"] }

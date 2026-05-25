@@ -1,8 +1,18 @@
 [package]
 name = "polypixel-memoir-sdk"
 version = "0.1.0"
-edition = "2021"
-publish = false
+description = "Generated gRPC client SDK for Memoir's memoir-service"
+authors = ["Myles Berueda <myles@polypixel.io>"]
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mylesberueda/memoir"
+homepage = "https://github.com/mylesberueda/memoir"
+documentation = "https://docs.rs/polypixel-memoir-sdk"
+readme = "README.md"
+keywords = ["memoir", "grpc", "tonic", "client", "sdk"]
+categories = ["api-bindings", "network-programming"]
+exclude = ["project.json"]
 
 # This whole package is generated - there's no need to lint
 [lints.clippy]
@@ -11,6 +21,12 @@ all = "allow"
 [lib]
 name = "memoir_sdk"
 path = "src/lib.rs"
+
+[features]
+default = []
+# Embed the serialized `FileDescriptorSet` covering every proto in `memoir.v1`.
+# Adds ~45 KB to the consumer's binary; only needed for gRPC reflection servers.
+reflection = []
 
 [dependencies]
 pbjson = "0.9.0"
