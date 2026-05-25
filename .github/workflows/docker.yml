@@ -122,8 +122,8 @@ jobs:
             --local=context=/github/workspace
             --local=dockerfile=/github/workspace/apps/${{ matrix.project }}
             --opt=target=test
-            --import-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://minio.minio-system.svc.cluster.local:9000,use_path_style=true
-            --export-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://minio.minio-system.svc.cluster.local:9000,use_path_style=true,mode=max
+            --import-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://rustfs-svc.rustfs-system.svc.cluster.local:9000,use_path_style=true
+            --export-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://rustfs-svc.rustfs-system.svc.cluster.local:9000,use_path_style=true,mode=max
         env:
           BUILDKITD_FLAGS: "--oci-worker-no-process-sandbox"
 
@@ -230,8 +230,8 @@ jobs:
             --local=context=/github/workspace
             --local=dockerfile=/github/workspace/apps/${{ matrix.project }}
             --opt=target=runtime
-            --import-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://minio.minio-system.svc.cluster.local:9000,use_path_style=true
-            --export-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://minio.minio-system.svc.cluster.local:9000,use_path_style=true,mode=max
+            --import-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://rustfs-svc.rustfs-system.svc.cluster.local:9000,use_path_style=true
+            --export-cache=type=s3,region=us-east-1,bucket=buildkit-cache,name=${{ matrix.project }},endpoint_url=http://rustfs-svc.rustfs-system.svc.cluster.local:9000,use_path_style=true,mode=max
             --output=type=image,name=${{ steps.meta.outputs.image-sha }},push=${{ inputs.push }}
             --output=type=image,name=${{ steps.meta.outputs.image-short }},push=${{ inputs.push }}
             --output=type=image,name=${{ steps.meta.outputs.image-latest }},push=${{ inputs.push }}
