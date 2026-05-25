@@ -1,0 +1,126 @@
+name: Docker Release Tags
+
+# Re-tags an existing per-commit Docker image with semver-pinned release tags
+# when a `v*` tag is pushed. Does NOT rebuild — the per-commit `:<sha>` image
+# produced by docker.yml on the underlying commit is the bits that get
+# re-tagged, guaranteeing bit-identity between the per-commit and release
+# images.
+#
+# Tag classification:
+#   Clean semver (vX.Y.Z):
+#     :vX.Y.Z, :X.Y, :X, :latest
+#   Pre-release (vX.Y.Z-<suffix>, e.g. v0.1.0-rc.1):
+#     :vX.Y.Z-<suffix> only — sliding aliases (:X.Y, :X, :latest) are NOT
+#     bumped, so consumers pinned to :0.1 never silently get pre-release bits.
+#
+# Mechanism: `crane copy` against ghcr.io. Single static binary, no Docker
+# daemon needed, works on arc-runner-set out of the box.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  GHCR_REGISTRY: ghcr.io/${{ github.repository_owner }}/memoir
+  PROJECT: memoir-service
+
+jobs:
+  docker-tag-release:
+    runs-on: arc-runner-set
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install crane
+        run: |
+          CRANE_VERSION="v0.20.2"
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            | tar xz -C /tmp crane
+          sudo mv /tmp/crane /usr/local/bin/crane
+          crane version
+
+      - name: Authenticate to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | crane auth login ghcr.io \
+            --username "${{ github.actor }}" --password-stdin
+
+      - name: Classify tag and compute destination tags
+        id: tags
+        run: |
+          TAG="${{ github.ref_name }}"
+          IMAGE_BASE="${GHCR_REGISTRY}/${PROJECT}"
+
+          # Strip leading "v" and split on first "-" to separate semver core
+          # from pre-release suffix. A "-" anywhere in the version-after-v
+          # marks this as a pre-release.
+          VERSION="${TAG#v}"
+          CORE="${VERSION%%-*}"
+          if [ "$CORE" = "$VERSION" ]; then
+            KIND="clean"
+          else
+            KIND="prerelease"
+          fi
+
+          # Validate semver core is X.Y.Z (digits only, dot-separated)
+          if ! echo "$CORE" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '$TAG' has invalid semver core '$CORE'. Expected vX.Y.Z[-suffix]."
+            exit 1
+          fi
+
+          MAJOR="${CORE%%.*}"
+          MINOR_PATCH="${CORE#*.}"
+          MINOR="${MINOR_PATCH%%.*}"
+
+          # Always produce the immutable version pin
+          DEST_TAGS="$TAG"
+
+          if [ "$KIND" = "clean" ]; then
+            DEST_TAGS="$DEST_TAGS ${MAJOR}.${MINOR} ${MAJOR} latest"
+          fi
+
+          echo "kind=$KIND" >> $GITHUB_OUTPUT
+          echo "image-base=$IMAGE_BASE" >> $GITHUB_OUTPUT
+          echo "source-image=${IMAGE_BASE}:${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "dest-tags=$DEST_TAGS" >> $GITHUB_OUTPUT
+
+          echo "🏷️  Tag classification:"
+          echo "    Input tag:    $TAG"
+          echo "    Kind:         $KIND"
+          echo "    Source image: ${IMAGE_BASE}:${{ github.sha }}"
+          echo "    Dest tags:    $DEST_TAGS"
+
+      - name: Verify source image exists
+        run: |
+          SRC="${{ steps.tags.outputs.source-image }}"
+          echo "Checking that $SRC exists in GHCR..."
+          if ! crane manifest "$SRC" > /dev/null 2>&1; then
+            echo "::error::Source image $SRC not found in GHCR."
+            echo "::error::The per-commit image for ${{ github.sha }} must be published before this tag can be released."
+            echo "::error::Push the branch containing this commit first; CI will build and push the per-commit image."
+            exit 1
+          fi
+          echo "✅ Source image found"
+
+      - name: Re-tag image
+        run: |
+          SRC="${{ steps.tags.outputs.source-image }}"
+          IMAGE_BASE="${{ steps.tags.outputs.image-base }}"
+          DEST_TAGS="${{ steps.tags.outputs.dest-tags }}"
+
+          for DEST_TAG in $DEST_TAGS; do
+            DEST="${IMAGE_BASE}:${DEST_TAG}"
+            echo "🐳 crane copy $SRC → $DEST"
+            crane copy "$SRC" "$DEST"
+          done
+
+          echo "✅ Published tags:"
+          for DEST_TAG in $DEST_TAGS; do
+            echo "  - ${IMAGE_BASE}:${DEST_TAG}"
+          done
