@@ -62,6 +62,52 @@ impl EditPatch {
     }
 }
 
+/// Direction in which [`MemoryStore::timeline`] orders rows by `created_at`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum TimelineDirection {
+    /// Newest-first — `ORDER BY created_at DESC`.
+    #[default]
+    Descending,
+
+    /// Oldest-first — `ORDER BY created_at ASC`.
+    Ascending,
+}
+
+/// Default page size for [`MemoryStore::timeline`].
+pub const DEFAULT_TIMELINE_LIMIT: usize = 50;
+
+/// Parameters for [`MemoryStore::timeline`].
+///
+/// `None` on a window bound means "no bound on that side." `include_superseded`
+/// defaults to `true` because timeline is the audit view; consumers wanting
+/// "current truth only" pass `false`.
+#[derive(Debug, Clone)]
+pub struct TimelineParams {
+    pub kinds: crate::memory::KindSelector,
+    pub created_after: Option<DateTime<FixedOffset>>,
+    pub created_before: Option<DateTime<FixedOffset>>,
+    pub event_at_after: Option<DateTime<FixedOffset>>,
+    pub event_at_before: Option<DateTime<FixedOffset>>,
+    pub include_superseded: bool,
+    pub limit: usize,
+    pub direction: TimelineDirection,
+}
+
+impl Default for TimelineParams {
+    fn default() -> Self {
+        Self {
+            kinds: crate::memory::KindSelector::default(),
+            created_after: None,
+            created_before: None,
+            event_at_after: None,
+            event_at_before: None,
+            include_superseded: true,
+            limit: DEFAULT_TIMELINE_LIMIT,
+            direction: TimelineDirection::Descending,
+        }
+    }
+}
+
 /// Persists and retrieves memory rows from the source-of-truth store.
 ///
 /// Implementations own the database connection. The trait methods are async
@@ -99,6 +145,24 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
     /// [`StoreError::Database`] for database failures.
     fn recall(&self, pid: &str) -> impl Future<Output = Result<Memory, StoreError>> + Send;
+
+    /// Returns memories in `scope` ordered by `created_at`, with optional filters.
+    ///
+    /// Postgres-only read; does not consult the vector index. Includes
+    /// superseded rows by default — pass [`TimelineParams::include_superseded`]
+    /// = `false` to filter them out. The `kinds` selector mirrors search's
+    /// kind toggles. Hydrated rows carry `score = None` (no similarity was
+    /// computed).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::InvalidScope`] if any scope field is empty,
+    /// [`StoreError::Database`] for database failures.
+    fn timeline(
+        &self,
+        scope: Scope,
+        params: TimelineParams,
+    ) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
 
     /// Fetches multiple memories by pid, returning only indexed rows.
     ///
@@ -331,6 +395,41 @@ mod tests {
                 .iter()
                 .filter_map(|pid| memories.iter().find(|m| m.pid == *pid).cloned())
                 .collect())
+        }
+
+        async fn timeline(&self, scope: Scope, params: TimelineParams) -> Result<Vec<Memory>, StoreError> {
+            scope.validate()?;
+            let memories = self.memories.lock().unwrap();
+
+            let mut filtered: Vec<Memory> = memories
+                .iter()
+                .filter(|m| m.scope == scope)
+                .filter(|m| match m.kind {
+                    MemoryKind::Episodic => params.kinds.episodic,
+                    MemoryKind::Semantic => params.kinds.semantic,
+                })
+                .filter(|m| params.created_after.is_none_or(|t| m.created_at >= t))
+                .filter(|m| params.created_before.is_none_or(|t| m.created_at < t))
+                .filter(|m| {
+                    params
+                        .event_at_after
+                        .is_none_or(|t| m.event_at.is_some_and(|ev| ev >= t))
+                })
+                .filter(|m| {
+                    params
+                        .event_at_before
+                        .is_none_or(|t| m.event_at.is_some_and(|ev| ev < t))
+                })
+                .filter(|m| params.include_superseded || m.supersession.is_none())
+                .cloned()
+                .collect();
+
+            filtered.sort_by(|a, b| match params.direction {
+                TimelineDirection::Descending => b.created_at.cmp(&a.created_at),
+                TimelineDirection::Ascending => a.created_at.cmp(&b.created_at),
+            });
+            filtered.truncate(params.limit);
+            Ok(filtered)
         }
 
         async fn forget(&self, target: ForgetTarget) -> Result<Vec<String>, StoreError> {

@@ -8,6 +8,7 @@ mod extract;
 mod reconcile;
 mod remember;
 mod search;
+mod timeline;
 mod worker;
 
 pub use admin::RetryBuilder;
@@ -16,6 +17,7 @@ pub use error::ClientError;
 pub use reconcile::{ReconcileBuilder, ReconcileSummary};
 pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
 pub use search::{DEFAULT_LIMIT, SearchBuilder};
+pub use timeline::TimelineBuilder;
 pub use worker::{
     DEFAULT_DRAIN_TIMEOUT, DEFAULT_LEASE_DURATION, DEFAULT_MAX_ATTEMPTS, DEFAULT_POLL_INTERVAL, WorkerBuilder,
     WorkerHandle,
@@ -310,6 +312,23 @@ impl Client {
     /// pids cannot be hydrated to full rows.
     pub fn search(&self, query: impl Into<String>, scope: crate::memory::Scope) -> SearchBuilder<'_> {
         SearchBuilder::new(self, query.into(), scope)
+    }
+
+    /// Returns memories in `scope` ordered chronologically — the event log.
+    ///
+    /// Postgres-only read; no embedding, no Qdrant. Includes superseded rows
+    /// by default (this is the audit view). Default order is newest-first,
+    /// default limit is [`crate::store::DEFAULT_TIMELINE_LIMIT`]. See
+    /// [`TimelineBuilder`] for the builder methods.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::InvalidScope`] when a `Scope` target has
+    /// empty fields, or wrapping
+    /// [`crate::store::StoreError::Database`] for database failures.
+    pub fn timeline(&self, scope: crate::memory::Scope) -> TimelineBuilder<'_> {
+        TimelineBuilder::new(self, scope)
     }
 
     /// Looks up a single memory by its public id, at any lifecycle state.
