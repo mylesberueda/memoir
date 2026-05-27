@@ -214,6 +214,18 @@ impl TestClient {
             .to_owned();
         Database::connect(options).await.context("connect raw_db")
     }
+
+    /// Opens a fresh `Qdrant` client targeting the configured QDRANT_URL.
+    ///
+    /// Used by payload-layer tests that need to inspect raw Qdrant point
+    /// payloads — e.g. verifying that the upsert path wrote the expected
+    /// `created_at` / `event_at` / metadata-flattened fields. The
+    /// collection name is `self.collection`; callers issue scrolls/queries
+    /// against that name.
+    pub fn raw_qdrant(&self) -> Result<Qdrant> {
+        let qdrant_url = std::env::var("QDRANT_URL").context("QDRANT_URL env var must be set")?;
+        Qdrant::from_url(&qdrant_url).build().context("build raw_qdrant client")
+    }
 }
 
 /// Builds a fresh, deterministic scope tuple for use within a test.

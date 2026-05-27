@@ -97,6 +97,17 @@ async fn execute(builder: RememberBuilder<'_>) -> Result<Memory, ClientError> {
     } = builder;
     let inner = client.inner.clone();
 
+    if let Some(obj) = metadata.as_object() {
+        for key in obj.keys() {
+            if crate::vector::qdrant::RESERVED_PAYLOAD_KEYS
+                .iter()
+                .any(|reserved| reserved == key)
+            {
+                return Err(ClientError::ReservedMetadataKey { key: key.clone() });
+            }
+        }
+    }
+
     let written = inner
         .store
         .remember(scope, prompt, metadata, MemoryKind::Episodic, None)

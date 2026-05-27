@@ -15,7 +15,10 @@ pub use qdrant::QdrantIndex;
 
 use std::future::Future;
 
-use crate::memory::{KindSelector, MemoryKind, Scope};
+use crate::memory::{KindSelector, Memory, Scope};
+
+#[cfg(test)]
+use crate::memory::MemoryKind;
 
 /// Stores and queries vectors keyed by memory pid.
 ///
@@ -33,30 +36,25 @@ pub trait VectorIndex: Send + Sync + 'static {
     /// Returns [`VectorError::Connection`] if the backend is unreachable,
     /// [`VectorError::BadRequest`] if the collection exists with a
     /// different vector dimension than requested.
-    fn ensure_collection(
-        &self,
-        vector_dim: usize,
-    ) -> impl Future<Output = Result<(), VectorError>> + Send;
+    fn ensure_collection(&self, vector_dim: usize) -> impl Future<Output = Result<(), VectorError>> + Send;
 
-    /// Upserts a single memory's vector + scope payload.
+    /// Upserts a memory's vector + payload for similarity search and filtering.
     ///
-    /// The pid is the same value persisted in the source-of-truth store; the
-    /// caller is responsible for ensuring the corresponding row exists before
-    /// the upsert completes (the [`crate::store::IndexStatus::Pending`]
-    /// lifecycle state covers the gap).
+    /// The payload carries enough of the memory's state to support payload-
+    /// level filters at search time: scope (`agent_id`, `org_id`, `user_id`),
+    /// `kind`, `created_at`, `event_at` (when known), and the memory's
+    /// arbitrary JSON `metadata` flattened to top-level payload keys. The
+    /// source-of-truth row in Postgres still holds the canonical copy; the
+    /// payload is a derived index. Callers are responsible for ensuring the
+    /// Postgres row exists before this completes
+    /// ([`crate::store::IndexStatus::Pending`] covers the gap).
     ///
     /// # Errors
     ///
     /// Returns [`VectorError::Connection`] on backend errors and
     /// [`VectorError::BadRequest`] when the vector's dimension does not
     /// match the collection's.
-    fn upsert(
-        &self,
-        pid: &str,
-        scope: &Scope,
-        kind: MemoryKind,
-        vector: Vec<f32>,
-    ) -> impl Future<Output = Result<(), VectorError>> + Send;
+    fn upsert(&self, memory: &Memory, vector: Vec<f32>) -> impl Future<Output = Result<(), VectorError>> + Send;
 
     /// Returns the top similarity hits within `scope`, filtered by kind.
     ///
@@ -93,10 +91,7 @@ pub trait VectorIndex: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`VectorError::Connection`] on backend errors.
-    fn delete_by_pids(
-        &self,
-        pids: &[&str],
-    ) -> impl Future<Output = Result<(), VectorError>> + Send;
+    fn delete_by_pids(&self, pids: &[&str]) -> impl Future<Output = Result<(), VectorError>> + Send;
 
     /// Returns every pid in the index that matches `scope`.
     ///
@@ -129,17 +124,11 @@ mod tests {
             Ok(())
         }
 
-        async fn upsert(
-            &self,
-            pid: &str,
-            scope: &Scope,
-            kind: MemoryKind,
-            vector: Vec<f32>,
-        ) -> Result<(), VectorError> {
+        async fn upsert(&self, memory: &Memory, vector: Vec<f32>) -> Result<(), VectorError> {
             self.points
                 .lock()
                 .unwrap()
-                .insert(pid.to_string(), (scope.clone(), kind, vector));
+                .insert(memory.pid.clone(), (memory.scope.clone(), memory.kind, vector));
             Ok(())
         }
 
@@ -170,11 +159,7 @@ mod tests {
             Ok(())
         }
 
-        async fn list_pids_in_scope(
-            &self,
-            scope: Scope,
-            _page_size: usize,
-        ) -> Result<Vec<String>, VectorError> {
+        async fn list_pids_in_scope(&self, scope: Scope, _page_size: usize) -> Result<Vec<String>, VectorError> {
             Ok(self
                 .points
                 .lock()
@@ -188,18 +173,31 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn should_implement_trait_with_in_test_stub() {
+        use chrono::Utc;
+
         let index = StubIndex::default();
         let scope = Scope {
             agent_id: "a".to_string(),
             org_id: "o".to_string(),
             user_id: "u".to_string(),
         };
+        let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
+        let memory = Memory {
+            pid: "pid1".to_string(),
+            scope: scope.clone(),
+            content: "hello".to_string(),
+            metadata: serde_json::json!({}),
+            kind: MemoryKind::Episodic,
+            source_pid: None,
+            supersession: None,
+            created_at: now,
+            updated_at: now,
+            event_at: None,
+            score: None,
+        };
 
         index.ensure_collection(4).await.unwrap();
-        index
-            .upsert("pid1", &scope, MemoryKind::Episodic, vec![0.1, 0.2, 0.3, 0.4])
-            .await
-            .unwrap();
+        index.upsert(&memory, vec![0.1, 0.2, 0.3, 0.4]).await.unwrap();
 
         let hits = index
             .search(scope, vec![0.1, 0.2, 0.3, 0.4], 5, KindSelector::default(), None, None)

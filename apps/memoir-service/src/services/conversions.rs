@@ -230,6 +230,16 @@ pub(crate) fn client_error_to_status(err: ClientError) -> Status {
             tracing::error!(error.kind = "migration", error.detail = %detail, "client error mapped to INTERNAL");
             Status::internal("internal error")
         }
+        ClientError::ReservedMetadataKey { key } => {
+            tracing::warn!(
+                error.kind = "client.reserved_metadata_key",
+                metadata.key = %key,
+                "client error mapped to INVALID_ARGUMENT",
+            );
+            Status::invalid_argument(format!(
+                "metadata key '{key}' is reserved by memoir-core's payload schema"
+            ))
+        }
     }
 }
 
