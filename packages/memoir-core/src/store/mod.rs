@@ -20,7 +20,8 @@ use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope};
 /// Persisted as the `qdrant_status` column on the memories table. The column
 /// name is historical; the state is generic over which vector backend an
 /// implementation uses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "lowercase")]
 pub enum IndexStatus {
     /// Row written to Postgres; embedding + vector upsert in flight.
     Pending,
@@ -30,17 +31,6 @@ pub enum IndexStatus {
 
     /// Embedding or vector upsert failed; reconciliation will retry.
     Failed,
-}
-
-impl IndexStatus {
-    /// Returns the canonical lowercase string used in storage.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Pending => "pending",
-            Self::Indexed => "indexed",
-            Self::Failed => "failed",
-        }
-    }
 }
 
 /// Persists and retrieves memory rows from the source-of-truth store.
@@ -86,10 +76,7 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`StoreError::Database`] for database failures.
-    fn find_by_pids(
-        &self,
-        pids: &[&str],
-    ) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
+    fn find_by_pids(&self, pids: &[&str]) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
 
     /// Deletes one memory or every memory in a scope, returning deleted pids.
     ///
@@ -100,10 +87,7 @@ pub trait MemoryStore: Send + Sync + 'static {
     ///
     /// Returns [`StoreError::InvalidScope`] if a scope target has empty
     /// fields, [`StoreError::Database`] for database failures.
-    fn forget(
-        &self,
-        target: ForgetTarget,
-    ) -> impl Future<Output = Result<Vec<String>, StoreError>> + Send;
+    fn forget(&self, target: ForgetTarget) -> impl Future<Output = Result<Vec<String>, StoreError>> + Send;
 
     /// Updates a memory's index lifecycle state.
     ///
@@ -114,11 +98,7 @@ pub trait MemoryStore: Send + Sync + 'static {
     ///
     /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
     /// [`StoreError::Database`] for database failures.
-    fn set_index_status(
-        &self,
-        pid: &str,
-        status: IndexStatus,
-    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+    fn set_index_status(&self, pid: &str, status: IndexStatus) -> impl Future<Output = Result<(), StoreError>> + Send;
 
     /// Returns up to `limit` memories whose index lifecycle is `failed`.
     ///
@@ -128,10 +108,7 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`StoreError::Database`] for database failures.
-    fn find_failed(
-        &self,
-        limit: usize,
-    ) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
+    fn find_failed(&self, limit: usize) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
 
     /// Returns every distinct scope tuple present in the store.
     ///
@@ -142,8 +119,7 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`StoreError::Database`] for database failures.
-    fn list_scopes(&self)
-    -> impl Future<Output = Result<Vec<Scope>, StoreError>> + Send;
+    fn list_scopes(&self) -> impl Future<Output = Result<Vec<Scope>, StoreError>> + Send;
 
     /// Returns every indexed pid for the given scope.
     ///
@@ -156,10 +132,7 @@ pub trait MemoryStore: Send + Sync + 'static {
     ///
     /// Returns [`StoreError::InvalidScope`] if any scope field is empty,
     /// [`StoreError::Database`] for database failures.
-    fn indexed_pids_in_scope(
-        &self,
-        scope: &Scope,
-    ) -> impl Future<Output = Result<Vec<String>, StoreError>> + Send;
+    fn indexed_pids_in_scope(&self, scope: &Scope) -> impl Future<Output = Result<Vec<String>, StoreError>> + Send;
 
     /// Marks `pid` as superseded by `by_pid`.
     ///
@@ -173,11 +146,7 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
     /// [`StoreError::Database`] for database failures (including FK
     /// violations when `by_pid` does not exist).
-    fn supersede(
-        &self,
-        pid: &str,
-        by_pid: &str,
-    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+    fn supersede(&self, pid: &str, by_pid: &str) -> impl Future<Output = Result<(), StoreError>> + Send;
 
     /// Clears the supersession marker on `pid`, restoring it to active state.
     ///
@@ -189,10 +158,7 @@ pub trait MemoryStore: Send + Sync + 'static {
     ///
     /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
     /// [`StoreError::Database`] for database failures.
-    fn unsupersede(
-        &self,
-        pid: &str,
-    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+    fn unsupersede(&self, pid: &str) -> impl Future<Output = Result<(), StoreError>> + Send;
 }
 
 #[cfg(test)]
@@ -215,6 +181,7 @@ mod tests {
             kind: MemoryKind,
             source_pid: Option<String>,
         ) -> Result<Memory, StoreError> {
+            let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
             let memory = Memory {
                 pid: format!("test-{}", self.memories.lock().unwrap().len()),
                 scope,
@@ -222,8 +189,10 @@ mod tests {
                 metadata,
                 kind,
                 source_pid,
-                superseded_by: None,
-                created_at: Utc::now().into(),
+                supersession: None,
+                created_at: now,
+                updated_at: now,
+                event_at: None,
                 score: None,
             };
             self.memories.lock().unwrap().push(memory.clone());
@@ -285,13 +254,8 @@ mod tests {
         }
 
         async fn list_scopes(&self) -> Result<Vec<Scope>, StoreError> {
-            let scopes: std::collections::HashSet<Scope> = self
-                .memories
-                .lock()
-                .unwrap()
-                .iter()
-                .map(|m| m.scope.clone())
-                .collect();
+            let scopes: std::collections::HashSet<Scope> =
+                self.memories.lock().unwrap().iter().map(|m| m.scope.clone()).collect();
             Ok(scopes.into_iter().collect())
         }
 
@@ -312,7 +276,10 @@ mod tests {
                 .iter_mut()
                 .find(|m| m.pid == pid)
                 .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
-            target.superseded_by = Some(by_pid.to_string());
+            target.supersession = Some(crate::memory::SupersessionInfo {
+                winner_pid: by_pid.to_string(),
+                at: Utc::now().into(),
+            });
             Ok(())
         }
 
@@ -322,7 +289,7 @@ mod tests {
                 .iter_mut()
                 .find(|m| m.pid == pid)
                 .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
-            target.superseded_by = None;
+            target.supersession = None;
             Ok(())
         }
     }
@@ -360,9 +327,9 @@ mod tests {
 
     #[test]
     fn should_render_index_status_as_lowercase_string() {
-        assert_eq!(IndexStatus::Pending.as_str(), "pending");
-        assert_eq!(IndexStatus::Indexed.as_str(), "indexed");
-        assert_eq!(IndexStatus::Failed.as_str(), "failed");
+        assert_eq!(IndexStatus::Pending.as_ref(), "pending");
+        assert_eq!(IndexStatus::Indexed.as_ref(), "indexed");
+        assert_eq!(IndexStatus::Failed.as_ref(), "failed");
     }
 
     async fn write(store: &StubStore, content: &str) -> Memory {
@@ -372,7 +339,13 @@ mod tests {
             user_id: "u".to_string(),
         };
         store
-            .remember(scope, content.to_string(), serde_json::json!({}), MemoryKind::Semantic, None)
+            .remember(
+                scope,
+                content.to_string(),
+                serde_json::json!({}),
+                MemoryKind::Semantic,
+                None,
+            )
             .await
             .unwrap()
     }
@@ -386,7 +359,8 @@ mod tests {
         store.supersede(&loser.pid, &winner.pid).await.unwrap();
 
         let after = store.recall(&loser.pid).await.unwrap();
-        assert_eq!(after.superseded_by.as_deref(), Some(winner.pid.as_str()));
+        let supersession = after.supersession.as_ref().expect("supersession set");
+        assert_eq!(supersession.winner_pid, winner.pid);
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -399,7 +373,7 @@ mod tests {
         store.unsupersede(&loser.pid).await.unwrap();
 
         let after = store.recall(&loser.pid).await.unwrap();
-        assert_eq!(after.superseded_by, None);
+        assert_eq!(after.supersession, None);
     }
 
     #[tokio::test(flavor = "current_thread")]

@@ -211,7 +211,7 @@ fn build_semantic_metadata(
 ) -> serde_json::Value {
     serde_json::json!({
         "origin": "extraction",
-        "provider": provider.as_str(),
+        "provider": provider.as_ref(),
         "model": model,
         "confidence": confidence,
     })

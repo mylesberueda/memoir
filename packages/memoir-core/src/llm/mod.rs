@@ -334,7 +334,7 @@ mod tests {
 
     #[test]
     fn should_render_role_as_lowercase_string() {
-        assert_eq!(LlmRole::Extraction.as_str(), "extraction");
-        assert_eq!(LlmRole::Contradiction.as_str(), "contradiction");
+        assert_eq!(LlmRole::Extraction.as_ref(), "extraction");
+        assert_eq!(LlmRole::Contradiction.as_ref(), "contradiction");
     }
 }

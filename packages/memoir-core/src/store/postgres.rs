@@ -57,7 +57,7 @@ impl MemoryStore for PostgresStore {
                 SeaOrmValue::String(Some(scope.user_id.clone())),
                 SeaOrmValue::String(Some(content)),
                 SeaOrmValue::Json(Some(Box::new(metadata))),
-                SeaOrmValue::String(Some(kind.as_str().to_string())),
+                SeaOrmValue::String(Some(kind.to_string())),
                 SeaOrmValue::String(source_pid),
             ],
         );
@@ -141,7 +141,7 @@ impl MemoryStore for PostgresStore {
             sea_orm::DatabaseBackend::Postgres,
             "UPDATE memories SET qdrant_status = $1 WHERE pid = $2",
             [
-                SeaOrmValue::String(Some(status.as_str().to_string())),
+                SeaOrmValue::String(Some(status.to_string())),
                 SeaOrmValue::String(Some(pid.to_string())),
             ],
         );
@@ -312,11 +312,23 @@ fn memory_from_row(row: &sea_orm::QueryResult) -> Result<Memory, StoreError> {
     let superseded_by: Option<String> = row.try_get("", "superseded_by").map_err(database)?;
     let created_at: DateTime<FixedOffset> = row.try_get("", "created_at").map_err(database)?;
 
-    let kind = match kind_str.as_str() {
-        "episodic" => MemoryKind::Episodic,
-        "semantic" => MemoryKind::Semantic,
-        other => return Err(StoreError::Database(format!("unknown memory kind: {other}"))),
-    };
+    let kind: MemoryKind = kind_str
+        .parse()
+        .map_err(|_| StoreError::Database(format!("unknown memory kind: {kind_str}")))?;
+
+    // Placeholders for ticket 0010/0002 — the Memory struct now carries
+    // `supersession`, `updated_at`, and `event_at`. This row-conversion
+    // helper does not yet hydrate them from the database; ticket 0010/0003
+    // (storage-layer rewrite) extends the SELECTs above and queries
+    // `supersession_events` to populate the supersession-time, and adds
+    // `updated_at` and `event_at` column reads. Until that ticket lands,
+    // the values below are coarsely approximated: supersession derives
+    // its pid from the existing cache column with a placeholder `at`,
+    // updated_at falls back to created_at, and event_at is None.
+    let supersession = superseded_by.map(|winner_pid| crate::memory::SupersessionInfo {
+        winner_pid,
+        at: created_at,
+    });
 
     Ok(Memory {
         pid,
@@ -329,8 +341,10 @@ fn memory_from_row(row: &sea_orm::QueryResult) -> Result<Memory, StoreError> {
         metadata,
         kind,
         source_pid,
-        superseded_by,
+        supersession,
         created_at,
+        updated_at: created_at,
+        event_at: None,
         score: None,
     })
 }

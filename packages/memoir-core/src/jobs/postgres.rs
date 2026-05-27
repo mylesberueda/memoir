@@ -45,7 +45,7 @@ impl MemoryJobsStore for PostgresJobsStore {
             "#,
             [
                 SeaOrmValue::String(Some(source_pid)),
-                SeaOrmValue::String(Some(kind.as_str().to_string())),
+                SeaOrmValue::String(Some(kind.to_string())),
                 SeaOrmValue::Json(Some(Box::new(payload))),
             ],
         );
@@ -220,7 +220,7 @@ impl MemoryJobsStore for PostgresJobsStore {
                 Statement::from_sql_and_values(
                     sea_orm::DatabaseBackend::Postgres,
                     "SELECT COUNT(*)::BIGINT AS n FROM memory_jobs WHERE state = 'failed' AND kind = $1",
-                    [SeaOrmValue::String(Some(k.as_str().to_string()))],
+                    [SeaOrmValue::String(Some(k.to_string()))],
                 )
             } else {
                 Statement::from_string(
@@ -250,7 +250,7 @@ impl MemoryJobsStore for PostgresJobsStore {
                     claimed_by = NULL
                 WHERE state = 'failed' AND kind = $1
                 "#,
-                [SeaOrmValue::String(Some(k.as_str().to_string()))],
+                [SeaOrmValue::String(Some(k.to_string()))],
             )
         } else {
             Statement::from_string(
@@ -318,18 +318,13 @@ fn job_from_row(row: &sea_orm::QueryResult) -> Result<Job, JobsError> {
     let created_at: DateTime<FixedOffset> = row.try_get("", "created_at").map_err(database)?;
     let updated_at: DateTime<FixedOffset> = row.try_get("", "updated_at").map_err(database)?;
 
-    let kind = match kind_str.as_str() {
-        "embed" => JobKind::Embed,
-        "extract" => JobKind::Extract,
-        other => return Err(JobsError::Database(format!("unknown job kind: {other}"))),
-    };
+    let kind: JobKind = kind_str
+        .parse()
+        .map_err(|_| JobsError::Database(format!("unknown job kind: {kind_str}")))?;
 
-    let state = match state_str.as_str() {
-        "pending" => JobState::Pending,
-        "claimed" => JobState::Claimed,
-        "failed" => JobState::Failed,
-        other => return Err(JobsError::Database(format!("unknown job state: {other}"))),
-    };
+    let state: JobState = state_str
+        .parse()
+        .map_err(|_| JobsError::Database(format!("unknown job state: {state_str}")))?;
 
     Ok(Job {
         id,
@@ -354,11 +349,9 @@ fn failed_job_from_row(row: &sea_orm::QueryResult) -> Result<FailedJob, JobsErro
     let failure_reason: Option<String> = row.try_get("", "failure_reason").map_err(database)?;
     let updated_at: DateTime<FixedOffset> = row.try_get("", "updated_at").map_err(database)?;
 
-    let kind = match kind_str.as_str() {
-        "embed" => JobKind::Embed,
-        "extract" => JobKind::Extract,
-        other => return Err(JobsError::Database(format!("unknown job kind: {other}"))),
-    };
+    let kind: JobKind = kind_str
+        .parse()
+        .map_err(|_| JobsError::Database(format!("unknown job kind: {kind_str}")))?;
 
     Ok(FailedJob {
         id,

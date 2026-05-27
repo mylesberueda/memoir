@@ -1,12 +1,10 @@
 #![cfg(all(test, feature = "integration"))]
 
 use memoir_core::store::MemoryStore as _;
-use memoir_sdk::memoir::v1::admin_service_client::AdminServiceClient;
 use memoir_sdk::memoir::v1::{
     DeleteFailedJobRequest, JobKind, ListFailedJobsRequest, PendingJobsCountRequest, ReconcileRequest, RememberRequest,
     RetryJobRequest, UnsupersedeRequest,
 };
-use tonic::transport::Channel;
 use tonic::{Code, Request};
 
 use super::common::TestHarness;
@@ -49,7 +47,7 @@ async fn should_list_failed_jobs_when_admin() {
         "library should see the seeded job"
     );
 
-    let mut admin = build_admin_client(&harness);
+    let mut admin = harness.admin.clone();
     let resp = admin
         .list_failed_jobs(harness.authed(ListFailedJobsRequest { limit: 50 }))
         .await
@@ -72,7 +70,7 @@ async fn should_list_failed_jobs_when_admin() {
 async fn should_return_pending_count() {
     let harness = TestHarness::start().await.expect("harness");
 
-    let mut admin = build_admin_client(&harness);
+    let mut admin = harness.admin.clone();
     let resp = admin
         .pending_jobs_count(harness.authed(PendingJobsCountRequest {}))
         .await
@@ -94,7 +92,7 @@ async fn should_retry_job_when_admin() {
     let failed_before = harness.count_jobs_with_state("failed").await.expect("count before");
     assert!(failed_before >= 1, "must have at least the seeded failed job");
 
-    let mut admin = build_admin_client(&harness);
+    let mut admin = harness.admin.clone();
     admin
         .retry_job(harness.authed(RetryJobRequest { id: job_id }))
         .await
@@ -117,7 +115,7 @@ async fn should_delete_failed_job_when_admin() {
         .await
         .expect("seed");
 
-    let mut admin = build_admin_client(&harness);
+    let mut admin = harness.admin.clone();
     admin
         .delete_failed_job(harness.authed(DeleteFailedJobRequest { id: job_id }))
         .await
@@ -144,14 +142,14 @@ async fn should_unsupersede_memory_when_admin() {
         .await
         .expect("seed supersede");
 
-    let mut admin = build_admin_client(&harness);
+    let mut admin = harness.admin.clone();
     admin
         .unsupersede(harness.authed(UnsupersedeRequest { pid: pid_a.clone() }))
         .await
         .expect("unsupersede rpc");
 
     let restored = harness.memoir.recall(&pid_a).await.expect("recall after unsupersede");
-    assert_eq!(restored.superseded_by, None, "supersession marker must be cleared");
+    assert_eq!(restored.supersession, None, "supersession marker must be cleared");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -164,7 +162,7 @@ async fn should_reconcile_when_admin() {
     // own integration suite; this test asserts only that the RPC round-
     // trips successfully through the admin gate and returns a well-formed
     // ReconcileSummary.
-    let mut admin = build_admin_client(&harness);
+    let mut admin = harness.admin.clone();
     let summary = admin
         .reconcile(harness.authed(ReconcileRequest {
             only_retry_failed: false,
@@ -185,7 +183,7 @@ async fn should_reject_non_admin_caller() {
     let harness = TestHarness::start().await.expect("harness");
     let non_admin_token = harness.login_non_admin().await.expect("non-admin login");
 
-    let mut admin = build_admin_client(&harness);
+    let mut admin = harness.admin.clone();
     let err = admin
         .pending_jobs_count(harness.authed_with(PendingJobsCountRequest {}, &non_admin_token))
         .await
@@ -197,7 +195,7 @@ async fn should_reject_non_admin_caller() {
 async fn should_reject_unauthenticated_caller() {
     let harness = TestHarness::start().await.expect("harness");
 
-    let mut admin = build_admin_client(&harness);
+    let mut admin = harness.admin.clone();
     let err = admin
         .pending_jobs_count(Request::new(PendingJobsCountRequest {}))
         .await
@@ -205,6 +203,3 @@ async fn should_reject_unauthenticated_caller() {
     assert_eq!(err.code(), Code::Unauthenticated);
 }
 
-fn build_admin_client(harness: &TestHarness) -> AdminServiceClient<Channel> {
-    AdminServiceClient::new(harness.channel.clone())
-}

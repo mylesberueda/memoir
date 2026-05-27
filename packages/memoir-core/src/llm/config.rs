@@ -35,29 +35,12 @@ pub const DEFAULT_ANTHROPIC_MODEL: &str = "claude-haiku-4-5";
 /// Useful when a caller wants to log "which provider is configured" without
 /// pattern-matching the full enum, and as the cross-reference for any
 /// provider-specific dashboards or routing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "lowercase")]
 pub enum LlmKind {
     Ollama,
     OpenAI,
     Anthropic,
-}
-
-impl LlmKind {
-    /// Returns the canonical lowercase string used in logs and storage.
-    #[must_use]
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Ollama => "ollama",
-            Self::OpenAI => "openai",
-            Self::Anthropic => "anthropic",
-        }
-    }
-}
-
-impl std::fmt::Display for LlmKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
 }
 
 /// Connection + model selection for memoir-core's LLM integration.
@@ -225,9 +208,9 @@ mod tests {
 
     #[test]
     fn should_render_kind_as_lowercase_string() {
-        assert_eq!(LlmKind::Ollama.as_str(), "ollama");
-        assert_eq!(LlmKind::OpenAI.as_str(), "openai");
-        assert_eq!(LlmKind::Anthropic.as_str(), "anthropic");
+        assert_eq!(LlmKind::Ollama.as_ref(), "ollama");
+        assert_eq!(LlmKind::OpenAI.as_ref(), "openai");
+        assert_eq!(LlmKind::Anthropic.as_ref(), "anthropic");
     }
 
     #[test]

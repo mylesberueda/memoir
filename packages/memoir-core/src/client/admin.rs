@@ -98,7 +98,7 @@ async fn execute(builder: RetryBuilder<'_>) -> Result<u64, ClientError> {
         Level::INFO,
         affected = affected,
         dry_run = dry_run,
-        kind = kind.as_ref().map(JobKind::as_str).unwrap_or("any"),
+        kind = kind.as_ref().map(|k| k.as_ref()).unwrap_or("any"),
         "bulk retry affected={{affected}} dry_run={{dry_run}} kind={{kind}}",
     );
 

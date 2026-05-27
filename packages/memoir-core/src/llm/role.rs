@@ -16,7 +16,8 @@ use super::RigLlmProvider;
 /// other roles keep working, and operators who haven't configured the new
 /// role get [`LlmRegistry::get`] returning `None` (which downstream code
 /// handles as "skip this step gracefully").
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "lowercase")]
 pub enum LlmRole {
     /// Calls extracting structured facts from episodic content (ticket 0006).
     Extraction,
@@ -27,23 +28,6 @@ pub enum LlmRole {
     /// an LLM call. This variant exists so the LLM path is available if the
     /// math doesn't pan out — no consumer wires it today.
     Contradiction,
-}
-
-impl LlmRole {
-    /// Returns the canonical lowercase string used in logs.
-    #[must_use]
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Extraction => "extraction",
-            Self::Contradiction => "contradiction",
-        }
-    }
-}
-
-impl std::fmt::Display for LlmRole {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
 }
 
 /// Map of [`LlmRole`] → [`RigLlmProvider`].

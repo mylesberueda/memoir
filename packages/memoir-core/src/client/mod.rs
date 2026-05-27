@@ -171,8 +171,8 @@ fn install_llm(
     tracing::event!(
         name: "memoir.client.llm_configured",
         tracing::Level::INFO,
-        role = role.as_str(),
-        provider = kind.as_str(),
+        role = role.as_ref(),
+        provider = kind.as_ref(),
         "configured {{provider}} provider for {{role}}",
     );
 

@@ -101,7 +101,7 @@ impl VectorIndex for QdrantIndex {
             ("agent_id", Value::from(scope.agent_id.clone())),
             ("org_id", Value::from(scope.org_id.clone())),
             ("user_id", Value::from(scope.user_id.clone())),
-            ("kind", Value::from(kind.as_str().to_string())),
+            ("kind", Value::from(kind.to_string())),
         ]);
 
         let point = PointStruct::new(Uuid::new_v4().to_string(), vector, payload);
@@ -141,7 +141,7 @@ impl VectorIndex for QdrantIndex {
             let names: Vec<String> = kinds
                 .included_kinds()
                 .into_iter()
-                .map(|k| k.as_str().to_string())
+                .map(|k| k.to_string())
                 .collect();
             must.push(Condition::matches("kind", names));
         }
