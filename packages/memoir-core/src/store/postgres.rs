@@ -3,7 +3,7 @@
 use chrono::{DateTime, FixedOffset};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, Value as SeaOrmValue};
 
-use super::{EditPatch, IndexStatus, MemoryStore, StoreError, TimelineDirection, TimelineParams};
+use super::{AsOfParams, EditPatch, IndexStatus, MemoryStore, StoreError, TimelineDirection, TimelineParams};
 use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope};
 
 const PID_LENGTH: usize = 21;
@@ -220,6 +220,67 @@ impl MemoryStore for PostgresStore {
             "SELECT {MEMORY_SELECT_COLUMNS} FROM memories m \
              WHERE {where_sql} \
              ORDER BY m.created_at {order} \
+             LIMIT ${limit_placeholder}",
+            where_sql = where_clauses.join(" AND "),
+        );
+        let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, values);
+
+        let rows = self.db.query_all_raw(stmt).await?;
+        let mut memories = Vec::with_capacity(rows.len());
+        for row in &rows {
+            memories.push(Memory::try_from(row)?);
+        }
+        Ok(memories)
+    }
+
+    async fn memories_as_of(&self, scope: Scope, params: AsOfParams) -> Result<Vec<Memory>, StoreError> {
+        scope.validate()?;
+
+        let included = params.kinds.included_kinds();
+        if included.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut where_clauses: Vec<String> = vec![
+            "m.agent_id = $1".into(),
+            "m.org_id = $2".into(),
+            "m.user_id = $3".into(),
+            "m.created_at <= $4".into(),
+            "latest_event.winner_pid IS NULL".into(),
+        ];
+        let mut values: Vec<SeaOrmValue> = vec![
+            SeaOrmValue::String(Some(scope.agent_id)),
+            SeaOrmValue::String(Some(scope.org_id)),
+            SeaOrmValue::String(Some(scope.user_id)),
+            SeaOrmValue::ChronoDateTimeWithTimeZone(Some(params.as_of)),
+        ];
+
+        if !params.kinds.includes_all() {
+            let placeholders: Vec<String> = included
+                .iter()
+                .map(|kind| {
+                    values.push(SeaOrmValue::String(Some(kind.to_string())));
+                    format!("${}", values.len())
+                })
+                .collect();
+            where_clauses.push(format!("m.kind IN ({})", placeholders.join(", ")));
+        }
+
+        values.push(SeaOrmValue::BigInt(Some(params.limit as i64)));
+        let limit_placeholder = values.len();
+
+        let sql = format!(
+            "SELECT {MEMORY_SELECT_COLUMNS} \
+             FROM memories m \
+             LEFT JOIN LATERAL ( \
+                 SELECT loser_pid, winner_pid, decided_at \
+                 FROM supersession_events \
+                 WHERE loser_pid = m.pid AND decided_at <= $4 \
+                 ORDER BY decided_at DESC \
+                 LIMIT 1 \
+             ) AS latest_event ON TRUE \
+             WHERE {where_sql} \
+             ORDER BY m.created_at DESC \
              LIMIT ${limit_placeholder}",
             where_sql = where_clauses.join(" AND "),
         );

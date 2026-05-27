@@ -108,6 +108,28 @@ impl Default for TimelineParams {
     }
 }
 
+/// Parameters for [`MemoryStore::memories_as_of`].
+///
+/// Returns memories that *existed* (`created_at <= as_of`) and were *active*
+/// (not yet superseded as of `as_of`). `kinds` filter mirrors timeline's.
+#[derive(Debug, Clone)]
+pub struct AsOfParams {
+    pub as_of: DateTime<FixedOffset>,
+    pub kinds: crate::memory::KindSelector,
+    pub limit: usize,
+}
+
+impl AsOfParams {
+    /// Builds a default `AsOfParams` for `as_of` — all kinds, default limit.
+    pub fn new(as_of: DateTime<FixedOffset>) -> Self {
+        Self {
+            as_of,
+            kinds: crate::memory::KindSelector::default(),
+            limit: DEFAULT_TIMELINE_LIMIT,
+        }
+    }
+}
+
 /// Persists and retrieves memory rows from the source-of-truth store.
 ///
 /// Implementations own the database connection. The trait methods are async
@@ -162,6 +184,24 @@ pub trait MemoryStore: Send + Sync + 'static {
         &self,
         scope: Scope,
         params: TimelineParams,
+    ) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
+
+    /// Returns memories that were active in `scope` as of `params.as_of`.
+    ///
+    /// A memory is included when `created_at <= as_of` AND, considering only
+    /// `supersession_events` rows with `decided_at <= as_of`, the memory is
+    /// not currently superseded (either no such events exist or the most
+    /// recent one was an unsupersede with `winner_pid IS NULL`). Ordering
+    /// is newest-first by `created_at`. Hydrated rows carry `score = None`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::InvalidScope`] if any scope field is empty,
+    /// [`StoreError::Database`] for database failures.
+    fn memories_as_of(
+        &self,
+        scope: Scope,
+        params: AsOfParams,
     ) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
 
     /// Fetches multiple memories by pid, returning only indexed rows.
@@ -428,6 +468,37 @@ mod tests {
                 TimelineDirection::Descending => b.created_at.cmp(&a.created_at),
                 TimelineDirection::Ascending => a.created_at.cmp(&b.created_at),
             });
+            filtered.truncate(params.limit);
+            Ok(filtered)
+        }
+
+        async fn memories_as_of(&self, scope: Scope, params: AsOfParams) -> Result<Vec<Memory>, StoreError> {
+            scope.validate()?;
+            let memories = self.memories.lock().unwrap();
+            let events = self.events.lock().unwrap();
+
+            let mut filtered: Vec<Memory> = memories
+                .iter()
+                .filter(|m| m.scope == scope)
+                .filter(|m| m.created_at <= params.as_of)
+                .filter(|m| match m.kind {
+                    MemoryKind::Episodic => params.kinds.episodic,
+                    MemoryKind::Semantic => params.kinds.semantic,
+                })
+                .filter(|m| {
+                    let latest = events
+                        .iter()
+                        .filter(|e| e.loser_pid == m.pid && e.decided_at <= params.as_of)
+                        .max_by_key(|e| e.decided_at);
+                    match latest {
+                        None => true,
+                        Some(e) => e.winner_pid.is_none(),
+                    }
+                })
+                .cloned()
+                .collect();
+
+            filtered.sort_by(|a, b| b.created_at.cmp(&a.created_at));
             filtered.truncate(params.limit);
             Ok(filtered)
         }

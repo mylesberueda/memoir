@@ -5,6 +5,7 @@ mod edit;
 mod embed;
 mod error;
 mod extract;
+mod recall_as_of;
 mod reconcile;
 mod remember;
 mod search;
@@ -14,6 +15,7 @@ mod worker;
 pub use admin::RetryBuilder;
 pub use edit::EditBuilder;
 pub use error::ClientError;
+pub use recall_as_of::RecallAsOfBuilder;
 pub use reconcile::{ReconcileBuilder, ReconcileSummary};
 pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
 pub use search::{DEFAULT_LIMIT, SearchBuilder};
@@ -329,6 +331,28 @@ impl Client {
     /// [`crate::store::StoreError::Database`] for database failures.
     pub fn timeline(&self, scope: crate::memory::Scope) -> TimelineBuilder<'_> {
         TimelineBuilder::new(self, scope)
+    }
+
+    /// Returns memoir's state of knowledge in `scope` as of `as_of`.
+    ///
+    /// A memory is included when it was written on or before `as_of` and was
+    /// not yet superseded then. Pure Postgres read; no Qdrant, no embedder.
+    /// Newest-first by `created_at`, default limit
+    /// [`crate::store::DEFAULT_TIMELINE_LIMIT`]. See [`RecallAsOfBuilder`]
+    /// for the builder methods.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::InvalidScope`] when a `Scope` target has
+    /// empty fields, or wrapping
+    /// [`crate::store::StoreError::Database`] for database failures.
+    pub fn recall_as_of(
+        &self,
+        scope: crate::memory::Scope,
+        as_of: impl Into<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> RecallAsOfBuilder<'_> {
+        RecallAsOfBuilder::new(self, scope, as_of.into())
     }
 
     /// Looks up a single memory by its public id, at any lifecycle state.
