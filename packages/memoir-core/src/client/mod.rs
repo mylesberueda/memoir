@@ -15,8 +15,8 @@ pub use reconcile::{ReconcileBuilder, ReconcileSummary};
 pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
 pub use search::{DEFAULT_LIMIT, SearchBuilder};
 pub use worker::{
-    DEFAULT_DRAIN_TIMEOUT, DEFAULT_LEASE_DURATION, DEFAULT_MAX_ATTEMPTS, DEFAULT_POLL_INTERVAL,
-    WorkerBuilder, WorkerHandle,
+    DEFAULT_DRAIN_TIMEOUT, DEFAULT_LEASE_DURATION, DEFAULT_MAX_ATTEMPTS, DEFAULT_POLL_INTERVAL, WorkerBuilder,
+    WorkerHandle,
 };
 
 use std::sync::Arc;
@@ -124,7 +124,9 @@ impl Client {
         // path. Listing `public` second lets shared extensions (pgcrypto,
         // etc.) resolve.
         let search_path = format!("{schema},public");
-        let options = ConnectOptions::new(database_url).set_schema_search_path(search_path).to_owned();
+        let options = ConnectOptions::new(database_url)
+            .set_schema_search_path(search_path)
+            .to_owned();
         let db = Database::connect(options).await.map_err(ClientError::Database)?;
 
         let embedder = OnnxEmbedding::new()?;
@@ -159,11 +161,7 @@ impl Client {
     }
 }
 
-fn install_llm(
-    registry: &mut LlmRegistry,
-    role: LlmRole,
-    config: LlmConfig,
-) -> Result<(), ClientError> {
+fn install_llm(registry: &mut LlmRegistry, role: LlmRole, config: LlmConfig) -> Result<(), ClientError> {
     let kind = config.kind();
     let provider = RigLlmProvider::new(config)?;
     registry.insert(role, provider);
@@ -234,7 +232,11 @@ impl Client {
     /// write-only.
     ///
     /// Attach optional JSON metadata via [`RememberBuilder::metadata`];
-    /// without it the column defaults to `{}`.
+    /// without it the column defaults to `{}`. Attach a parsed event-time
+    /// via [`RememberBuilder::event_at`] when the content references a
+    /// specific moment (e.g. "the deployment happened Friday"); without it,
+    /// the memory has no event-time and is excluded from event-time range
+    /// filters at search time.
     ///
     /// # Examples
     ///
@@ -440,10 +442,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns [`ClientError::Jobs`] wrapping any database failure.
-    pub async fn failed_jobs(
-        &self,
-        limit: usize,
-    ) -> Result<Vec<crate::jobs::FailedJob>, ClientError> {
+    pub async fn failed_jobs(&self, limit: usize) -> Result<Vec<crate::jobs::FailedJob>, ClientError> {
         Ok(self.inner.jobs.list_failed(limit).await?)
     }
 

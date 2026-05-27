@@ -163,6 +163,9 @@ impl ClientInner {
 
             let metadata = build_semantic_metadata(provider_kind, &provider_model, fact.confidence);
 
+            // event_at is None at this layer; LLM extraction-driven
+            // event-time identification is ticket 0011's territory and
+            // will populate this argument once that ticket lands.
             let written = self
                 .store
                 .remember(
@@ -171,6 +174,7 @@ impl ClientInner {
                     metadata,
                     MemoryKind::Semantic,
                     Some(source_pid.clone()),
+                    None,
                 )
                 .await
                 .map_err(|err| ExtractError::Persist(err.to_string()))?;

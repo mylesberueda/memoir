@@ -64,10 +64,21 @@ async fn should_drop_hits_below_min_similarity_threshold() -> anyhow::Result<()>
     let client = common::fresh_client().await?;
     let scope = common::fresh_scope();
 
-    let related = client.remember("rust borrow checker prevents data races", scope.clone()).await?;
-    let _unrelated = client.remember("recipe for chocolate chip cookies", scope.clone()).await?;
+    let related = client
+        .remember("rust borrow checker prevents data races", scope.clone())
+        .await?;
+    let _unrelated = client
+        .remember("recipe for chocolate chip cookies", scope.clone())
+        .await?;
 
-    common::wait_until_indexed(&client, &related.pid, &scope, "rust borrow checker", Duration::from_secs(15)).await?;
+    common::wait_until_indexed(
+        &client,
+        &related.pid,
+        &scope,
+        "rust borrow checker",
+        Duration::from_secs(15),
+    )
+    .await?;
 
     // Use an absurdly high floor — even the on-topic row should be dropped.
     let none_qualify = client
@@ -273,10 +284,7 @@ async fn should_include_only_rows_within_numeric_range() -> anyhow::Result<()> {
         .filter(|(n, _)| (5..8).contains(n))
         .map(|(_, p)| p.clone())
         .collect();
-    assert_eq!(
-        returned, expected,
-        "range gte=5, lt=8 must select exactly ranks 5/6/7"
-    );
+    assert_eq!(returned, expected, "range gte=5, lt=8 must select exactly ranks 5/6/7");
 
     Ok(())
 }
@@ -340,7 +348,14 @@ async fn should_combine_metadata_filter_and_min_similarity_as_and() -> anyhow::R
         .metadata(serde_json::json!({ "role": "user" }))
         .await?;
 
-    common::wait_until_indexed(&client, &on_topic_user.pid, &scope, "deploy pipeline", Duration::from_secs(15)).await?;
+    common::wait_until_indexed(
+        &client,
+        &on_topic_user.pid,
+        &scope,
+        "deploy pipeline",
+        Duration::from_secs(15),
+    )
+    .await?;
 
     let only_user = MemoryFilter {
         must: vec![FilterCondition::Equals {
@@ -387,7 +402,14 @@ async fn should_reject_scope_widening_via_caller_supplied_must() -> anyhow::Resu
     let leak_target = client
         .remember("scope A confidential planning notes", scope_a.clone())
         .await?;
-    common::wait_until_indexed(&client, &leak_target.pid, &scope_a, "planning notes", Duration::from_secs(15)).await?;
+    common::wait_until_indexed(
+        &client,
+        &leak_target.pid,
+        &scope_a,
+        "planning notes",
+        Duration::from_secs(15),
+    )
+    .await?;
 
     let widen_attempt = MemoryFilter {
         must: vec![FilterCondition::Equals {
@@ -477,6 +499,181 @@ async fn should_return_no_hits_when_filter_targets_unknown_field() -> anyhow::Re
         hits.list().is_empty(),
         "Qdrant treats a `must` on an absent payload field as no match; got {} hits",
         hits.list().len()
+    );
+
+    Ok(())
+}
+
+// ---------- Time-range builder methods (ticket 0006) ----------
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_filter_by_event_at_window_when_set() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+
+    let january = chrono::DateTime::parse_from_rfc3339("2026-01-15T12:00:00Z")?;
+    let march = chrono::DateTime::parse_from_rfc3339("2026-03-15T12:00:00Z")?;
+    let in_window = client
+        .remember("the deployment happened in January", scope.clone())
+        .event_at(january)
+        .await?;
+    let out_of_window = client
+        .remember("the deployment happened in March", scope.clone())
+        .event_at(march)
+        .await?;
+    common::wait_until_indexed(
+        &client,
+        &in_window.pid,
+        &scope,
+        "deployment January",
+        Duration::from_secs(15),
+    )
+    .await?;
+    common::wait_until_indexed(
+        &client,
+        &out_of_window.pid,
+        &scope,
+        "deployment March",
+        Duration::from_secs(15),
+    )
+    .await?;
+
+    let feb_1 = chrono::DateTime::parse_from_rfc3339("2026-02-01T00:00:00Z")?;
+    let jan_1 = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")?;
+    let hits = client
+        .search("deployment", scope)
+        .event_at_after(jan_1)
+        .event_at_before(feb_1)
+        .await?;
+
+    let pids: Vec<&str> = hits.list().iter().map(|m| m.pid.as_str()).collect();
+    assert!(
+        pids.contains(&in_window.pid.as_str()),
+        "January memory must be in window"
+    );
+    assert!(
+        !pids.contains(&out_of_window.pid.as_str()),
+        "March memory must be filtered out"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_exclude_memories_with_null_event_at_when_filtering_by_event_at() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+
+    // Two memories with the same content, one carrying event_at and the
+    // other not. event_at-range filtering must drop the latter — Qdrant
+    // treats missing payload keys on a range target as non-matches, which
+    // is the omit-when-None semantic from ticket 0004.
+    let with_event_at = client
+        .remember("deployment status", scope.clone())
+        .event_at(chrono::DateTime::parse_from_rfc3339("2026-01-15T12:00:00Z")?)
+        .await?;
+    let without_event_at = client.remember("deployment status update", scope.clone()).await?;
+    common::wait_until_indexed(
+        &client,
+        &with_event_at.pid,
+        &scope,
+        "deployment",
+        Duration::from_secs(15),
+    )
+    .await?;
+    common::wait_until_indexed(
+        &client,
+        &without_event_at.pid,
+        &scope,
+        "deployment",
+        Duration::from_secs(15),
+    )
+    .await?;
+
+    let jan_1 = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")?;
+    let hits = client.search("deployment", scope).event_at_after(jan_1).await?;
+
+    let pids: Vec<&str> = hits.list().iter().map(|m| m.pid.as_str()).collect();
+    assert!(pids.contains(&with_event_at.pid.as_str()));
+    assert!(
+        !pids.contains(&without_event_at.pid.as_str()),
+        "memory without event_at must not satisfy event-time range filter; got {pids:?}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_filter_by_created_at_window() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+
+    // Both memories get created_at = now. Capture a boundary after the
+    // first and before the second to exercise the .created_after filter.
+    let early = client.remember("early note about kubernetes", scope.clone()).await?;
+    common::wait_until_indexed(&client, &early.pid, &scope, "kubernetes", Duration::from_secs(15)).await?;
+    let boundary = chrono::Utc::now();
+    // Sleep a beat to make sure the second memory's created_at is strictly
+    // after `boundary` even at millisecond resolution.
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    let late = client.remember("late note about kubernetes too", scope.clone()).await?;
+    common::wait_until_indexed(&client, &late.pid, &scope, "kubernetes", Duration::from_secs(15)).await?;
+
+    let hits = client.search("kubernetes", scope).created_after(boundary).await?;
+
+    let pids: Vec<&str> = hits.list().iter().map(|m| m.pid.as_str()).collect();
+    assert!(pids.contains(&late.pid.as_str()), "late memory must be in window");
+    assert!(
+        !pids.contains(&early.pid.as_str()),
+        "early memory (before boundary) must be filtered out; got {pids:?}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_compose_time_range_with_metadata_filter() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+
+    // Two memories with different roles. Time-range plus role filter
+    // must AND-join: only the matching role *and* the matching window
+    // returns.
+    let target = client
+        .remember("deployment status from the user", scope.clone())
+        .metadata(serde_json::json!({ "role": "user" }))
+        .event_at(chrono::DateTime::parse_from_rfc3339("2026-01-15T12:00:00Z")?)
+        .await?;
+    let wrong_role = client
+        .remember("deployment status from the assistant", scope.clone())
+        .metadata(serde_json::json!({ "role": "assistant" }))
+        .event_at(chrono::DateTime::parse_from_rfc3339("2026-01-15T12:00:00Z")?)
+        .await?;
+    common::wait_until_indexed(&client, &target.pid, &scope, "deployment", Duration::from_secs(15)).await?;
+    common::wait_until_indexed(&client, &wrong_role.pid, &scope, "deployment", Duration::from_secs(15)).await?;
+
+    let only_user = MemoryFilter {
+        must: vec![FilterCondition::Equals {
+            field: "role".into(),
+            value: MatchValue::Keyword("user".into()),
+        }],
+        ..MemoryFilter::default()
+    };
+    let jan_1 = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")?;
+    let feb_1 = chrono::DateTime::parse_from_rfc3339("2026-02-01T00:00:00Z")?;
+
+    let hits = client
+        .search("deployment", scope)
+        .metadata_filter(only_user)
+        .event_at_after(jan_1)
+        .event_at_before(feb_1)
+        .await?;
+
+    let pids: Vec<&str> = hits.list().iter().map(|m| m.pid.as_str()).collect();
+    assert_eq!(
+        pids,
+        vec![target.pid.as_str()],
+        "AND-join must keep only role=user in window"
     );
 
     Ok(())

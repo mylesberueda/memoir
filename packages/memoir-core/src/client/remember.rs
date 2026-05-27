@@ -3,6 +3,8 @@
 use std::future::{Future, IntoFuture};
 use std::pin::Pin;
 
+use chrono::{DateTime, FixedOffset};
+
 use crate::jobs::MemoryJobsStore;
 use crate::memory::{Memory, MemoryKind, Scope};
 use crate::store::MemoryStore;
@@ -47,12 +49,28 @@ below as a bulleted list of past content. Use them to maintain continuity:
 /// # Ok(())
 /// # }
 /// ```
+///
+/// Attach a parsed event-time when the utterance references a specific moment:
+///
+/// ```no_run
+/// # use chrono::{DateTime, Utc};
+/// # use memoir_core::client::Client;
+/// # use memoir_core::memory::Scope;
+/// # async fn example(client: &Client, scope: Scope, deploy_time: DateTime<Utc>) -> Result<(), Box<dyn std::error::Error>> {
+/// let written = client
+///     .remember("the deployment happened Friday", scope)
+///     .event_at(deploy_time)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
 #[must_use = "remember(..) returns a builder that must be awaited"]
 pub struct RememberBuilder<'a> {
     client: &'a Client,
     prompt: String,
     scope: Scope,
     metadata: serde_json::Value,
+    event_at: Option<DateTime<FixedOffset>>,
 }
 
 impl<'a> RememberBuilder<'a> {
@@ -62,6 +80,7 @@ impl<'a> RememberBuilder<'a> {
             prompt,
             scope,
             metadata: serde_json::json!({}),
+            event_at: None,
         }
     }
 
@@ -75,6 +94,24 @@ impl<'a> RememberBuilder<'a> {
     /// Defaults to `{}` when unset, matching the column's schema default.
     pub fn metadata(mut self, metadata: serde_json::Value) -> Self {
         self.metadata = metadata;
+        self
+    }
+
+    /// Records the wall-clock time the event being remembered occurred.
+    ///
+    /// Distinct from `created_at` (when memoir was told). Set this when the
+    /// utterance carries a parseable date or time reference — the agent (or
+    /// upstream parser) is responsible for resolving "last Friday" to an
+    /// absolute moment before passing it here. Memoir does not parse the
+    /// content for time references on this path; LLM-driven event-time
+    /// extraction is a separate write path (ticket 0011).
+    ///
+    /// Accepts any value convertible to `DateTime<FixedOffset>`, including
+    /// `DateTime<Utc>`. Defaults to `None` when unset, which is the right
+    /// value for memories whose content has no meaningful event-time
+    /// (preferences, identity facts, atemporal observations).
+    pub fn event_at(mut self, event_at: impl Into<DateTime<FixedOffset>>) -> Self {
+        self.event_at = Some(event_at.into());
         self
     }
 }
@@ -94,6 +131,7 @@ async fn execute(builder: RememberBuilder<'_>) -> Result<Memory, ClientError> {
         prompt,
         scope,
         metadata,
+        event_at,
     } = builder;
     let inner = client.inner.clone();
 
@@ -110,7 +148,7 @@ async fn execute(builder: RememberBuilder<'_>) -> Result<Memory, ClientError> {
 
     let written = inner
         .store
-        .remember(scope, prompt, metadata, MemoryKind::Episodic, None)
+        .remember(scope, prompt, metadata, MemoryKind::Episodic, None, event_at)
         .await?;
 
     // Persistent write-behind: enqueue an embed job rather than running

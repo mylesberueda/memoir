@@ -105,6 +105,14 @@ pub struct NumericRange {
     pub gte: Option<f64>,
 }
 
+impl NumericRange {
+    /// Returns `true` when no bound is set — the range is a no-op.
+    #[must_use]
+    pub fn is_unbounded(&self) -> bool {
+        self.lt.is_none() && self.lte.is_none() && self.gt.is_none() && self.gte.is_none()
+    }
+}
+
 // ─── Translation to Qdrant types ────────────────────────────────────────────
 
 impl From<MemoryFilter> for qd::Filter {

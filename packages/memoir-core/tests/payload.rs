@@ -67,9 +67,9 @@ async fn should_omit_event_at_from_payload_when_none() -> anyhow::Result<()> {
     let scope = common::fresh_scope();
     let qdrant = client.raw_qdrant()?;
 
-    // RememberBuilder doesn't yet expose .event_at() (lands in ticket 0005).
-    // Default writes leave event_at as None, which is exactly the case
-    // under test: payload key must be absent, not stored as null.
+    // Default writes leave event_at as None. Payload key must be absent,
+    // not stored as null, so range filters against event_at exclude these
+    // rows.
     let written = client.remember("no event time", scope.clone()).await?;
     common::wait_until_indexed(&client, &written.pid, &scope, "no event", Duration::from_secs(15)).await?;
 
@@ -77,6 +77,43 @@ async fn should_omit_event_at_from_payload_when_none() -> anyhow::Result<()> {
     assert!(
         !payload.contains_key("event_at"),
         "payload must omit event_at when Memory.event_at is None; got {payload:?}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_write_event_at_to_payload_as_integer_milliseconds_when_set() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+    let qdrant = client.raw_qdrant()?;
+
+    let deploy_time = chrono::DateTime::parse_from_rfc3339("2026-01-15T12:00:00Z")?;
+    let written = client
+        .remember("the deployment happened mid-January", scope.clone())
+        .event_at(deploy_time)
+        .await?;
+    common::wait_until_indexed(
+        &client,
+        &written.pid,
+        &scope,
+        "deployment mid-January",
+        Duration::from_secs(15),
+    )
+    .await?;
+
+    assert_eq!(
+        written.event_at,
+        Some(deploy_time),
+        "returned Memory.event_at must round-trip through the store",
+    );
+
+    let payload = point_payload_for_pid(&qdrant, &client.collection, &written.pid).await?;
+    let event_at = payload.get("event_at").expect("event_at key present when set");
+    assert_eq!(
+        event_at.as_integer(),
+        Some(deploy_time.timestamp_millis()),
+        "payload event_at must match the builder-supplied timestamp (ms since epoch)",
     );
 
     Ok(())

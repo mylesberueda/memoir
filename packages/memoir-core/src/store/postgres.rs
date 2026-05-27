@@ -68,6 +68,7 @@ impl MemoryStore for PostgresStore {
         metadata: serde_json::Value,
         kind: MemoryKind,
         source_pid: Option<String>,
+        event_at: Option<DateTime<FixedOffset>>,
     ) -> Result<Memory, StoreError> {
         validate_scope(&scope)?;
 
@@ -81,8 +82,8 @@ impl MemoryStore for PostgresStore {
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             r#"
-            INSERT INTO memories (pid, agent_id, org_id, user_id, content, metadata, kind, source_pid)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO memories (pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, event_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING
                 pid, agent_id, org_id, user_id, content, metadata, kind,
                 source_pid, superseded_by, created_at, updated_at, event_at,
@@ -97,6 +98,7 @@ impl MemoryStore for PostgresStore {
                 SeaOrmValue::Json(Some(Box::new(metadata))),
                 SeaOrmValue::String(Some(kind.to_string())),
                 SeaOrmValue::String(source_pid),
+                SeaOrmValue::ChronoDateTimeWithTimeZone(event_at),
             ],
         );
 

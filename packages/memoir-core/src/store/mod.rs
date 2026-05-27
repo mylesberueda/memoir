@@ -44,9 +44,12 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Inserts a new memory and returns the persisted row.
     ///
     /// The returned [`Memory`] carries the server-generated `pid`,
-    /// `created_at`, and a `score` of `None`. `source_pid` is `None` for
-    /// episodic rows and `Some(pid)` for semantic rows extracted from an
-    /// episodic memory (the extract worker stage passes this through).
+    /// `created_at`, `updated_at` (equal to `created_at` on insert), and a
+    /// `score` of `None`. `source_pid` is `None` for episodic rows and
+    /// `Some(pid)` for semantic rows extracted from an episodic memory (the
+    /// extract worker stage passes this through). `event_at` carries the
+    /// caller-supplied event time and is `None` for memories with no known
+    /// event-time.
     ///
     /// # Errors
     ///
@@ -59,6 +62,7 @@ pub trait MemoryStore: Send + Sync + 'static {
         metadata: serde_json::Value,
         kind: MemoryKind,
         source_pid: Option<String>,
+        event_at: Option<DateTime<FixedOffset>>,
     ) -> impl Future<Output = Result<Memory, StoreError>> + Send;
 
     /// Looks up a single memory by pid, returning all lifecycle states.
@@ -245,6 +249,7 @@ mod tests {
             metadata: serde_json::Value,
             kind: MemoryKind,
             source_pid: Option<String>,
+            event_at: Option<DateTime<FixedOffset>>,
         ) -> Result<Memory, StoreError> {
             let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
             let memory = Memory {
@@ -257,7 +262,7 @@ mod tests {
                 supersession: None,
                 created_at: now,
                 updated_at: now,
-                event_at: None,
+                event_at,
                 score: None,
             };
             self.memories.lock().unwrap().push(memory.clone());
@@ -396,6 +401,7 @@ mod tests {
                 serde_json::json!({}),
                 MemoryKind::Episodic,
                 None,
+                None,
             )
             .await
             .unwrap();
@@ -430,6 +436,7 @@ mod tests {
                 content.to_string(),
                 serde_json::json!({}),
                 MemoryKind::Semantic,
+                None,
                 None,
             )
             .await
