@@ -2,9 +2,9 @@
 
 import { getOrganizationByPid } from '@actions/organizations';
 import { useOrganizations } from '@providers/OrganizationContextProvider';
-import type { Organization } from '@/lib/proto-shims';
 import { Users2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import type { Organization } from '@/lib/proto-shims';
 import MemberManagement from '../../settings/organization/_components/MemberManagement';
 
 export default function OrgMembersClient() {

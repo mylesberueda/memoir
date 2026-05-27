@@ -2,9 +2,9 @@
 
 import { getOrganizationByPid } from '@actions/organizations';
 import { useOrganizations } from '@providers/OrganizationContextProvider';
-import type { Organization } from '@/lib/proto-shims';
 import { Building2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import type { Organization } from '@/lib/proto-shims';
 import OrganizationDetails from '../../settings/organization/_components/OrganizationDetails';
 
 export default function OrgDetailsClient() {

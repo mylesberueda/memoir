@@ -1,0 +1,155 @@
+{
+	"name": "memoir-service",
+	"$schema": "../../node_modules/nx/schemas/project-schema.json",
+	"projectType": "application",
+	"sourceRoot": "apps/memoir-service/src",
+	"targets": {
+		"cargo": {
+			"command": "cargo",
+			"options": {
+				"cwd": "{projectRoot}",
+				"env": {
+					"RUST_LOG": "trace"
+				}
+			}
+		},
+		"dev": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo run server start"],
+				"parallel": true
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs"],
+			"outputs": ["{projectRoot}/dist"]
+		},
+		"build": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo build --release"],
+				"parallel": false
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs"],
+			"outputs": ["{projectRoot}/target/release"]
+		},
+		"test": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo test --bins --release --features unit"]
+			},
+			"cache": true,
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/tests/**/*.rs"]
+		},
+		"test:integration": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo test --release --features integration"],
+				"env": {
+					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_service_test"
+				}
+			},
+			"cache": true,
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/tests/**/*.rs"]
+		},
+		"typecheck": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo check"]
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs", "{workspaceRoot}/apps/{projectName}/Cargo.toml"]
+		},
+		"lint": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo clippy --no-deps -- -D warnings"]
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs", "{workspaceRoot}/apps/{projectName}/Cargo.toml"]
+		},
+		"lint:fix": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo clippy --no-deps --fix --allow-dirty --allow-staged -- -D warnings"]
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs", "{workspaceRoot}/apps/{projectName}/Cargo.toml"]
+		},
+		"format": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo fmt --check"]
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs", "{workspaceRoot}/apps/{projectName}/Cargo.toml"]
+		},
+		"format:fix": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo fmt"]
+			},
+			"cache": true,
+			"inputs": ["{workspaceRoot}/apps/{projectName}/src/**/*.rs", "{workspaceRoot}/apps/{projectName}/Cargo.toml"]
+		},
+		"migrate:up": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "sea migrate up",
+				"envFile": "{projectRoot}/.env"
+			},
+			"inputs": ["{projectRoot}/migration/src/**/*.rs"],
+			"outputs": ["{projectRoot}/src/models/**/*.rs"]
+		},
+		"migrate:down": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "sea migrate down",
+				"envFile": "{projectRoot}/.env"
+			},
+			"inputs": ["{projectRoot}/migration/src/**/*.rs"],
+			"outputs": ["{projectRoot}/src/models/**/*.rs"]
+		},
+		"migrate:fresh": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "sea migrate fresh",
+				"envFile": "{projectRoot}/.env"
+			},
+			"inputs": ["{projectRoot}/migration/src/**/*.rs"],
+			"outputs": ["{projectRoot}/src/models/**/*.rs"]
+		},
+		"gen:entities": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "sea generate entity --with-serde both --enum-extra-derives 'strum::Display,strum::EnumString' --output-dir ./src/models/_entity",
+				"envFile": "{projectRoot}/.env"
+			},
+			"inputs": ["{projectRoot}/migration/src/**/*.rs"],
+			"outputs": ["{projectRoot}/src/models/**/*.rs"]
+		},
+		"gen:protos": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"command": "buf generate"
+			},
+			"inputs": ["{projectRoot}/proto/**/*.proto"],
+			"outputs": []
+		}
+	},
+	"tags": ["scope:memoir-service", "type:app", "lang:rust"]
+}

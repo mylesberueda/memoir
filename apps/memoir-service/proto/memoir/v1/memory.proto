@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package memoir.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// MemoryService is the canonical read/write surface for processed memories.
+//
+// v0.1: handlers return Unimplemented. The proto is defined now to lock in
+// the SDK surface so consumers can integrate against stable types.
+// The memory epic implements real handlers.
+service MemoryService {
+  // Semantic retrieval within a scope. Vector + optional graph traversal,
+  // no LLM call. Hot path — designed to add minimal latency to agent loops.
+  rpc Search(SearchRequest) returns (SearchResponse);
+
+  // Direct lookup by memory pid. Bypasses vector search.
+  rpc Recall(RecallRequest) returns (RecallResponse);
+
+  // Write a memory. Returns immediately after persisting raw content;
+  // extraction / embedding / contradiction detection happen asynchronously.
+  rpc Remember(RememberRequest) returns (RememberResponse);
+
+  // Soft- or hard-delete a memory or a scope's worth of memories.
+  rpc Forget(ForgetRequest) returns (ForgetResponse);
+}
+
+// ─── Scope ──────────────────────────────────────────────────────────────────
+
+// Scope uniquely identifies a memory partition. Memories written under one
+// scope are never returned under another. The triple matches the manifesto's
+// SDK pseudocode and the Tier-1 integration shape.
+message Scope {
+  string agent_id = 1;
+  string org_id = 2;
+  string user_id = 3;
+}
+
+// ─── Core type ──────────────────────────────────────────────────────────────
+
+message Memory {
+  string pid = 1;
+  Scope scope = 2;
+  string content = 3;
+  google.protobuf.Struct metadata = 4;
+  google.protobuf.Timestamp created_at = 5;
+  optional google.protobuf.Timestamp processed_at = 6;
+  MemoryStatus status = 7;
+}
+
+enum MemoryStatus {
+  MEMORY_STATUS_UNSPECIFIED = 0;
+  MEMORY_STATUS_PENDING = 1; // Written, not yet processed by the worker.
+  MEMORY_STATUS_PROCESSED = 2; // Extraction + embedding + graph update done.
+  MEMORY_STATUS_FAILED = 3; // Processing failed after max retries. See admin "failed writes" view.
+}
+
+// Search result with similarity score attached.
+message SearchHit {
+  Memory memory = 1;
+  float score = 2; // Vector similarity score, higher is closer.
+}
+
+// ─── RPCs ───────────────────────────────────────────────────────────────────
+
+message SearchRequest {
+  Scope scope = 1;
+  string query = 2;
+  int32 limit = 3;
+  // Optional metadata filter — JSON-encoded Qdrant payload filter.
+  // Exact shape is implementation-defined and may evolve.
+  optional google.protobuf.Struct metadata_filter = 4;
+}
+
+message SearchResponse {
+  repeated SearchHit hits = 1;
+}
+
+message RecallRequest {
+  string pid = 1;
+}
+
+message RecallResponse {
+  Memory memory = 1;
+}
+
+message RememberRequest {
+  Scope scope = 1;
+  string content = 2;
+  optional google.protobuf.Struct metadata = 3;
+}
+
+message RememberResponse {
+  Memory memory = 1;
+}
+
+message ForgetRequest {
+  // Either pid (target a single memory) OR scope (target every memory in a scope).
+  // Exactly one must be set.
+  oneof target {
+    string pid = 1;
+    Scope scope = 2;
+  }
+  bool hard_delete = 3; // When false, soft-delete (status preserved, memory excluded from search).
+}
+
+message ForgetResponse {}

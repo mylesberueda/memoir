@@ -1,3 +1,4 @@
+pub mod hashing;
 mod local;
 
 pub use local::LocalCrypto;
@@ -16,6 +17,14 @@ pub enum CryptoError {
     InvalidCipherText,
     #[error("invalid key")]
     InvalidKey,
+    #[error("password hashing failed")]
+    HashFailed,
+    #[error("password verification failed (malformed hash)")]
+    VerifyFailed,
+    #[error("invalid API key format")]
+    InvalidKeyFormat,
+    #[error("RNG failed to produce random bytes")]
+    RngFailed,
 }
 
 /// Trait for types that can be displayed in a truncated/redacted form.

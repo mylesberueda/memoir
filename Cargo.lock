@@ -896,7 +896,9 @@ version = "0.1.0"
 dependencies = [
  "aes-gcm",
  "argon2",
+ "base64",
  "color-eyre",
+ "rand_core 0.6.4",
  "thiserror",
  "tracing",
  "tracing-subscriber",
@@ -1272,42 +1274,6 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener 5.4.1",
  "pin-project-lite",
-]
-
-[[package]]
-name = "example-grpc-service"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap 4.6.0 (git+https://github.com/clap-rs/clap?branch=master)",
- "color-eyre",
- "common-rs",
- "dashmap",
- "example-grpc-service-migration",
- "http",
- "pbjson-types",
- "polypixel-memoir-sdk",
- "reqwest",
- "sea-orm",
- "serde",
- "serde_json",
- "serial_test",
- "test-context",
- "thiserror",
- "tokio",
- "tonic",
- "tonic-health",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "example-grpc-service-migration"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "regex",
- "sea-orm-migration",
 ]
 
 [[package]]
@@ -2299,6 +2265,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "memoir-service"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "chrono",
+ "clap 4.6.0 (git+https://github.com/clap-rs/clap?branch=master)",
+ "color-eyre",
+ "common-rs",
+ "dashmap",
+ "http",
+ "memoir-service-migration",
+ "pbjson-types",
+ "polypixel-memoir-sdk",
+ "reqwest",
+ "sea-orm",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "test-context",
+ "thiserror",
+ "tokio",
+ "tonic",
+ "tonic-health",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "memoir-service-migration"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "regex",
+ "sea-orm-migration",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2582,6 +2585,7 @@ checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
 dependencies = [
  "getrandom 0.4.2",
  "phc",
+ "rand_core 0.10.0",
 ]
 
 [[package]]
@@ -2665,6 +2669,7 @@ dependencies = [
  "base64ct",
  "ctutils",
  "getrandom 0.4.2",
+ "rand_core 0.10.0",
 ]
 
 [[package]]

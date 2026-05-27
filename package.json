@@ -24,9 +24,9 @@
 		"migrate:down": "nx run-many --target=migrate:down --all",
 		"migrate:fresh": "nx run-many --target=migrate:fresh --all",
 		"gen:protos": "nx run-many --target=gen:protos",
-		"proto:lint": "buf lint apps/example-grpc-service/proto",
-		"proto:breaking": "buf breaking apps/example-grpc-service/proto --against .git#branch=main",
-		"proto:format": "buf format apps/example-grpc-service/proto -w",
+		"proto:lint": "buf lint apps/memoir-service/proto",
+		"proto:breaking": "buf breaking apps/memoir-service/proto --against .git#branch=main",
+		"proto:format": "buf format apps/memoir-service/proto -w",
 		"nx": "nx"
 	},
 	"private": true,

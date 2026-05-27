@@ -1,9 +1,9 @@
 'use client';
 
-import type { Organization } from '@/lib/proto-shims';
 import { Building2, Check, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Dropdown } from 'rsc-daisyui';
+import type { Organization } from '@/lib/proto-shims';
 
 interface OrgSelectorProps {
 	organizations: Organization[];
