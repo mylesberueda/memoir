@@ -197,6 +197,25 @@ impl Drop for TestClient {
     }
 }
 
+impl TestClient {
+    /// Opens a fresh `DatabaseConnection` pinned to this test's schema.
+    ///
+    /// Used by migration-layer tests that need to issue raw SQL against
+    /// memoir-core's tables — e.g. verifying a trigger's side-effect or
+    /// asserting a CHECK constraint rejects bad inserts. The returned
+    /// connection's `search_path` is set to the test's schema first then
+    /// `public`, matching the convention `Client::new` uses internally.
+    pub async fn raw_db(&self) -> Result<DatabaseConnection> {
+        let database_url =
+            std::env::var("DATABASE_URL").context("DATABASE_URL env var must be set")?;
+        let search_path = format!("{},public", self.schema);
+        let options = sea_orm::ConnectOptions::new(database_url)
+            .set_schema_search_path(search_path)
+            .to_owned();
+        Database::connect(options).await.context("connect raw_db")
+    }
+}
+
 /// Builds a fresh, deterministic scope tuple for use within a test.
 pub fn fresh_scope() -> Scope {
     let suffix = nanoid::nanoid!(8, &TEST_ID_ALPHABET);

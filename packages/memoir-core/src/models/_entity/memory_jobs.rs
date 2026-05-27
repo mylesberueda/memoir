@@ -4,45 +4,43 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "api_keys", schema_name = "memoir_service")]
+#[sea_orm(schema_name = "memoir", table_name = "memory_jobs")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
-    #[sea_orm(column_type = "Text", unique)]
-    pub pid: String,
-    #[sea_orm(column_type = "Text", unique)]
-    pub key_id: String,
     #[sea_orm(column_type = "Text")]
-    pub key_hash: String,
+    pub source_pid: String,
     #[sea_orm(column_type = "Text")]
-    pub name: String,
+    pub kind: String,
     #[sea_orm(column_type = "Text")]
-    pub role: String,
+    pub state: String,
+    #[sea_orm(column_type = "JsonBinary")]
+    pub payload: Json,
+    pub attempts: i32,
     #[sea_orm(column_type = "Text", nullable)]
-    pub org_id: Option<String>,
-    #[sea_orm(column_type = "Text")]
-    pub status: String,
-    pub created_by: Option<i64>,
+    pub failure_reason: Option<String>,
+    pub claimed_at: Option<DateTimeWithTimeZone>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub claimed_by: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
-    pub last_used_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::users::Entity",
-        from = "Column::CreatedBy",
-        to = "super::users::Column::Id",
+        belongs_to = "super::memories::Entity",
+        from = "Column::SourcePid",
+        to = "super::memories::Column::Pid",
         on_update = "NoAction",
-        on_delete = "SetNull"
+        on_delete = "Cascade"
     )]
-    Users,
+    Memories,
 }
 
-impl Related<super::users::Entity> for Entity {
+impl Related<super::memories::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Users.def()
+        Relation::Memories.def()
     }
 }
 

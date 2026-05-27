@@ -24,6 +24,7 @@
 		"migrate:down": "nx run-many --target=migrate:down --all",
 		"migrate:fresh": "nx run-many --target=migrate:fresh --all",
 		"gen:protos": "nx run-many --target=gen:protos",
+		"gen:entities": "nx run-many --target=gen:entities",
 		"proto:lint": "buf lint apps/memoir-service/proto",
 		"proto:breaking": "buf breaking apps/memoir-service/proto --against .git#branch=main",
 		"proto:format": "buf format apps/memoir-service/proto -w",
