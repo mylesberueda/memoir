@@ -35,6 +35,33 @@ pub enum IndexStatus {
     Failed,
 }
 
+/// Field-level patch for [`MemoryStore::edit`].
+///
+/// Each field is `Option`-tracked so callers update only what they pass.
+/// `None` means "leave this field untouched"; `Some(value)` means "overwrite
+/// with this value." `event_at = Some(None)` is reachable via the nested
+/// `Option` and means "clear the event-time"; the outer wrapper distinguishes
+/// "untouched" from "explicitly cleared."
+#[derive(Debug, Clone, Default)]
+pub struct EditPatch {
+    /// New content. `None` leaves it unchanged.
+    pub content: Option<String>,
+
+    /// New metadata blob. `None` leaves it unchanged.
+    pub metadata: Option<serde_json::Value>,
+
+    /// New event-time. Outer `None` means "untouched"; `Some(None)` clears.
+    pub event_at: Option<Option<DateTime<FixedOffset>>>,
+}
+
+impl EditPatch {
+    /// Returns `true` when no field is set — the patch is a no-op.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.content.is_none() && self.metadata.is_none() && self.event_at.is_none()
+    }
+}
+
 /// Persists and retrieves memory rows from the source-of-truth store.
 ///
 /// Implementations own the database connection. The trait methods are async
@@ -139,6 +166,25 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Returns [`StoreError::InvalidScope`] if any scope field is empty,
     /// [`StoreError::Database`] for database failures.
     fn indexed_pids_in_scope(&self, scope: &Scope) -> impl Future<Output = Result<Vec<String>, StoreError>> + Send;
+
+    /// Mutates a memory in place. See [`EditPatch`] for the field semantics.
+    ///
+    /// Distinct from [`Self::supersede`]: edit *overwrites* the original row
+    /// because it was wrong (a correction), while supersede preserves it
+    /// because new information obsoletes — but does not invalidate — old.
+    /// `created_at` is unchanged; `updated_at` is bumped by the database
+    /// trigger. The caller is responsible for re-embedding the row after a
+    /// content change (enqueue a `JobKind::Embed` job; the worker handles
+    /// the upsert) and for flipping `qdrant_status` back to `pending` so
+    /// the row falls out of search until re-embedding completes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
+    /// [`StoreError::UnsupportedEdit`] when the target row's kind does not
+    /// support in-place edits (currently every kind except `Episodic`),
+    /// [`StoreError::Database`] for database failures.
+    fn edit(&self, pid: &str, patch: EditPatch) -> impl Future<Output = Result<Memory, StoreError>> + Send;
 
     /// Marks `pid` as superseded by `by_pid`.
     ///
@@ -338,6 +384,31 @@ mod tests {
                 .filter(|m| &m.scope == scope)
                 .map(|m| m.pid.clone())
                 .collect())
+        }
+
+        async fn edit(&self, pid: &str, patch: EditPatch) -> Result<Memory, StoreError> {
+            let mut memories = self.memories.lock().unwrap();
+            let memory = memories
+                .iter_mut()
+                .find(|m| m.pid == pid)
+                .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
+            if memory.kind != MemoryKind::Episodic {
+                return Err(StoreError::UnsupportedEdit {
+                    pid: pid.to_string(),
+                    kind: memory.kind,
+                });
+            }
+            if let Some(content) = patch.content {
+                memory.content = content;
+            }
+            if let Some(metadata) = patch.metadata {
+                memory.metadata = metadata;
+            }
+            if let Some(event_at) = patch.event_at {
+                memory.event_at = event_at;
+            }
+            memory.updated_at = Utc::now().into();
+            Ok(memory.clone())
         }
 
         async fn supersede(&self, pid: &str, by_pid: &str) -> Result<(), StoreError> {

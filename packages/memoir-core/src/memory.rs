@@ -14,6 +14,28 @@ pub struct Scope {
     pub user_id: String,
 }
 
+/// Reasons a [`Scope`] fails validation.
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum ScopeError {
+    #[error("scope: agent_id, org_id, and user_id must all be non-empty")]
+    Empty,
+}
+
+impl Scope {
+    /// Returns `Ok(())` when every field is non-empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ScopeError::Empty`] when any of `agent_id`, `org_id`, or
+    /// `user_id` is the empty string.
+    pub fn validate(&self) -> Result<(), ScopeError> {
+        if self.agent_id.is_empty() || self.org_id.is_empty() || self.user_id.is_empty() {
+            return Err(ScopeError::Empty);
+        }
+        Ok(())
+    }
+}
+
 /// Kind of memory written to or read from storage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
 #[strum(serialize_all = "lowercase")]
@@ -296,5 +318,45 @@ mod tests {
             memory.event_at.is_none(),
             "fixture default event_at must be None — most memories have no meaningful event-time"
         );
+    }
+
+    #[test]
+    fn should_reject_scope_with_empty_agent_id() {
+        let scope = Scope {
+            agent_id: "".to_string(),
+            org_id: "o".to_string(),
+            user_id: "u".to_string(),
+        };
+        assert_eq!(scope.validate(), Err(ScopeError::Empty));
+    }
+
+    #[test]
+    fn should_reject_scope_with_empty_org_id() {
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "".to_string(),
+            user_id: "u".to_string(),
+        };
+        assert_eq!(scope.validate(), Err(ScopeError::Empty));
+    }
+
+    #[test]
+    fn should_reject_scope_with_empty_user_id() {
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "o".to_string(),
+            user_id: "".to_string(),
+        };
+        assert_eq!(scope.validate(), Err(ScopeError::Empty));
+    }
+
+    #[test]
+    fn should_accept_scope_with_all_non_empty_fields() {
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "o".to_string(),
+            user_id: "u".to_string(),
+        };
+        assert!(scope.validate().is_ok());
     }
 }

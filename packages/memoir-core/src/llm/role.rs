@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use super::RigLlmProvider;
+use super::{LlmConfig, LlmError, RigLlmProvider};
 
 /// What a given LLM call is being used for.
 ///
@@ -72,6 +72,31 @@ impl LlmRegistry {
     /// Installs `provider` at `role`, replacing any prior entry.
     pub fn insert(&mut self, role: LlmRole, provider: RigLlmProvider) {
         self.providers.insert(role, provider);
+    }
+
+    /// Builds a provider from `config` and installs it at `role`.
+    ///
+    /// Equivalent to `self.insert(role, RigLlmProvider::new(config)?)` plus a
+    /// structured `INFO`-level trace recording the role and provider kind.
+    /// Replaces any prior entry at `role`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`LlmError`] from [`RigLlmProvider::new`].
+    pub fn install(&mut self, role: LlmRole, config: LlmConfig) -> Result<(), LlmError> {
+        let kind = config.kind();
+        let provider = RigLlmProvider::new(config)?;
+        self.insert(role, provider);
+
+        tracing::event!(
+            name: "memoir.llm.configured",
+            tracing::Level::INFO,
+            role = role.as_ref(),
+            provider = kind.as_ref(),
+            "configured {{provider}} provider for {{role}}",
+        );
+
+        Ok(())
     }
 
     /// Returns `true` when no roles are configured.

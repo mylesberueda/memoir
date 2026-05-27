@@ -3,12 +3,12 @@
 use chrono::{DateTime, FixedOffset};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, Value as SeaOrmValue};
 
-use super::{IndexStatus, MemoryStore, StoreError};
+use super::{EditPatch, IndexStatus, MemoryStore, StoreError};
 use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope};
 
 const PID_LENGTH: usize = 21;
 
-/// Column list shared by every `memory_from_row`-bound SELECT.
+/// Column list shared by every `Memory::try_from`-bound SELECT.
 ///
 /// `supersession_at` is sourced from the `supersession_events` audit table
 /// via correlated subquery, gated on the cached `superseded_by` column so
@@ -70,15 +70,10 @@ impl MemoryStore for PostgresStore {
         source_pid: Option<String>,
         event_at: Option<DateTime<FixedOffset>>,
     ) -> Result<Memory, StoreError> {
-        validate_scope(&scope)?;
+        scope.validate()?;
 
         let pid = nanoid::nanoid!(PID_LENGTH);
 
-        // Newly inserted rows have no supersession history by construction,
-        // so `RETURNING` includes the on-row columns only and `supersession_at`
-        // is hardcoded NULL — saves the correlated-subquery cost on the hot
-        // write path. `memory_from_row` handles the NULL uniformly with rows
-        // hydrated by SELECT paths that do run the subquery.
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             r#"
@@ -105,11 +100,10 @@ impl MemoryStore for PostgresStore {
         let row = self
             .db
             .query_one_raw(stmt)
-            .await
-            .map_err(database)?
-            .ok_or_else(|| StoreError::Database("insert returned no row".to_string()))?;
+            .await?
+            .ok_or_else(|| StoreError::CacheInvariant("insert returned no row".to_string()))?;
 
-        memory_from_row(&row).map(|mut m| {
+        Memory::try_from(&row).map(|mut m| {
             m.score = None;
             m
         })
@@ -130,11 +124,10 @@ impl MemoryStore for PostgresStore {
         let row = self
             .db
             .query_one_raw(stmt)
-            .await
-            .map_err(database)?
+            .await?
             .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
 
-        memory_from_row(&row)
+        Memory::try_from(&row)
     }
 
     async fn find_by_pids(&self, pids: &[&str]) -> Result<Vec<Memory>, StoreError> {
@@ -158,10 +151,10 @@ impl MemoryStore for PostgresStore {
             )],
         );
 
-        let rows = self.db.query_all_raw(stmt).await.map_err(database)?;
+        let rows = self.db.query_all_raw(stmt).await?;
         let mut memories = Vec::with_capacity(rows.len());
         for row in &rows {
-            memories.push(memory_from_row(row)?);
+            memories.push(Memory::try_from(row)?);
         }
         Ok(memories)
     }
@@ -183,7 +176,7 @@ impl MemoryStore for PostgresStore {
             ],
         );
 
-        let result = self.db.execute_raw(stmt).await.map_err(database)?;
+        let result = self.db.execute_raw(stmt).await?;
 
         if result.rows_affected() == 0 {
             return Err(StoreError::NotFound(pid.to_string()));
@@ -200,10 +193,10 @@ impl MemoryStore for PostgresStore {
             [SeaOrmValue::BigInt(Some(limit as i64))],
         );
 
-        let rows = self.db.query_all_raw(stmt).await.map_err(database)?;
+        let rows = self.db.query_all_raw(stmt).await?;
         let mut memories = Vec::with_capacity(rows.len());
         for row in &rows {
-            memories.push(memory_from_row(row)?);
+            memories.push(Memory::try_from(row)?);
         }
         Ok(memories)
     }
@@ -213,21 +206,21 @@ impl MemoryStore for PostgresStore {
             sea_orm::DatabaseBackend::Postgres,
             "SELECT DISTINCT agent_id, org_id, user_id FROM memories".to_string(),
         );
-        let rows = self.db.query_all_raw(stmt).await.map_err(database)?;
+        let rows = self.db.query_all_raw(stmt).await?;
 
         let mut scopes = Vec::with_capacity(rows.len());
         for row in &rows {
             scopes.push(Scope {
-                agent_id: row.try_get::<String>("", "agent_id").map_err(database)?,
-                org_id: row.try_get::<String>("", "org_id").map_err(database)?,
-                user_id: row.try_get::<String>("", "user_id").map_err(database)?,
+                agent_id: row.try_get::<String>("", "agent_id")?,
+                org_id: row.try_get::<String>("", "org_id")?,
+                user_id: row.try_get::<String>("", "user_id")?,
             });
         }
         Ok(scopes)
     }
 
     async fn indexed_pids_in_scope(&self, scope: &Scope) -> Result<Vec<String>, StoreError> {
-        validate_scope(scope)?;
+        scope.validate()?;
 
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
@@ -243,12 +236,58 @@ impl MemoryStore for PostgresStore {
             ],
         );
 
-        let rows = self.db.query_all_raw(stmt).await.map_err(database)?;
+        let rows = self.db.query_all_raw(stmt).await?;
         let mut pids = Vec::with_capacity(rows.len());
         for row in &rows {
-            pids.push(row.try_get::<String>("", "pid").map_err(database)?);
+            pids.push(row.try_get::<String>("", "pid")?);
         }
         Ok(pids)
+    }
+
+    async fn edit(&self, pid: &str, patch: EditPatch) -> Result<Memory, StoreError> {
+        if patch.is_empty() {
+            return self.recall(pid).await;
+        }
+
+        let current = self.recall(pid).await?;
+        if current.kind != MemoryKind::Episodic {
+            return Err(StoreError::UnsupportedEdit {
+                pid: pid.to_string(),
+                kind: current.kind,
+            });
+        }
+
+        let mut set_fragments: Vec<String> = Vec::with_capacity(3);
+        let mut values: Vec<SeaOrmValue> = Vec::with_capacity(4);
+
+        if let Some(content) = patch.content {
+            set_fragments.push(format!("content = ${}", values.len() + 1));
+            values.push(SeaOrmValue::String(Some(content)));
+        }
+        if let Some(metadata) = patch.metadata {
+            set_fragments.push(format!("metadata = ${}", values.len() + 1));
+            values.push(SeaOrmValue::Json(Some(Box::new(metadata))));
+        }
+        if let Some(event_at) = patch.event_at {
+            set_fragments.push(format!("event_at = ${}", values.len() + 1));
+            values.push(SeaOrmValue::ChronoDateTimeWithTimeZone(event_at));
+        }
+
+        let pid_placeholder = values.len() + 1;
+        values.push(SeaOrmValue::String(Some(pid.to_string())));
+
+        let sql = format!(
+            "UPDATE memories SET {set} WHERE pid = ${pid_placeholder}",
+            set = set_fragments.join(", "),
+        );
+        let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, values);
+
+        let result = self.db.execute_raw(stmt).await?;
+        if result.rows_affected() == 0 {
+            return Err(StoreError::NotFound(pid.to_string()));
+        }
+
+        self.recall(pid).await
     }
 
     async fn supersede(&self, pid: &str, by_pid: &str) -> Result<(), StoreError> {
@@ -271,7 +310,7 @@ impl MemoryStore for PostgresStore {
             ],
         );
 
-        let result = self.db.execute_raw(stmt).await.map_err(database)?;
+        let result = self.db.execute_raw(stmt).await?;
 
         if result.rows_affected() == 0 {
             return Err(StoreError::NotFound(pid.to_string()));
@@ -294,7 +333,7 @@ impl MemoryStore for PostgresStore {
             [SeaOrmValue::String(Some(pid.to_string()))],
         );
 
-        let result = self.db.execute_raw(stmt).await.map_err(database)?;
+        let result = self.db.execute_raw(stmt).await?;
 
         if result.rows_affected() == 0 {
             return Err(StoreError::NotFound(pid.to_string()));
@@ -324,10 +363,10 @@ impl MemoryStore for PostgresStore {
             ],
         );
 
-        let row = self.db.query_one_raw(stmt).await.map_err(database)?;
+        let row = self.db.query_one_raw(stmt).await?;
         match row {
             None => Ok(None),
-            Some(row) => row.try_get("", "winner_pid").map_err(database),
+            Some(row) => row.try_get("", "winner_pid").map_err(StoreError::from),
         }
     }
 }
@@ -339,16 +378,16 @@ impl PostgresStore {
             "DELETE FROM memories WHERE pid = $1 RETURNING pid",
             [SeaOrmValue::String(Some(pid.to_string()))],
         );
-        let rows = self.db.query_all_raw(stmt).await.map_err(database)?;
+        let rows = self.db.query_all_raw(stmt).await?;
         let mut deleted = Vec::with_capacity(rows.len());
         for row in &rows {
-            deleted.push(row.try_get::<String>("", "pid").map_err(database)?);
+            deleted.push(row.try_get::<String>("", "pid")?);
         }
         Ok(deleted)
     }
 
     async fn forget_scope(&self, scope: Scope) -> Result<Vec<String>, StoreError> {
-        validate_scope(&scope)?;
+        scope.validate()?;
 
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
@@ -359,130 +398,68 @@ impl PostgresStore {
                 SeaOrmValue::String(Some(scope.user_id)),
             ],
         );
-        let rows = self.db.query_all_raw(stmt).await.map_err(database)?;
+        let rows = self.db.query_all_raw(stmt).await?;
         let mut deleted = Vec::with_capacity(rows.len());
         for row in &rows {
-            deleted.push(row.try_get::<String>("", "pid").map_err(database)?);
+            deleted.push(row.try_get::<String>("", "pid")?);
         }
         Ok(deleted)
     }
 }
 
-fn validate_scope(scope: &Scope) -> Result<(), StoreError> {
-    if scope.agent_id.is_empty() || scope.org_id.is_empty() || scope.user_id.is_empty() {
-        return Err(StoreError::InvalidScope(
-            "agent_id, org_id, and user_id must all be non-empty".to_string(),
-        ));
-    }
-    Ok(())
-}
+impl TryFrom<&sea_orm::QueryResult> for Memory {
+    type Error = StoreError;
 
-fn database<E: std::fmt::Display>(err: E) -> StoreError {
-    StoreError::Database(err.to_string())
-}
+    fn try_from(row: &sea_orm::QueryResult) -> Result<Self, Self::Error> {
+        let pid: String = row.try_get("", "pid")?;
+        let agent_id: String = row.try_get("", "agent_id")?;
+        let org_id: String = row.try_get("", "org_id")?;
+        let user_id: String = row.try_get("", "user_id")?;
+        let content: String = row.try_get("", "content")?;
+        let metadata: serde_json::Value = row.try_get("", "metadata")?;
+        let kind_str: String = row.try_get("", "kind")?;
+        let source_pid: Option<String> = row.try_get("", "source_pid")?;
+        let superseded_by: Option<String> = row.try_get("", "superseded_by")?;
+        let created_at: DateTime<FixedOffset> = row.try_get("", "created_at")?;
+        let updated_at: DateTime<FixedOffset> = row.try_get("", "updated_at")?;
+        let event_at: Option<DateTime<FixedOffset>> = row.try_get("", "event_at")?;
+        let supersession_at: Option<DateTime<FixedOffset>> = row.try_get("", "supersession_at")?;
 
-fn memory_from_row(row: &sea_orm::QueryResult) -> Result<Memory, StoreError> {
-    let pid: String = row.try_get("", "pid").map_err(database)?;
-    let agent_id: String = row.try_get("", "agent_id").map_err(database)?;
-    let org_id: String = row.try_get("", "org_id").map_err(database)?;
-    let user_id: String = row.try_get("", "user_id").map_err(database)?;
-    let content: String = row.try_get("", "content").map_err(database)?;
-    let metadata: serde_json::Value = row.try_get("", "metadata").map_err(database)?;
-    let kind_str: String = row.try_get("", "kind").map_err(database)?;
-    let source_pid: Option<String> = row.try_get("", "source_pid").map_err(database)?;
-    let superseded_by: Option<String> = row.try_get("", "superseded_by").map_err(database)?;
-    let created_at: DateTime<FixedOffset> = row.try_get("", "created_at").map_err(database)?;
-    let updated_at: DateTime<FixedOffset> = row.try_get("", "updated_at").map_err(database)?;
-    let event_at: Option<DateTime<FixedOffset>> = row.try_get("", "event_at").map_err(database)?;
-    let supersession_at: Option<DateTime<FixedOffset>> = row.try_get("", "supersession_at").map_err(database)?;
+        let kind: MemoryKind = kind_str
+            .parse()
+            .map_err(|_| StoreError::CacheInvariant(format!("unknown memory kind: {kind_str}")))?;
 
-    let kind: MemoryKind = kind_str
-        .parse()
-        .map_err(|_| StoreError::Database(format!("unknown memory kind: {kind_str}")))?;
-
-    // `superseded_by` (the cache) and `supersession_at` (computed via
-    // correlated subquery) are populated together by the SQL: the CASE
-    // expression in MEMORY_SELECT_COLUMNS gates the subquery on
-    // `superseded_by IS NOT NULL`, so an active row has both `None` and
-    // a superseded row has both `Some`. Mismatched populations would
-    // signal a row that's been mutated between cache and audit table —
-    // surfaced as a `Database` error here rather than silently dropping
-    // one half.
-    let supersession = match (superseded_by, supersession_at) {
-        (Some(winner_pid), Some(at)) => Some(crate::memory::SupersessionInfo { winner_pid, at }),
-        (None, None) => None,
-        (Some(winner_pid), None) => {
-            return Err(StoreError::Database(format!(
-                "row {pid}: superseded_by={winner_pid} but no supersession_events row found"
-            )));
-        }
-        (None, Some(_)) => {
-            return Err(StoreError::Database(format!(
-                "row {pid}: supersession_at populated but superseded_by is NULL"
-            )));
-        }
-    };
-
-    Ok(Memory {
-        pid,
-        scope: Scope {
-            agent_id,
-            org_id,
-            user_id,
-        },
-        content,
-        metadata,
-        kind,
-        source_pid,
-        supersession,
-        created_at,
-        updated_at,
-        event_at,
-        score: None,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn should_reject_scope_with_empty_agent_id() {
-        let scope = Scope {
-            agent_id: "".to_string(),
-            org_id: "o".to_string(),
-            user_id: "u".to_string(),
+        let supersession = match (superseded_by, supersession_at) {
+            (Some(winner_pid), Some(at)) => Some(crate::memory::SupersessionInfo { winner_pid, at }),
+            (None, None) => None,
+            (Some(winner_pid), None) => {
+                return Err(StoreError::CacheInvariant(format!(
+                    "row {pid}: superseded_by={winner_pid} but no supersession_events row found"
+                )));
+            }
+            (None, Some(_)) => {
+                return Err(StoreError::CacheInvariant(format!(
+                    "row {pid}: supersession_at populated but superseded_by is NULL"
+                )));
+            }
         };
-        assert!(matches!(validate_scope(&scope), Err(StoreError::InvalidScope(_))));
-    }
 
-    #[test]
-    fn should_reject_scope_with_empty_org_id() {
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "".to_string(),
-            user_id: "u".to_string(),
-        };
-        assert!(matches!(validate_scope(&scope), Err(StoreError::InvalidScope(_))));
-    }
-
-    #[test]
-    fn should_reject_scope_with_empty_user_id() {
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "o".to_string(),
-            user_id: "".to_string(),
-        };
-        assert!(matches!(validate_scope(&scope), Err(StoreError::InvalidScope(_))));
-    }
-
-    #[test]
-    fn should_accept_scope_with_all_non_empty_fields() {
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "o".to_string(),
-            user_id: "u".to_string(),
-        };
-        assert!(validate_scope(&scope).is_ok());
+        Ok(Memory {
+            pid,
+            scope: Scope {
+                agent_id,
+                org_id,
+                user_id,
+            },
+            content,
+            metadata,
+            kind,
+            source_pid,
+            supersession,
+            created_at,
+            updated_at,
+            event_at,
+            score: None,
+        })
     }
 }

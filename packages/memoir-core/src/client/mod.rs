@@ -1,6 +1,7 @@
 //! High-level facade composing the embedder, store, and vector index.
 
 mod admin;
+mod edit;
 mod embed;
 mod error;
 mod extract;
@@ -10,6 +11,7 @@ mod search;
 mod worker;
 
 pub use admin::RetryBuilder;
+pub use edit::EditBuilder;
 pub use error::ClientError;
 pub use reconcile::{ReconcileBuilder, ReconcileSummary};
 pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
@@ -27,7 +29,7 @@ use sea_orm::{ConnectOptions, Database};
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
 use crate::jobs::{MemoryJobsStore, PostgresJobsStore};
-use crate::llm::{LlmConfig, LlmRegistry, LlmRole, RigLlmProvider};
+use crate::llm::{LlmConfig, LlmRegistry, LlmRole};
 use crate::memory::{ForgetTarget, Memory};
 use crate::store::{MemoryStore, PostgresStore};
 use crate::vector::{QdrantIndex, VectorIndex};
@@ -141,10 +143,10 @@ impl Client {
 
         let mut llms = LlmRegistry::new();
         if let Some(config) = extraction_llm {
-            install_llm(&mut llms, LlmRole::Extraction, config)?;
+            llms.install(LlmRole::Extraction, config)?;
         }
         if let Some(config) = contradiction_llm {
-            install_llm(&mut llms, LlmRole::Contradiction, config)?;
+            llms.install(LlmRole::Contradiction, config)?;
         }
 
         Ok(Client {
@@ -159,22 +161,6 @@ impl Client {
             }),
         })
     }
-}
-
-fn install_llm(registry: &mut LlmRegistry, role: LlmRole, config: LlmConfig) -> Result<(), ClientError> {
-    let kind = config.kind();
-    let provider = RigLlmProvider::new(config)?;
-    registry.insert(role, provider);
-
-    tracing::event!(
-        name: "memoir.client.llm_configured",
-        tracing::Level::INFO,
-        role = role.as_ref(),
-        provider = kind.as_ref(),
-        "configured {{provider}} provider for {{role}}",
-    );
-
-    Ok(())
 }
 
 impl Client {
@@ -260,6 +246,34 @@ impl Client {
     /// extract job cannot be enqueued.
     pub fn remember(&self, prompt: impl Into<String>, scope: crate::memory::Scope) -> RememberBuilder<'_> {
         RememberBuilder::new(self, prompt.into(), scope)
+    }
+
+    /// Mutates an existing memory in place — a correction, not a supersession.
+    ///
+    /// Returns a per-call builder; await it to apply the patch. Use this when
+    /// the original row was *wrong* and the caller is overwriting it (typo,
+    /// misheard utterance, wrong parsed date). When the original was *true at
+    /// the time* but new information now obsoletes it, use the contradiction
+    /// path that calls `MemoryStore::supersede` instead — `edit` discards the
+    /// old text, supersede preserves it.
+    ///
+    /// `created_at` is preserved; `updated_at` bumps automatically via the
+    /// database trigger. Content changes flip the row's vector-index state
+    /// back to `pending` and enqueue a re-embed job, so the row drops out of
+    /// search hits until the worker drains the queue — same lifecycle as a
+    /// fresh `remember()`. See [`EditBuilder`] for the builder methods.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::NotFound`] when no memory matches `pid`,
+    /// [`crate::store::StoreError::UnsupportedEdit`] when the target row's
+    /// kind does not support in-place edits (today: every non-Episodic
+    /// kind), [`ClientError::ReservedMetadataKey`] when metadata contains a
+    /// reserved payload key, and [`ClientError::Jobs`] when the re-embed
+    /// job cannot be enqueued.
+    pub fn edit(&self, pid: impl Into<String>) -> EditBuilder<'_> {
+        EditBuilder::new(self, pid.into())
     }
 
     /// Searches indexed memories in `scope` by vector similarity to `query`.
@@ -541,12 +555,12 @@ mod tests {
     #[test]
     fn should_install_extraction_llm_into_empty_registry() {
         let mut registry = LlmRegistry::new();
-        install_llm(
-            &mut registry,
-            LlmRole::Extraction,
-            LlmConfig::ollama("http://localhost:11434", "llama3.2"),
-        )
-        .unwrap();
+        registry
+            .install(
+                LlmRole::Extraction,
+                LlmConfig::ollama("http://localhost:11434", "llama3.2"),
+            )
+            .unwrap();
 
         let provider = registry.get(LlmRole::Extraction).expect("extraction provider present");
         assert_eq!(provider.kind(), LlmKind::Ollama);
@@ -556,18 +570,18 @@ mod tests {
     #[test]
     fn should_install_both_extraction_and_contradiction_llms_independently() {
         let mut registry = LlmRegistry::new();
-        install_llm(
-            &mut registry,
-            LlmRole::Extraction,
-            LlmConfig::ollama("http://localhost:11434", "extraction-model"),
-        )
-        .unwrap();
-        install_llm(
-            &mut registry,
-            LlmRole::Contradiction,
-            LlmConfig::ollama("http://localhost:11434", "contradiction-model"),
-        )
-        .unwrap();
+        registry
+            .install(
+                LlmRole::Extraction,
+                LlmConfig::ollama("http://localhost:11434", "extraction-model"),
+            )
+            .unwrap();
+        registry
+            .install(
+                LlmRole::Contradiction,
+                LlmConfig::ollama("http://localhost:11434", "contradiction-model"),
+            )
+            .unwrap();
 
         assert_eq!(registry.get(LlmRole::Extraction).unwrap().model(), "extraction-model");
         assert_eq!(

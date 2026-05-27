@@ -12,7 +12,7 @@
 //! 3. Call the corresponding `ctx.memoir.<method>` per ticket 0009's
 //!    library-method-to-RPC mapping.
 //! 4. Map any [`memoir_core::client::ClientError`] to a `tonic::Status`
-//!    via [`crate::services::conversions::client_error_to_status`].
+//!    via the `From` impl in memoir-core (behind the `grpc` feature).
 //! 5. Wrap the library return value in the proto response shape.
 //!
 //! ## Caller identity & scope
@@ -36,8 +36,7 @@ use tonic::{Request, Response, Status};
 use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
-    client_error_to_status, forget_target_from_proto, memory_to_proto, metadata_filter_from_proto, metadata_from_proto,
-    scope_from_proto,
+    forget_target_from_proto, memory_to_proto, metadata_filter_from_proto, metadata_from_proto, scope_from_proto,
 };
 
 /// `MemoryService` RPC handler.
@@ -114,7 +113,7 @@ impl MemoryService for Memory {
         if let Some(threshold) = min_similarity {
             builder = builder.min_similarity(threshold);
         }
-        let memories = builder.await.map_err(client_error_to_status)?;
+        let memories = builder.await.map_err(Status::from)?;
 
         let hits = memories
             .list()
@@ -155,7 +154,7 @@ impl MemoryService for Memory {
             .memoir
             .recall(&memory_pid)
             .await
-            .map_err(client_error_to_status)?;
+            .map_err(Status::from)?;
 
         Ok(Response::new(RecallResponse {
             memory: Some(memory_to_proto(memory)),
@@ -201,7 +200,7 @@ impl MemoryService for Memory {
             .remember(content, scope)
             .metadata(metadata)
             .await
-            .map_err(client_error_to_status)?;
+            .map_err(Status::from)?;
 
         Ok(Response::new(RememberResponse {
             memory: Some(memory_to_proto(written)),
@@ -231,7 +230,7 @@ impl MemoryService for Memory {
             "MemoryService.Forget invoked",
         );
 
-        let deleted_pids = self.ctx.memoir.forget(target).await.map_err(client_error_to_status)?;
+        let deleted_pids = self.ctx.memoir.forget(target).await.map_err(Status::from)?;
 
         Ok(Response::new(ForgetResponse { deleted_pids }))
     }

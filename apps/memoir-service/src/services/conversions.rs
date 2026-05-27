@@ -162,86 +162,8 @@ pub(crate) fn timestamp_from_chrono(dt: chrono::DateTime<chrono::FixedOffset>) -
     }
 }
 
-/// Maps a [`memoir_core::client::ClientError`] to a [`tonic::Status`].
-///
-/// The mapping follows gRPC semantics:
-///
-/// | Library error                                        | gRPC code         |
-/// |------------------------------------------------------|-------------------|
-/// | `Store(StoreError::NotFound)` / `Jobs(JobsError::NotFound)` | `NotFound`       |
-/// | `Store(StoreError::InvalidScope)`                    | `InvalidArgument` |
-/// | `Vector(VectorError::NotFound)`                      | `NotFound`        |
-/// | `Vector(VectorError::BadRequest)`                    | `InvalidArgument` |
-/// | `Vector(VectorError::Connection)` / `Database`       | `Unavailable`     |
-/// | `Store(StoreError::Database)` / `Jobs(...Database)`  | `Internal`        |
-/// | `Embedding(_)` / `Llm(_)` / `Migration(_)`           | `Internal`        |
-///
-/// Wire messages are opaque ("internal error", "memory not found", etc.)
-/// — never the inner error's `Display`. Full error context is logged
-/// server-side at WARN/ERROR with structured fields so operators can
-/// triage without exposing internals to callers.
-pub(crate) fn client_error_to_status(err: ClientError) -> Status {
-    match &err {
-        ClientError::Store(StoreError::NotFound(pid)) => {
-            tracing::debug!(error.kind = "store.not_found", memory.pid = %pid, "client error mapped to NOT_FOUND");
-            Status::not_found("memory not found")
-        }
-        ClientError::Store(StoreError::InvalidScope(detail)) => {
-            tracing::warn!(error.kind = "store.invalid_scope", error.detail = %detail, "client error mapped to INVALID_ARGUMENT");
-            Status::invalid_argument("scope: agent_id, org_id, and user_id must all be non-empty")
-        }
-        ClientError::Store(StoreError::Database(detail)) => {
-            tracing::error!(error.kind = "store.database", error.detail = %detail, "client error mapped to INTERNAL");
-            Status::internal("internal error")
-        }
-        ClientError::Jobs(JobsError::NotFound(id)) => {
-            tracing::debug!(error.kind = "jobs.not_found", job.id = %id, "client error mapped to NOT_FOUND");
-            Status::not_found("job not found")
-        }
-        ClientError::Jobs(JobsError::Database(detail)) => {
-            tracing::error!(error.kind = "jobs.database", error.detail = %detail, "client error mapped to INTERNAL");
-            Status::internal("internal error")
-        }
-        ClientError::Vector(VectorError::NotFound(detail)) => {
-            tracing::debug!(error.kind = "vector.not_found", error.detail = %detail, "client error mapped to NOT_FOUND");
-            Status::not_found("vector index entry not found")
-        }
-        ClientError::Vector(VectorError::BadRequest(detail)) => {
-            tracing::warn!(error.kind = "vector.bad_request", error.detail = %detail, "client error mapped to INVALID_ARGUMENT");
-            Status::invalid_argument("invalid request to vector backend")
-        }
-        ClientError::Vector(VectorError::Connection(detail)) => {
-            tracing::error!(error.kind = "vector.connection", error.detail = %detail, "client error mapped to UNAVAILABLE");
-            Status::unavailable("vector backend unavailable")
-        }
-        ClientError::Database(detail) => {
-            tracing::error!(error.kind = "database", error.detail = %detail, "client error mapped to UNAVAILABLE");
-            Status::unavailable("database unavailable")
-        }
-        ClientError::Embedding(detail) => {
-            tracing::error!(error.kind = "embedding", error.detail = %detail, "client error mapped to INTERNAL");
-            Status::internal("internal error")
-        }
-        ClientError::Llm(detail) => {
-            tracing::error!(error.kind = "llm", error.detail = %detail, "client error mapped to INTERNAL");
-            Status::internal("internal error")
-        }
-        ClientError::Migration(detail) => {
-            tracing::error!(error.kind = "migration", error.detail = %detail, "client error mapped to INTERNAL");
-            Status::internal("internal error")
-        }
-        ClientError::ReservedMetadataKey { key } => {
-            tracing::warn!(
-                error.kind = "client.reserved_metadata_key",
-                metadata.key = %key,
-                "client error mapped to INVALID_ARGUMENT",
-            );
-            Status::invalid_argument(format!(
-                "metadata key '{key}' is reserved by memoir-core's payload schema"
-            ))
-        }
-    }
-}
+// `ClientError → Status` lives in memoir-core behind the `grpc` feature.
+// Call sites use `.map_err(Status::from)` or `?` against tonic boundaries.
 
 // ─── AdminService conversions ──────────────────────────────────────────────
 
@@ -537,37 +459,37 @@ mod tests {
     #[test]
     fn should_map_store_not_found_to_grpc_not_found() {
         let err = ClientError::Store(StoreError::NotFound("abc".into()));
-        let status = client_error_to_status(err);
+        let status = Status::from(err);
         assert_eq!(status.code(), tonic::Code::NotFound);
     }
 
     #[test]
     fn should_map_store_invalid_scope_to_grpc_invalid_argument() {
         let err = ClientError::Store(StoreError::InvalidScope("empty".into()));
-        let status = client_error_to_status(err);
+        let status = Status::from(err);
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
     }
 
     #[test]
     fn should_map_vector_connection_to_grpc_unavailable() {
         let err = ClientError::Vector(VectorError::Connection("dial failed".into()));
-        let status = client_error_to_status(err);
+        let status = Status::from(err);
         assert_eq!(status.code(), tonic::Code::Unavailable);
     }
 
     #[test]
     fn should_map_jobs_not_found_to_grpc_not_found() {
         let err = ClientError::Jobs(JobsError::NotFound("42".into()));
-        let status = client_error_to_status(err);
+        let status = Status::from(err);
         assert_eq!(status.code(), tonic::Code::NotFound);
     }
 
     #[test]
     fn should_never_echo_database_error_detail_to_status_message() {
-        let err = ClientError::Store(StoreError::Database(
+        let err = ClientError::Store(StoreError::Database(sea_orm::DbErr::Custom(
             "connection string: postgres://user:s3cret@host/db".into(),
-        ));
-        let status = client_error_to_status(err);
+        )));
+        let status = Status::from(err);
         let message = status.message();
         assert!(!message.contains("s3cret"));
         assert!(!message.contains("postgres://"));
