@@ -13,6 +13,8 @@ pub use postgres::PostgresStore;
 
 use std::future::Future;
 
+use chrono::{DateTime, FixedOffset};
+
 use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope};
 
 /// Lifecycle state of a memory's vector index.
@@ -136,10 +138,12 @@ pub trait MemoryStore: Send + Sync + 'static {
 
     /// Marks `pid` as superseded by `by_pid`.
     ///
-    /// Sets the `superseded_by` column to `by_pid` so search paths filter
-    /// the row out. Idempotent: re-superseding an already-superseded row
-    /// overwrites the pointer to the new winner. Internal API — callers
-    /// must come from the contradiction-detection engine, not user code.
+    /// Records a row in the `supersession_events` audit table; a database
+    /// trigger maintains the cached `memories.superseded_by` column so
+    /// search paths continue to filter superseded rows out. Idempotent in
+    /// effect (the cache reflects the latest event), but every call is
+    /// recorded in history. Internal API — callers must come from the
+    /// contradiction-detection engine, not user code.
     ///
     /// # Errors
     ///
@@ -151,14 +155,37 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Clears the supersession marker on `pid`, restoring it to active state.
     ///
     /// Used by the admin surface when an operator decides a supersession was
-    /// wrong. No-ops at the SQL level if the row was already active
-    /// (`superseded_by IS NULL`); still requires the row to exist.
+    /// wrong. Records an unsupersede event in the audit log; the trigger
+    /// clears the cache. The audit row is always recorded, even when the
+    /// row was already active — operator intent is preserved in history.
     ///
     /// # Errors
     ///
     /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
     /// [`StoreError::Database`] for database failures.
     fn unsupersede(&self, pid: &str) -> impl Future<Output = Result<(), StoreError>> + Send;
+
+    /// Returns the winner pid `pid` was superseded by as of `as_of`, or `None`.
+    ///
+    /// Walks the `supersession_events` audit table for `pid`, returning the
+    /// `winner_pid` of the most recent event whose `decided_at <= as_of`.
+    /// `None` covers three cases: the pid has no supersession events at all,
+    /// the events all occurred after `as_of`, or the latest event before
+    /// `as_of` was an unsupersede (a row with `winner_pid IS NULL`).
+    ///
+    /// Used by point-in-time reads (`Client::recall_as_of`, ticket 0009) to
+    /// answer "was this memory active at T?" The cached
+    /// `memories.superseded_by` column is the present-time answer; this
+    /// method answers the same question for arbitrary past timestamps.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Database`] for database failures.
+    fn supersession_at(
+        &self,
+        pid: &str,
+        as_of: DateTime<FixedOffset>,
+    ) -> impl Future<Output = Result<Option<String>, StoreError>> + Send;
 }
 
 #[cfg(test)]
@@ -167,9 +194,47 @@ mod tests {
     use chrono::Utc;
     use std::sync::Mutex;
 
+    /// One row of the in-memory supersession event log used by `StubStore`.
+    ///
+    /// Mirrors the Postgres `supersession_events` table shape. `winner_pid`
+    /// is `None` for unsupersede events, matching the SQL `NULL` semantics.
+    #[derive(Debug, Clone)]
+    struct StubEvent {
+        loser_pid: String,
+        winner_pid: Option<String>,
+        decided_at: DateTime<FixedOffset>,
+    }
+
     #[derive(Default)]
     struct StubStore {
         memories: Mutex<Vec<Memory>>,
+        events: Mutex<Vec<StubEvent>>,
+    }
+
+    impl StubStore {
+        /// Recomputes a memory's `supersession` field from the event log.
+        ///
+        /// Replicates the Postgres trigger: latest event wins, `winner_pid IS
+        /// NULL` clears the cache. Called after every supersede/unsupersede
+        /// so reads see a consistent cached view without consulting the log.
+        fn refresh_cache(&self, pid: &str) {
+            let events = self.events.lock().unwrap();
+            let latest = events
+                .iter()
+                .filter(|e| e.loser_pid == pid)
+                .max_by_key(|e| e.decided_at);
+            let supersession = latest.and_then(|e| {
+                e.winner_pid.clone().map(|winner_pid| crate::memory::SupersessionInfo {
+                    winner_pid,
+                    at: e.decided_at,
+                })
+            });
+            drop(events);
+            let mut memories = self.memories.lock().unwrap();
+            if let Some(m) = memories.iter_mut().find(|m| m.pid == pid) {
+                m.supersession = supersession;
+            }
+        }
     }
 
     impl MemoryStore for StubStore {
@@ -271,26 +336,47 @@ mod tests {
         }
 
         async fn supersede(&self, pid: &str, by_pid: &str) -> Result<(), StoreError> {
-            let mut memories = self.memories.lock().unwrap();
-            let target = memories
-                .iter_mut()
-                .find(|m| m.pid == pid)
-                .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
-            target.supersession = Some(crate::memory::SupersessionInfo {
-                winner_pid: by_pid.to_string(),
-                at: Utc::now().into(),
+            // EXISTS-guarded behavior mirrored from Postgres: if the loser
+            // pid doesn't exist, return NotFound without writing anything.
+            {
+                let memories = self.memories.lock().unwrap();
+                if !memories.iter().any(|m| m.pid == pid) {
+                    return Err(StoreError::NotFound(pid.to_string()));
+                }
+            }
+            self.events.lock().unwrap().push(StubEvent {
+                loser_pid: pid.to_string(),
+                winner_pid: Some(by_pid.to_string()),
+                decided_at: Utc::now().into(),
             });
+            self.refresh_cache(pid);
             Ok(())
         }
 
         async fn unsupersede(&self, pid: &str) -> Result<(), StoreError> {
-            let mut memories = self.memories.lock().unwrap();
-            let target = memories
-                .iter_mut()
-                .find(|m| m.pid == pid)
-                .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
-            target.supersession = None;
+            {
+                let memories = self.memories.lock().unwrap();
+                if !memories.iter().any(|m| m.pid == pid) {
+                    return Err(StoreError::NotFound(pid.to_string()));
+                }
+            }
+            // Per DP2: always insert, even when already active.
+            self.events.lock().unwrap().push(StubEvent {
+                loser_pid: pid.to_string(),
+                winner_pid: None,
+                decided_at: Utc::now().into(),
+            });
+            self.refresh_cache(pid);
             Ok(())
+        }
+
+        async fn supersession_at(&self, pid: &str, as_of: DateTime<FixedOffset>) -> Result<Option<String>, StoreError> {
+            let events = self.events.lock().unwrap();
+            let latest = events
+                .iter()
+                .filter(|e| e.loser_pid == pid && e.decided_at <= as_of)
+                .max_by_key(|e| e.decided_at);
+            Ok(latest.and_then(|e| e.winner_pid.clone()))
         }
     }
 
@@ -393,5 +479,66 @@ mod tests {
         let result = store.unsupersede("does-not-exist").await;
 
         assert!(matches!(result, Err(StoreError::NotFound(_))));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_resolve_to_latest_winner_when_resuperseded() {
+        let store = StubStore::default();
+        let loser = write(&store, "old").await;
+        let first_winner = write(&store, "first").await;
+        let second_winner = write(&store, "second").await;
+
+        store.supersede(&loser.pid, &first_winner.pid).await.unwrap();
+        store.supersede(&loser.pid, &second_winner.pid).await.unwrap();
+
+        let after = store.recall(&loser.pid).await.unwrap();
+        let supersession = after.supersession.as_ref().expect("supersession set");
+        assert_eq!(
+            supersession.winner_pid, second_winner.pid,
+            "latest event wins the cache"
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_return_winner_pid_from_supersession_at_for_past_timestamp() {
+        let store = StubStore::default();
+        let loser = write(&store, "loser").await;
+        let winner = write(&store, "winner").await;
+        store.supersede(&loser.pid, &winner.pid).await.unwrap();
+        let now: DateTime<FixedOffset> = Utc::now().into();
+
+        let result = store.supersession_at(&loser.pid, now).await.unwrap();
+
+        assert_eq!(result.as_deref(), Some(winner.pid.as_str()));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_return_none_from_supersession_at_when_as_of_predates_event() {
+        let store = StubStore::default();
+        let loser = write(&store, "loser").await;
+        let winner = write(&store, "winner").await;
+        let before: DateTime<FixedOffset> = Utc::now().into();
+        // Sleep just enough that the event's decided_at is strictly after `before`.
+        // current_thread runtime + this short sleep is reliable in CI.
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        store.supersede(&loser.pid, &winner.pid).await.unwrap();
+
+        let result = store.supersession_at(&loser.pid, before).await.unwrap();
+
+        assert!(result.is_none(), "events after as_of must not count");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_return_none_from_supersession_at_when_latest_event_was_unsupersede() {
+        let store = StubStore::default();
+        let loser = write(&store, "loser").await;
+        let winner = write(&store, "winner").await;
+        store.supersede(&loser.pid, &winner.pid).await.unwrap();
+        store.unsupersede(&loser.pid).await.unwrap();
+        let now: DateTime<FixedOffset> = Utc::now().into();
+
+        let result = store.supersession_at(&loser.pid, now).await.unwrap();
+
+        assert!(result.is_none(), "unsupersede event clears the as-of answer");
     }
 }

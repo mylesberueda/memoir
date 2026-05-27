@@ -8,6 +8,36 @@ use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope};
 
 const PID_LENGTH: usize = 21;
 
+/// Column list shared by every `memory_from_row`-bound SELECT.
+///
+/// `supersession_at` is sourced from the `supersession_events` audit table
+/// via correlated subquery, gated on the cached `superseded_by` column so
+/// active rows return `NULL` even when a prior unsupersede event exists.
+/// The compound index `supersession_events_loser_decided_idx` makes the
+/// subquery an indexed lookup.
+const MEMORY_SELECT_COLUMNS: &str = "
+    m.pid,
+    m.agent_id,
+    m.org_id,
+    m.user_id,
+    m.content,
+    m.metadata,
+    m.kind,
+    m.source_pid,
+    m.superseded_by,
+    m.created_at,
+    m.updated_at,
+    m.event_at,
+    CASE
+        WHEN m.superseded_by IS NULL THEN NULL
+        ELSE (
+            SELECT MAX(decided_at)
+            FROM supersession_events
+            WHERE loser_pid = m.pid
+        )
+    END AS supersession_at
+";
+
 /// Default [`MemoryStore`] backed by Postgres.
 ///
 /// Constructed via [`Self::new`] from an existing
@@ -43,12 +73,20 @@ impl MemoryStore for PostgresStore {
 
         let pid = nanoid::nanoid!(PID_LENGTH);
 
+        // Newly inserted rows have no supersession history by construction,
+        // so `RETURNING` includes the on-row columns only and `supersession_at`
+        // is hardcoded NULL — saves the correlated-subquery cost on the hot
+        // write path. `memory_from_row` handles the NULL uniformly with rows
+        // hydrated by SELECT paths that do run the subquery.
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             r#"
             INSERT INTO memories (pid, agent_id, org_id, user_id, content, metadata, kind, source_pid)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, superseded_by, created_at
+            RETURNING
+                pid, agent_id, org_id, user_id, content, metadata, kind,
+                source_pid, superseded_by, created_at, updated_at, event_at,
+                NULL::TIMESTAMPTZ AS supersession_at
             "#,
             [
                 SeaOrmValue::String(Some(pid)),
@@ -80,13 +118,10 @@ impl MemoryStore for PostgresStore {
             return Err(StoreError::NotFound(pid.to_string()));
         }
 
+        let select_sql = format!("SELECT {MEMORY_SELECT_COLUMNS} FROM memories m WHERE m.pid = $1");
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            r#"
-            SELECT pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, superseded_by, created_at
-            FROM memories
-            WHERE pid = $1
-            "#,
+            select_sql,
             [SeaOrmValue::String(Some(pid.to_string()))],
         );
 
@@ -106,13 +141,13 @@ impl MemoryStore for PostgresStore {
         }
 
         let owned_pids: Vec<String> = pids.iter().map(|p| (*p).to_string()).collect();
+        let select_sql = format!(
+            "SELECT {MEMORY_SELECT_COLUMNS} FROM memories m \
+             WHERE m.pid = ANY($1) AND m.qdrant_status = 'indexed' AND m.superseded_by IS NULL"
+        );
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            r#"
-            SELECT pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, superseded_by, created_at
-            FROM memories
-            WHERE pid = ANY($1) AND qdrant_status = 'indexed' AND superseded_by IS NULL
-            "#,
+            select_sql,
             [SeaOrmValue::Array(
                 sea_orm::sea_query::ArrayType::String,
                 Some(Box::new(
@@ -155,14 +190,11 @@ impl MemoryStore for PostgresStore {
     }
 
     async fn find_failed(&self, limit: usize) -> Result<Vec<Memory>, StoreError> {
+        let select_sql =
+            format!("SELECT {MEMORY_SELECT_COLUMNS} FROM memories m WHERE m.qdrant_status = 'failed' LIMIT $1");
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            r#"
-            SELECT pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, superseded_by, created_at
-            FROM memories
-            WHERE qdrant_status = 'failed'
-            LIMIT $1
-            "#,
+            select_sql,
             [SeaOrmValue::BigInt(Some(limit as i64))],
         );
 
@@ -218,12 +250,22 @@ impl MemoryStore for PostgresStore {
     }
 
     async fn supersede(&self, pid: &str, by_pid: &str) -> Result<(), StoreError> {
+        // `INSERT ... SELECT ... WHERE EXISTS` keeps the contract identical
+        // to the old UPDATE-based path: if the loser pid does not exist,
+        // zero rows are inserted and we surface `NotFound`. The trigger
+        // (migration 0005) maintains `memories.superseded_by` from the
+        // inserted event. FK violations on `winner_pid` still bubble up as
+        // `Database` errors when `by_pid` doesn't exist.
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            "UPDATE memories SET superseded_by = $1 WHERE pid = $2",
+            r#"
+            INSERT INTO supersession_events (loser_pid, winner_pid)
+            SELECT $1, $2
+            WHERE EXISTS (SELECT 1 FROM memories WHERE pid = $1)
+            "#,
             [
-                SeaOrmValue::String(Some(by_pid.to_string())),
                 SeaOrmValue::String(Some(pid.to_string())),
+                SeaOrmValue::String(Some(by_pid.to_string())),
             ],
         );
 
@@ -236,9 +278,17 @@ impl MemoryStore for PostgresStore {
     }
 
     async fn unsupersede(&self, pid: &str) -> Result<(), StoreError> {
+        // Same EXISTS-guarded INSERT shape as `supersede`; `winner_pid` is
+        // NULL to encode an unsupersede event. Per DP2, this always inserts
+        // (no cache pre-check) — the audit table reflects every operator
+        // call, even redundant ones against an already-active row.
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            "UPDATE memories SET superseded_by = NULL WHERE pid = $1",
+            r#"
+            INSERT INTO supersession_events (loser_pid, winner_pid)
+            SELECT $1, NULL
+            WHERE EXISTS (SELECT 1 FROM memories WHERE pid = $1)
+            "#,
             [SeaOrmValue::String(Some(pid.to_string()))],
         );
 
@@ -248,6 +298,35 @@ impl MemoryStore for PostgresStore {
             return Err(StoreError::NotFound(pid.to_string()));
         }
         Ok(())
+    }
+
+    async fn supersession_at(&self, pid: &str, as_of: DateTime<FixedOffset>) -> Result<Option<String>, StoreError> {
+        // Returns the winner_pid for `pid` as of timestamp `as_of`, or
+        // `None` if the row was not superseded at that time (either it
+        // had no events, or its latest event before `as_of` was an
+        // unsupersede). The compound index
+        // `supersession_events_loser_decided_idx` makes this an indexed
+        // ORDER BY + LIMIT.
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT winner_pid
+            FROM supersession_events
+            WHERE loser_pid = $1 AND decided_at <= $2
+            ORDER BY decided_at DESC
+            LIMIT 1
+            "#,
+            [
+                SeaOrmValue::String(Some(pid.to_string())),
+                SeaOrmValue::ChronoDateTimeWithTimeZone(Some(as_of)),
+            ],
+        );
+
+        let row = self.db.query_one_raw(stmt).await.map_err(database)?;
+        match row {
+            None => Ok(None),
+            Some(row) => row.try_get("", "winner_pid").map_err(database),
+        }
     }
 }
 
@@ -311,24 +390,36 @@ fn memory_from_row(row: &sea_orm::QueryResult) -> Result<Memory, StoreError> {
     let source_pid: Option<String> = row.try_get("", "source_pid").map_err(database)?;
     let superseded_by: Option<String> = row.try_get("", "superseded_by").map_err(database)?;
     let created_at: DateTime<FixedOffset> = row.try_get("", "created_at").map_err(database)?;
+    let updated_at: DateTime<FixedOffset> = row.try_get("", "updated_at").map_err(database)?;
+    let event_at: Option<DateTime<FixedOffset>> = row.try_get("", "event_at").map_err(database)?;
+    let supersession_at: Option<DateTime<FixedOffset>> = row.try_get("", "supersession_at").map_err(database)?;
 
     let kind: MemoryKind = kind_str
         .parse()
         .map_err(|_| StoreError::Database(format!("unknown memory kind: {kind_str}")))?;
 
-    // Placeholders for ticket 0010/0002 — the Memory struct now carries
-    // `supersession`, `updated_at`, and `event_at`. This row-conversion
-    // helper does not yet hydrate them from the database; ticket 0010/0003
-    // (storage-layer rewrite) extends the SELECTs above and queries
-    // `supersession_events` to populate the supersession-time, and adds
-    // `updated_at` and `event_at` column reads. Until that ticket lands,
-    // the values below are coarsely approximated: supersession derives
-    // its pid from the existing cache column with a placeholder `at`,
-    // updated_at falls back to created_at, and event_at is None.
-    let supersession = superseded_by.map(|winner_pid| crate::memory::SupersessionInfo {
-        winner_pid,
-        at: created_at,
-    });
+    // `superseded_by` (the cache) and `supersession_at` (computed via
+    // correlated subquery) are populated together by the SQL: the CASE
+    // expression in MEMORY_SELECT_COLUMNS gates the subquery on
+    // `superseded_by IS NOT NULL`, so an active row has both `None` and
+    // a superseded row has both `Some`. Mismatched populations would
+    // signal a row that's been mutated between cache and audit table —
+    // surfaced as a `Database` error here rather than silently dropping
+    // one half.
+    let supersession = match (superseded_by, supersession_at) {
+        (Some(winner_pid), Some(at)) => Some(crate::memory::SupersessionInfo { winner_pid, at }),
+        (None, None) => None,
+        (Some(winner_pid), None) => {
+            return Err(StoreError::Database(format!(
+                "row {pid}: superseded_by={winner_pid} but no supersession_events row found"
+            )));
+        }
+        (None, Some(_)) => {
+            return Err(StoreError::Database(format!(
+                "row {pid}: supersession_at populated but superseded_by is NULL"
+            )));
+        }
+    };
 
     Ok(Memory {
         pid,
@@ -343,8 +434,8 @@ fn memory_from_row(row: &sea_orm::QueryResult) -> Result<Memory, StoreError> {
         source_pid,
         supersession,
         created_at,
-        updated_at: created_at,
-        event_at: None,
+        updated_at,
+        event_at,
         score: None,
     })
 }
