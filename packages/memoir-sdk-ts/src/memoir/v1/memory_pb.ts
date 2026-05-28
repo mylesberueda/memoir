@@ -12,7 +12,7 @@ import type { JsonObject, Message } from "@bufbuild/protobuf";
  * Describes the file memoir/v1/memory.proto.
  */
 export const file_memoir_v1_memory: GenFile = /*@__PURE__*/
-  fileDesc("ChZtZW1vaXIvdjEvbWVtb3J5LnByb3RvEgltZW1vaXIudjEiOgoFU2NvcGUSEAoIYWdlbnRfaWQYASABKAkSDgoGb3JnX2lkGAIgASgJEg8KB3VzZXJfaWQYAyABKAkikwIKBk1lbW9yeRILCgNwaWQYASABKAkSHwoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgDIAEoCRIpCghtZXRhZGF0YRgEIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoMcHJvY2Vzc2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgAiAEBEicKBnN0YXR1cxgHIAEoDjIXLm1lbW9pci52MS5NZW1vcnlTdGF0dXNCDwoNX3Byb2Nlc3NlZF9hdCI9CglTZWFyY2hIaXQSIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeRINCgVzY29yZRgCIAEoAiLJAQoNU2VhcmNoUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRINCgVxdWVyeRgCIAEoCRINCgVsaW1pdBgDIAEoBRI1Cg9tZXRhZGF0YV9maWx0ZXIYBCABKAsyFy5tZW1vaXIudjEuTWVtb3J5RmlsdGVySACIAQESGwoObWluX3NpbWlsYXJpdHkYBSABKAJIAYgBAUISChBfbWV0YWRhdGFfZmlsdGVyQhEKD19taW5fc2ltaWxhcml0eSKSAQoMTWVtb3J5RmlsdGVyEigKBG11c3QYASADKAsyGi5tZW1vaXIudjEuRmlsdGVyQ29uZGl0aW9uEiwKCG11c3Rfbm90GAIgAygLMhoubWVtb2lyLnYxLkZpbHRlckNvbmRpdGlvbhIqCgZzaG91bGQYAyADKAsyGi5tZW1vaXIudjEuRmlsdGVyQ29uZGl0aW9uIq0BCg9GaWx0ZXJDb25kaXRpb24SDQoFZmllbGQYASABKAkSJwoGZXF1YWxzGAIgASgLMhUubWVtb2lyLnYxLk1hdGNoVmFsdWVIABIrCglpbl92YWx1ZXMYAyABKAsyFi5tZW1vaXIudjEuTWF0Y2hWYWx1ZXNIABIoCgVyYW5nZRgEIAEoCzIXLm1lbW9pci52MS5OdW1lcmljUmFuZ2VIAEILCgljb25kaXRpb24iTgoKTWF0Y2hWYWx1ZRIRCgdrZXl3b3JkGAEgASgJSAASEQoHaW50ZWdlchgCIAEoA0gAEhEKB2Jvb2xlYW4YAyABKAhIAEIHCgV2YWx1ZSJvCgtNYXRjaFZhbHVlcxIqCghrZXl3b3JkcxgBIAEoCzIWLm1lbW9pci52MS5LZXl3b3JkTGlzdEgAEioKCGludGVnZXJzGAIgASgLMhYubWVtb2lyLnYxLkludGVnZXJMaXN0SABCCAoGdmFsdWVzIh0KC0tleXdvcmRMaXN0Eg4KBnZhbHVlcxgBIAMoCSIdCgtJbnRlZ2VyTGlzdBIOCgZ2YWx1ZXMYASADKAMicgoMTnVtZXJpY1JhbmdlEg8KAmx0GAEgASgBSACIAQESEAoDbHRlGAIgASgBSAGIAQESDwoCZ3QYAyABKAFIAogBARIQCgNndGUYBCABKAFIA4gBAUIFCgNfbHRCBgoEX2x0ZUIFCgNfZ3RCBgoEX2d0ZSI0Cg5TZWFyY2hSZXNwb25zZRIiCgRoaXRzGAEgAygLMhQubWVtb2lyLnYxLlNlYXJjaEhpdCIcCg1SZWNhbGxSZXF1ZXN0EgsKA3BpZBgBIAEoCSIzCg5SZWNhbGxSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5IoABCg9SZW1lbWJlclJlcXVlc3QSHwoFc2NvcGUYASABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgCIAEoCRIuCghtZXRhZGF0YRgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3RIAIgBAUILCglfbWV0YWRhdGEiNQoQUmVtZW1iZXJSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5ImAKDUZvcmdldFJlcXVlc3QSDQoDcGlkGAEgASgJSAASIQoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGVIABITCgtoYXJkX2RlbGV0ZRgDIAEoCEIICgZ0YXJnZXQiJgoORm9yZ2V0UmVzcG9uc2USFAoMZGVsZXRlZF9waWRzGAEgAygJKn8KDE1lbW9yeVN0YXR1cxIdChlNRU1PUllfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGQoVTUVNT1JZX1NUQVRVU19QRU5ESU5HEAESGwoXTUVNT1JZX1NUQVRVU19QUk9DRVNTRUQQAhIYChRNRU1PUllfU1RBVFVTX0ZBSUxFRBADMpECCg1NZW1vcnlTZXJ2aWNlEj0KBlNlYXJjaBIYLm1lbW9pci52MS5TZWFyY2hSZXF1ZXN0GhkubWVtb2lyLnYxLlNlYXJjaFJlc3BvbnNlEj0KBlJlY2FsbBIYLm1lbW9pci52MS5SZWNhbGxSZXF1ZXN0GhkubWVtb2lyLnYxLlJlY2FsbFJlc3BvbnNlEkMKCFJlbWVtYmVyEhoubWVtb2lyLnYxLlJlbWVtYmVyUmVxdWVzdBobLm1lbW9pci52MS5SZW1lbWJlclJlc3BvbnNlEj0KBkZvcmdldBIYLm1lbW9pci52MS5Gb3JnZXRSZXF1ZXN0GhkubWVtb2lyLnYxLkZvcmdldFJlc3BvbnNlYgZwcm90bzM", [file_google_protobuf_struct, file_google_protobuf_timestamp]);
+  fileDesc("ChZtZW1vaXIvdjEvbWVtb3J5LnByb3RvEgltZW1vaXIudjEiOgoFU2NvcGUSEAoIYWdlbnRfaWQYASABKAkSDgoGb3JnX2lkGAIgASgJEg8KB3VzZXJfaWQYAyABKAkiyAMKBk1lbW9yeRILCgNwaWQYASABKAkSHwoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgDIAEoCRIpCghtZXRhZGF0YRgEIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoMcHJvY2Vzc2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgAiAEBEicKBnN0YXR1cxgHIAEoDjIXLm1lbW9pci52MS5NZW1vcnlTdGF0dXMSLgoKdXBkYXRlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMQoIZXZlbnRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAGIAQESMgoMc3VwZXJzZXNzaW9uGAogASgLMhcubWVtb2lyLnYxLlN1cGVyc2Vzc2lvbkgCiAEBQg8KDV9wcm9jZXNzZWRfYXRCCwoJX2V2ZW50X2F0Qg8KDV9zdXBlcnNlc3Npb24iSgoMU3VwZXJzZXNzaW9uEhIKCndpbm5lcl9waWQYASABKAkSJgoCYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIjIKDEtpbmRTZWxlY3RvchIQCghlcGlzb2RpYxgBIAEoCBIQCghzZW1hbnRpYxgCIAEoCCI9CglTZWFyY2hIaXQSIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeRINCgVzY29yZRgCIAEoAiKAAgoNU2VhcmNoUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRINCgVxdWVyeRgCIAEoCRINCgVsaW1pdBgDIAEoBRI1Cg9tZXRhZGF0YV9maWx0ZXIYBCABKAsyFy5tZW1vaXIudjEuTWVtb3J5RmlsdGVySACIAQESGwoObWluX3NpbWlsYXJpdHkYBSABKAJIAYgBARIrCgVraW5kcxgGIAEoCzIXLm1lbW9pci52MS5LaW5kU2VsZWN0b3JIAogBAUISChBfbWV0YWRhdGFfZmlsdGVyQhEKD19taW5fc2ltaWxhcml0eUIICgZfa2luZHMikgEKDE1lbW9yeUZpbHRlchIoCgRtdXN0GAEgAygLMhoubWVtb2lyLnYxLkZpbHRlckNvbmRpdGlvbhIsCghtdXN0X25vdBgCIAMoCzIaLm1lbW9pci52MS5GaWx0ZXJDb25kaXRpb24SKgoGc2hvdWxkGAMgAygLMhoubWVtb2lyLnYxLkZpbHRlckNvbmRpdGlvbiKtAQoPRmlsdGVyQ29uZGl0aW9uEg0KBWZpZWxkGAEgASgJEicKBmVxdWFscxgCIAEoCzIVLm1lbW9pci52MS5NYXRjaFZhbHVlSAASKwoJaW5fdmFsdWVzGAMgASgLMhYubWVtb2lyLnYxLk1hdGNoVmFsdWVzSAASKAoFcmFuZ2UYBCABKAsyFy5tZW1vaXIudjEuTnVtZXJpY1JhbmdlSABCCwoJY29uZGl0aW9uIk4KCk1hdGNoVmFsdWUSEQoHa2V5d29yZBgBIAEoCUgAEhEKB2ludGVnZXIYAiABKANIABIRCgdib29sZWFuGAMgASgISABCBwoFdmFsdWUibwoLTWF0Y2hWYWx1ZXMSKgoIa2V5d29yZHMYASABKAsyFi5tZW1vaXIudjEuS2V5d29yZExpc3RIABIqCghpbnRlZ2VycxgCIAEoCzIWLm1lbW9pci52MS5JbnRlZ2VyTGlzdEgAQggKBnZhbHVlcyIdCgtLZXl3b3JkTGlzdBIOCgZ2YWx1ZXMYASADKAkiHQoLSW50ZWdlckxpc3QSDgoGdmFsdWVzGAEgAygDInIKDE51bWVyaWNSYW5nZRIPCgJsdBgBIAEoAUgAiAEBEhAKA2x0ZRgCIAEoAUgBiAEBEg8KAmd0GAMgASgBSAKIAQESEAoDZ3RlGAQgASgBSAOIAQFCBQoDX2x0QgYKBF9sdGVCBQoDX2d0QgYKBF9ndGUiNAoOU2VhcmNoUmVzcG9uc2USIgoEaGl0cxgBIAMoCzIULm1lbW9pci52MS5TZWFyY2hIaXQiHAoNUmVjYWxsUmVxdWVzdBILCgNwaWQYASABKAkiMwoOUmVjYWxsUmVzcG9uc2USIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeSKAAQoPUmVtZW1iZXJSZXF1ZXN0Eh8KBXNjb3BlGAEgASgLMhAubWVtb2lyLnYxLlNjb3BlEg8KB2NvbnRlbnQYAiABKAkSLgoIbWV0YWRhdGEYAyABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0SACIAQFCCwoJX21ldGFkYXRhIjUKEFJlbWVtYmVyUmVzcG9uc2USIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeSJgCg1Gb3JnZXRSZXF1ZXN0Eg0KA3BpZBgBIAEoCUgAEiEKBXNjb3BlGAIgASgLMhAubWVtb2lyLnYxLlNjb3BlSAASEwoLaGFyZF9kZWxldGUYAyABKAhCCAoGdGFyZ2V0IiYKDkZvcmdldFJlc3BvbnNlEhQKDGRlbGV0ZWRfcGlkcxgBIAMoCSLXAwoPVGltZWxpbmVSZXF1ZXN0Eh8KBXNjb3BlGAEgASgLMhAubWVtb2lyLnYxLlNjb3BlEisKBWtpbmRzGAIgASgLMhcubWVtb2lyLnYxLktpbmRTZWxlY3RvckgAiAEBEjYKDWNyZWF0ZWRfYWZ0ZXIYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAGIAQESNwoOY3JlYXRlZF9iZWZvcmUYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAKIAQESNwoOZXZlbnRfYXRfYWZ0ZXIYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAOIAQESOAoPZXZlbnRfYXRfYmVmb3JlGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgEiAEBEhoKEmV4Y2x1ZGVfc3VwZXJzZWRlZBgHIAEoCBINCgVsaW1pdBgIIAEoBRIRCglhc2NlbmRpbmcYCSABKAhCCAoGX2tpbmRzQhAKDl9jcmVhdGVkX2FmdGVyQhEKD19jcmVhdGVkX2JlZm9yZUIRCg9fZXZlbnRfYXRfYWZ0ZXJCEgoQX2V2ZW50X2F0X2JlZm9yZSI3ChBUaW1lbGluZVJlc3BvbnNlEiMKCG1lbW9yaWVzGAEgAygLMhEubWVtb2lyLnYxLk1lbW9yeSp/CgxNZW1vcnlTdGF0dXMSHQoZTUVNT1JZX1NUQVRVU19VTlNQRUNJRklFRBAAEhkKFU1FTU9SWV9TVEFUVVNfUEVORElORxABEhsKF01FTU9SWV9TVEFUVVNfUFJPQ0VTU0VEEAISGAoUTUVNT1JZX1NUQVRVU19GQUlMRUQQAzLWAgoNTWVtb3J5U2VydmljZRI9CgZTZWFyY2gSGC5tZW1vaXIudjEuU2VhcmNoUmVxdWVzdBoZLm1lbW9pci52MS5TZWFyY2hSZXNwb25zZRI9CgZSZWNhbGwSGC5tZW1vaXIudjEuUmVjYWxsUmVxdWVzdBoZLm1lbW9pci52MS5SZWNhbGxSZXNwb25zZRJDCghSZW1lbWJlchIaLm1lbW9pci52MS5SZW1lbWJlclJlcXVlc3QaGy5tZW1vaXIudjEuUmVtZW1iZXJSZXNwb25zZRI9CgZGb3JnZXQSGC5tZW1vaXIudjEuRm9yZ2V0UmVxdWVzdBoZLm1lbW9pci52MS5Gb3JnZXRSZXNwb25zZRJDCghUaW1lbGluZRIaLm1lbW9pci52MS5UaW1lbGluZVJlcXVlc3QaGy5tZW1vaXIudjEuVGltZWxpbmVSZXNwb25zZWIGcHJvdG8z", [file_google_protobuf_struct, file_google_protobuf_timestamp]);
 
 /**
  * Scope uniquely identifies a memory partition. Memories written under one
@@ -94,6 +94,31 @@ export type Memory = Message<"memoir.v1.Memory"> & {
    * @generated from field: memoir.v1.MemoryStatus status = 7;
    */
   status: MemoryStatus;
+
+  /**
+   * Wall-clock time of the row's last in-place edit. Equals `created_at`
+   * for memories never edited. Maps from memoir-core's `Memory.updated_at`.
+   *
+   * @generated from field: google.protobuf.Timestamp updated_at = 8;
+   */
+  updatedAt?: Timestamp;
+
+  /**
+   * Event-time of the thing being remembered, distinct from `created_at`
+   * (when memoir was told). Unset when no event-time is known (preferences,
+   * identity facts). Maps from memoir-core's `Memory.event_at`.
+   *
+   * @generated from field: optional google.protobuf.Timestamp event_at = 9;
+   */
+  eventAt?: Timestamp;
+
+  /**
+   * Soft-deletion marker; unset when the memory is active. Maps from
+   * memoir-core's `Memory.supersession` (`SupersessionInfo`).
+   *
+   * @generated from field: optional memoir.v1.Supersession supersession = 10;
+   */
+  supersession?: Supersession;
 };
 
 /**
@@ -102,6 +127,58 @@ export type Memory = Message<"memoir.v1.Memory"> & {
  */
 export const MemorySchema: GenMessage<Memory> = /*@__PURE__*/
   messageDesc(file_memoir_v1_memory, 1);
+
+/**
+ * Latest supersession state for a Memory — winner pid and decision time.
+ * Mirrors memoir-core's `SupersessionInfo`. Present only on superseded rows.
+ *
+ * @generated from message memoir.v1.Supersession
+ */
+export type Supersession = Message<"memoir.v1.Supersession"> & {
+  /**
+   * @generated from field: string winner_pid = 1;
+   */
+  winnerPid: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp at = 2;
+   */
+  at?: Timestamp;
+};
+
+/**
+ * Describes the message memoir.v1.Supersession.
+ * Use `create(SupersessionSchema)` to create a new message.
+ */
+export const SupersessionSchema: GenMessage<Supersession> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 2);
+
+/**
+ * Selects which memory kinds a read includes. Mirrors memoir-core's
+ * `KindSelector`. Per the library's semantics, a selector with BOTH fields
+ * false (the proto3 default, or an omitted selector) means "all kinds" —
+ * not "no kinds". Setting exactly one field filters to that kind.
+ *
+ * @generated from message memoir.v1.KindSelector
+ */
+export type KindSelector = Message<"memoir.v1.KindSelector"> & {
+  /**
+   * @generated from field: bool episodic = 1;
+   */
+  episodic: boolean;
+
+  /**
+   * @generated from field: bool semantic = 2;
+   */
+  semantic: boolean;
+};
+
+/**
+ * Describes the message memoir.v1.KindSelector.
+ * Use `create(KindSelectorSchema)` to create a new message.
+ */
+export const KindSelectorSchema: GenMessage<KindSelector> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 3);
 
 /**
  * Search result with similarity score attached.
@@ -131,7 +208,7 @@ export type SearchHit = Message<"memoir.v1.SearchHit"> & {
  * Use `create(SearchHitSchema)` to create a new message.
  */
 export const SearchHitSchema: GenMessage<SearchHit> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 2);
+  messageDesc(file_memoir_v1_memory, 4);
 
 /**
  * @generated from message memoir.v1.SearchRequest
@@ -175,6 +252,15 @@ export type SearchRequest = Message<"memoir.v1.SearchRequest"> & {
    * @generated from field: optional float min_similarity = 5;
    */
   minSimilarity?: number;
+
+  /**
+   * Restricts retrieval to the selected memory kind(s). Omitted or
+   * both-false = all kinds (see `KindSelector`). Maps to the library's
+   * `SearchBuilder::episodic` / `::semantic` toggles.
+   *
+   * @generated from field: optional memoir.v1.KindSelector kinds = 6;
+   */
+  kinds?: KindSelector;
 };
 
 /**
@@ -182,7 +268,7 @@ export type SearchRequest = Message<"memoir.v1.SearchRequest"> & {
  * Use `create(SearchRequestSchema)` to create a new message.
  */
 export const SearchRequestSchema: GenMessage<SearchRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 3);
+  messageDesc(file_memoir_v1_memory, 5);
 
 /**
  * Caller-supplied filter applied at search time. Mirrors Qdrant's payload
@@ -217,7 +303,7 @@ export type MemoryFilter = Message<"memoir.v1.MemoryFilter"> & {
  * Use `create(MemoryFilterSchema)` to create a new message.
  */
 export const MemoryFilterSchema: GenMessage<MemoryFilter> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 4);
+  messageDesc(file_memoir_v1_memory, 6);
 
 /**
  * One field-targeted condition inside a [`MemoryFilter`].
@@ -267,7 +353,7 @@ export type FilterCondition = Message<"memoir.v1.FilterCondition"> & {
  * Use `create(FilterConditionSchema)` to create a new message.
  */
 export const FilterConditionSchema: GenMessage<FilterCondition> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 5);
+  messageDesc(file_memoir_v1_memory, 7);
 
 /**
  * Concrete value for equality matching. Mirrors memoir-core's `MatchValue`.
@@ -304,7 +390,7 @@ export type MatchValue = Message<"memoir.v1.MatchValue"> & {
  * Use `create(MatchValueSchema)` to create a new message.
  */
 export const MatchValueSchema: GenMessage<MatchValue> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 6);
+  messageDesc(file_memoir_v1_memory, 8);
 
 /**
  * List of values for `IN (...)` matching. Mirrors memoir-core's `MatchValues`.
@@ -335,7 +421,7 @@ export type MatchValues = Message<"memoir.v1.MatchValues"> & {
  * Use `create(MatchValuesSchema)` to create a new message.
  */
 export const MatchValuesSchema: GenMessage<MatchValues> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 7);
+  messageDesc(file_memoir_v1_memory, 9);
 
 /**
  * @generated from message memoir.v1.KeywordList
@@ -352,7 +438,7 @@ export type KeywordList = Message<"memoir.v1.KeywordList"> & {
  * Use `create(KeywordListSchema)` to create a new message.
  */
 export const KeywordListSchema: GenMessage<KeywordList> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 8);
+  messageDesc(file_memoir_v1_memory, 10);
 
 /**
  * @generated from message memoir.v1.IntegerList
@@ -369,7 +455,7 @@ export type IntegerList = Message<"memoir.v1.IntegerList"> & {
  * Use `create(IntegerListSchema)` to create a new message.
  */
 export const IntegerListSchema: GenMessage<IntegerList> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 9);
+  messageDesc(file_memoir_v1_memory, 11);
 
 /**
  * Half-open or closed numeric range. All bounds optional; an entirely-unbounded
@@ -405,7 +491,7 @@ export type NumericRange = Message<"memoir.v1.NumericRange"> & {
  * Use `create(NumericRangeSchema)` to create a new message.
  */
 export const NumericRangeSchema: GenMessage<NumericRange> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 10);
+  messageDesc(file_memoir_v1_memory, 12);
 
 /**
  * @generated from message memoir.v1.SearchResponse
@@ -422,7 +508,7 @@ export type SearchResponse = Message<"memoir.v1.SearchResponse"> & {
  * Use `create(SearchResponseSchema)` to create a new message.
  */
 export const SearchResponseSchema: GenMessage<SearchResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 11);
+  messageDesc(file_memoir_v1_memory, 13);
 
 /**
  * @generated from message memoir.v1.RecallRequest
@@ -439,7 +525,7 @@ export type RecallRequest = Message<"memoir.v1.RecallRequest"> & {
  * Use `create(RecallRequestSchema)` to create a new message.
  */
 export const RecallRequestSchema: GenMessage<RecallRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 12);
+  messageDesc(file_memoir_v1_memory, 14);
 
 /**
  * @generated from message memoir.v1.RecallResponse
@@ -456,7 +542,7 @@ export type RecallResponse = Message<"memoir.v1.RecallResponse"> & {
  * Use `create(RecallResponseSchema)` to create a new message.
  */
 export const RecallResponseSchema: GenMessage<RecallResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 13);
+  messageDesc(file_memoir_v1_memory, 15);
 
 /**
  * @generated from message memoir.v1.RememberRequest
@@ -483,7 +569,7 @@ export type RememberRequest = Message<"memoir.v1.RememberRequest"> & {
  * Use `create(RememberRequestSchema)` to create a new message.
  */
 export const RememberRequestSchema: GenMessage<RememberRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 14);
+  messageDesc(file_memoir_v1_memory, 16);
 
 /**
  * @generated from message memoir.v1.RememberResponse
@@ -505,7 +591,7 @@ export type RememberResponse = Message<"memoir.v1.RememberResponse"> & {
  * Use `create(RememberResponseSchema)` to create a new message.
  */
 export const RememberResponseSchema: GenMessage<RememberResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 15);
+  messageDesc(file_memoir_v1_memory, 17);
 
 /**
  * @generated from message memoir.v1.ForgetRequest
@@ -544,7 +630,7 @@ export type ForgetRequest = Message<"memoir.v1.ForgetRequest"> & {
  * Use `create(ForgetRequestSchema)` to create a new message.
  */
 export const ForgetRequestSchema: GenMessage<ForgetRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 16);
+  messageDesc(file_memoir_v1_memory, 18);
 
 /**
  * @generated from message memoir.v1.ForgetResponse
@@ -565,7 +651,102 @@ export type ForgetResponse = Message<"memoir.v1.ForgetResponse"> & {
  * Use `create(ForgetResponseSchema)` to create a new message.
  */
 export const ForgetResponseSchema: GenMessage<ForgetResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 17);
+  messageDesc(file_memoir_v1_memory, 19);
+
+/**
+ * @generated from message memoir.v1.TimelineRequest
+ */
+export type TimelineRequest = Message<"memoir.v1.TimelineRequest"> & {
+  /**
+   * @generated from field: memoir.v1.Scope scope = 1;
+   */
+  scope?: Scope;
+
+  /**
+   * Restricts to the selected kind(s). Omitted or both-false = all kinds.
+   *
+   * @generated from field: optional memoir.v1.KindSelector kinds = 2;
+   */
+  kinds?: KindSelector;
+
+  /**
+   * Half-open time windows. `*_after` is inclusive (>=), `*_before` is
+   * exclusive (<), matching the library's `start..end` convention. All
+   * optional; unset = unbounded on that side. `created_*` filters on
+   * write-time, `event_at_*` on event-time (rows with no event_at are
+   * excluded by an event_at bound).
+   *
+   * @generated from field: optional google.protobuf.Timestamp created_after = 3;
+   */
+  createdAfter?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp created_before = 4;
+   */
+  createdBefore?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp event_at_after = 5;
+   */
+  eventAtAfter?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp event_at_before = 6;
+   */
+  eventAtBefore?: Timestamp;
+
+  /**
+   * Drops superseded rows when true. Default (false/omitted) INCLUDES them —
+   * timeline is the audit view. The field is named for the non-default
+   * action so proto3's false-default aligns with the library's
+   * include-by-default behavior.
+   *
+   * @generated from field: bool exclude_superseded = 7;
+   */
+  excludeSuperseded: boolean;
+
+  /**
+   * Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
+   *
+   * @generated from field: int32 limit = 8;
+   */
+  limit: number;
+
+  /**
+   * Oldest-first when true. Default (false/omitted) is newest-first by
+   * created_at, matching the library default.
+   *
+   * @generated from field: bool ascending = 9;
+   */
+  ascending: boolean;
+};
+
+/**
+ * Describes the message memoir.v1.TimelineRequest.
+ * Use `create(TimelineRequestSchema)` to create a new message.
+ */
+export const TimelineRequestSchema: GenMessage<TimelineRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 20);
+
+/**
+ * @generated from message memoir.v1.TimelineResponse
+ */
+export type TimelineResponse = Message<"memoir.v1.TimelineResponse"> & {
+  /**
+   * Memories in the requested order. `score` is never set (timeline computes
+   * no similarity). Mirrors `Client::timeline`'s `Vec<Memory>` return.
+   *
+   * @generated from field: repeated memoir.v1.Memory memories = 1;
+   */
+  memories: Memory[];
+};
+
+/**
+ * Describes the message memoir.v1.TimelineResponse.
+ * Use `create(TimelineResponseSchema)` to create a new message.
+ */
+export const TimelineResponseSchema: GenMessage<TimelineResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 21);
 
 /**
  * @generated from enum memoir.v1.MemoryStatus
@@ -655,6 +836,19 @@ export const MemoryService: GenService<{
     methodKind: "unary";
     input: typeof ForgetRequestSchema;
     output: typeof ForgetResponseSchema;
+  },
+  /**
+   * Chronological event-log read within a scope. Postgres-only — no vector
+   * search, no LLM. Includes superseded rows by default (audit view).
+   * Newest-first unless `ascending` is set. Wraps memoir-core's
+   * `Client::timeline`.
+   *
+   * @generated from rpc memoir.v1.MemoryService.Timeline
+   */
+  timeline: {
+    methodKind: "unary";
+    input: typeof TimelineRequestSchema;
+    output: typeof TimelineResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_memoir_v1_memory, 0);

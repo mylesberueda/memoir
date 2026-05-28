@@ -26,18 +26,21 @@
 
 use std::sync::Arc;
 
+use memoir_core::store::TimelineDirection;
 use memoir_sdk::memoir::v1::memory_service_server::MemoryService;
 use memoir_sdk::memoir::v1::{
     ForgetRequest, ForgetResponse, RecallRequest, RecallResponse, RememberRequest, RememberResponse, SearchHit,
-    SearchRequest, SearchResponse,
+    SearchRequest, SearchResponse, TimelineRequest, TimelineResponse,
 };
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
-    forget_target_from_proto, memory_to_proto, metadata_filter_from_proto, metadata_from_proto, scope_from_proto,
+    TimelineArgs, forget_target_from_proto, memory_to_proto, metadata_filter_from_proto, metadata_from_proto,
+    scope_from_proto, timeline_response,
 };
+use crate::services::wire::WireError;
 
 /// `MemoryService` RPC handler.
 ///
@@ -84,6 +87,7 @@ impl MemoryService for Memory {
             limit,
             metadata_filter,
             min_similarity,
+            kinds,
         } = request.into_inner();
 
         let scope = scope_from_proto(scope)?;
@@ -112,6 +116,15 @@ impl MemoryService for Memory {
         }
         if let Some(threshold) = min_similarity {
             builder = builder.min_similarity(threshold);
+        }
+        // Builder treats neither-toggled as both kinds, so only toggle to filter down.
+        if let Some(k) = kinds {
+            if k.episodic {
+                builder = builder.episodic();
+            }
+            if k.semantic {
+                builder = builder.semantic();
+            }
         }
         let memories = builder.await.map_err(Status::from)?;
 
@@ -233,6 +246,57 @@ impl MemoryService for Memory {
         let deleted_pids = self.ctx.memoir.forget(target).await.map_err(Status::from)?;
 
         Ok(Response::new(ForgetResponse { deleted_pids }))
+    }
+
+    /// Chronological event-log read. Postgres-only; no vector search, no LLM.
+    ///
+    /// Includes superseded rows by default (audit view). Read-tier — same
+    /// auth posture as `Search` / `Recall`.
+    async fn timeline(&self, request: Request<TimelineRequest>) -> Result<Response<TimelineResponse>, Status> {
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let TimelineArgs { scope, params } = request.into_inner().try_into()?;
+
+        tracing::event!(
+            name: "memoir.service.memory.timeline.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            scope.agent_id = %scope.agent_id,
+            scope.org_id = %scope.org_id,
+            scope.user_id = %scope.user_id,
+            limit = params.limit,
+            include_superseded = params.include_superseded,
+            "MemoryService.Timeline invoked",
+        );
+
+        let mut builder = self.ctx.memoir.timeline(scope).limit(params.limit);
+        if params.kinds.episodic && !params.kinds.semantic {
+            builder = builder.episodic();
+        }
+        if params.kinds.semantic && !params.kinds.episodic {
+            builder = builder.semantic();
+        }
+        if !params.include_superseded {
+            builder = builder.exclude_superseded();
+        }
+        if matches!(params.direction, TimelineDirection::Ascending) {
+            builder = builder.ascending();
+        }
+        if let Some(t) = params.created_after {
+            builder = builder.created_after(t);
+        }
+        if let Some(t) = params.created_before {
+            builder = builder.created_before(t);
+        }
+        if let Some(t) = params.event_at_after {
+            builder = builder.event_at_after(t);
+        }
+        if let Some(t) = params.event_at_before {
+            builder = builder.event_at_before(t);
+        }
+
+        let memories = builder.await.map_err(WireError::into_status)?;
+        Ok(Response::new(timeline_response(memories)))
     }
 }
 

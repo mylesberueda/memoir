@@ -24,6 +24,12 @@ service MemoryService {
 
   // Soft- or hard-delete a memory or a scope's worth of memories.
   rpc Forget(ForgetRequest) returns (ForgetResponse);
+
+  // Chronological event-log read within a scope. Postgres-only — no vector
+  // search, no LLM. Includes superseded rows by default (audit view).
+  // Newest-first unless `ascending` is set. Wraps memoir-core's
+  // `Client::timeline`.
+  rpc Timeline(TimelineRequest) returns (TimelineResponse);
 }
 
 // ─── Scope ──────────────────────────────────────────────────────────────────
@@ -58,6 +64,35 @@ message Memory {
   // column (`pending` / `indexed` / `failed`) to PENDING / PROCESSED /
   // FAILED at the handler boundary.
   MemoryStatus status = 7;
+
+  // Wall-clock time of the row's last in-place edit. Equals `created_at`
+  // for memories never edited. Maps from memoir-core's `Memory.updated_at`.
+  google.protobuf.Timestamp updated_at = 8;
+
+  // Event-time of the thing being remembered, distinct from `created_at`
+  // (when memoir was told). Unset when no event-time is known (preferences,
+  // identity facts). Maps from memoir-core's `Memory.event_at`.
+  optional google.protobuf.Timestamp event_at = 9;
+
+  // Soft-deletion marker; unset when the memory is active. Maps from
+  // memoir-core's `Memory.supersession` (`SupersessionInfo`).
+  optional Supersession supersession = 10;
+}
+
+// Latest supersession state for a Memory — winner pid and decision time.
+// Mirrors memoir-core's `SupersessionInfo`. Present only on superseded rows.
+message Supersession {
+  string winner_pid = 1;
+  google.protobuf.Timestamp at = 2;
+}
+
+// Selects which memory kinds a read includes. Mirrors memoir-core's
+// `KindSelector`. Per the library's semantics, a selector with BOTH fields
+// false (the proto3 default, or an omitted selector) means "all kinds" —
+// not "no kinds". Setting exactly one field filters to that kind.
+message KindSelector {
+  bool episodic = 1;
+  bool semantic = 2;
 }
 
 enum MemoryStatus {
@@ -101,6 +136,11 @@ message SearchRequest {
   // value are dropped by the vector backend before they reach the response.
   // Unset = no floor.
   optional float min_similarity = 5;
+
+  // Restricts retrieval to the selected memory kind(s). Omitted or
+  // both-false = all kinds (see `KindSelector`). Maps to the library's
+  // `SearchBuilder::episodic` / `::semantic` toggles.
+  optional KindSelector kinds = 6;
 }
 
 // Caller-supplied filter applied at search time. Mirrors Qdrant's payload
@@ -207,4 +247,40 @@ message ForgetResponse {
   // when the target matched no rows (not an error). Mirrors the library's
   // `Client::forget` return shape (`Vec<String>`).
   repeated string deleted_pids = 1;
+}
+
+message TimelineRequest {
+  Scope scope = 1;
+
+  // Restricts to the selected kind(s). Omitted or both-false = all kinds.
+  optional KindSelector kinds = 2;
+
+  // Half-open time windows. `*_after` is inclusive (>=), `*_before` is
+  // exclusive (<), matching the library's `start..end` convention. All
+  // optional; unset = unbounded on that side. `created_*` filters on
+  // write-time, `event_at_*` on event-time (rows with no event_at are
+  // excluded by an event_at bound).
+  optional google.protobuf.Timestamp created_after = 3;
+  optional google.protobuf.Timestamp created_before = 4;
+  optional google.protobuf.Timestamp event_at_after = 5;
+  optional google.protobuf.Timestamp event_at_before = 6;
+
+  // Drops superseded rows when true. Default (false/omitted) INCLUDES them —
+  // timeline is the audit view. The field is named for the non-default
+  // action so proto3's false-default aligns with the library's
+  // include-by-default behavior.
+  bool exclude_superseded = 7;
+
+  // Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
+  int32 limit = 8;
+
+  // Oldest-first when true. Default (false/omitted) is newest-first by
+  // created_at, matching the library default.
+  bool ascending = 9;
+}
+
+message TimelineResponse {
+  // Memories in the requested order. `score` is never set (timeline computes
+  // no similarity). Mirrors `Client::timeline`'s `Vec<Memory>` return.
+  repeated Memory memories = 1;
 }

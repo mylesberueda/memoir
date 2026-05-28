@@ -171,4 +171,3 @@ impl From<NumericRange> for qd::Range {
         }
     }
 }
-

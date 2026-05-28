@@ -21,19 +21,20 @@
 //!   `serde_json::to_value` / `serde_json::from_value` pair is the
 //!   canonical conversion path per the pbjson-types maintainer.
 
-use memoir_core::client::{ClientError, ReconcileSummary};
-use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind, JobsError};
-use memoir_core::memory::{ForgetTarget, Memory as LibMemory, Scope as LibScope};
-use memoir_core::store::StoreError;
+use memoir_core::client::ReconcileSummary;
+use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind};
+use memoir_core::memory::{ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory, Scope as LibScope};
+use memoir_core::store::{DEFAULT_TIMELINE_LIMIT, TimelineDirection, TimelineParams};
 use memoir_core::vector::{
     FilterCondition as LibFilterCondition, MatchValue as LibMatchValue, MatchValues as LibMatchValues,
-    MemoryFilter as LibMemoryFilter, NumericRange as LibNumericRange, VectorError,
+    MemoryFilter as LibMemoryFilter, NumericRange as LibNumericRange,
 };
 use memoir_sdk::memoir::v1::{
     FailedJob as ProtoFailedJob, FilterCondition as ProtoFilterCondition, ForgetRequest, JobKind as ProtoJobKind,
-    MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues, Memory as ProtoMemory,
-    MemoryFilter as ProtoMemoryFilter, MemoryStatus, NumericRange as ProtoNumericRange, ReconcileResponse,
-    Scope as ProtoScope, filter_condition, forget_request, match_value, match_values,
+    KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues,
+    Memory as ProtoMemory, MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, ReconcileResponse,
+    Scope as ProtoScope, TimelineRequest, TimelineResponse, filter_condition, forget_request, match_value,
+    match_values,
 };
 use tonic::Status;
 
@@ -106,21 +107,12 @@ pub(crate) fn metadata_to_proto(value: serde_json::Value) -> pbjson_types::Struc
 
 /// Converts a library `Memory` into the wire shape.
 ///
-/// `processed_at` is always `None` in v0.1 — memoir-core does not yet
-/// track a dedicated processed timestamp (see `memory.proto` field
-/// comment). The `status` field is set to PENDING for newly-written
-/// rows; a future library schema migration will let this surface
-/// PROCESSED/FAILED based on `qdrant_status`.
+/// Shim delegating to [`crate::services::wire::WireMemory`] — the canonical
+/// conversion. Retained so the not-yet-migrated handlers (search / recall /
+/// remember) keep compiling; ticket 0015 repoints them to `WireMemory` and
+/// removes this shim.
 pub(crate) fn memory_to_proto(memory: LibMemory) -> ProtoMemory {
-    ProtoMemory {
-        pid: memory.pid,
-        scope: Some(scope_to_proto(memory.scope)),
-        content: memory.content,
-        metadata: Some(metadata_to_proto(memory.metadata)),
-        created_at: Some(timestamp_from_chrono(memory.created_at)),
-        processed_at: None,
-        status: MemoryStatus::Pending as i32,
-    }
+    crate::services::wire::WireMemory::from(memory).0
 }
 
 /// Converts `ForgetRequest.target` (oneof) into the library `ForgetTarget`.
@@ -159,6 +151,85 @@ pub(crate) fn timestamp_from_chrono(dt: chrono::DateTime<chrono::FixedOffset>) -
     pbjson_types::Timestamp {
         seconds: dt.timestamp(),
         nanos: dt.timestamp_subsec_nanos() as i32,
+    }
+}
+
+/// Converts a wire `Timestamp` to a `chrono::DateTime<FixedOffset>` (UTC offset).
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when the seconds/nanos do not form a
+/// representable instant (out-of-range or invalid nanos).
+fn timestamp_to_chrono(ts: pbjson_types::Timestamp) -> Result<chrono::DateTime<chrono::FixedOffset>, Status> {
+    chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
+        .map(|dt| dt.fixed_offset())
+        .ok_or_else(|| Status::invalid_argument("timestamp: not a representable instant"))
+}
+
+/// Converts a wire `KindSelector` into the library shape.
+///
+/// `None` (omitted) and a both-false selector both map to
+/// [`LibKindSelector::default`] — all kinds — matching the library's
+/// "toggled neither = retrieve both" rule. Setting exactly one field filters
+/// to that kind.
+fn kind_selector_from_proto(kinds: Option<ProtoKindSelector>) -> LibKindSelector {
+    match kinds {
+        None
+        | Some(ProtoKindSelector {
+            episodic: false,
+            semantic: false,
+        }) => LibKindSelector::default(),
+        Some(ProtoKindSelector { episodic, semantic }) => LibKindSelector { episodic, semantic },
+    }
+}
+
+/// A validated `Timeline` request: scope plus query parameters.
+///
+/// `TryFrom<TimelineRequest>` performs boundary validation — the request's
+/// shared-vocabulary fields (scope, timestamps, kinds) are checked and
+/// converted here. The handler destructures this rather than juggling a
+/// tuple.
+#[derive(Debug)]
+pub(crate) struct TimelineArgs {
+    pub scope: LibScope,
+    pub params: TimelineParams,
+}
+
+impl TryFrom<TimelineRequest> for TimelineArgs {
+    type Error = Status;
+
+    fn try_from(request: TimelineRequest) -> Result<Self, Status> {
+        let limit = if request.limit > 0 {
+            request.limit as usize
+        } else {
+            DEFAULT_TIMELINE_LIMIT
+        };
+        let direction = if request.ascending {
+            TimelineDirection::Ascending
+        } else {
+            TimelineDirection::Descending
+        };
+        Ok(Self {
+            scope: scope_from_proto(request.scope)?,
+            params: TimelineParams {
+                kinds: kind_selector_from_proto(request.kinds),
+                created_after: request.created_after.map(timestamp_to_chrono).transpose()?,
+                created_before: request.created_before.map(timestamp_to_chrono).transpose()?,
+                event_at_after: request.event_at_after.map(timestamp_to_chrono).transpose()?,
+                event_at_before: request.event_at_before.map(timestamp_to_chrono).transpose()?,
+                include_superseded: !request.exclude_superseded,
+                limit,
+                direction,
+            },
+        })
+    }
+}
+
+/// Wraps a library timeline result in the wire response shape.
+pub(crate) fn timeline_response(memories: Vec<LibMemory>) -> TimelineResponse {
+    use crate::services::wire::WireMemory;
+    TimelineResponse {
+        memories: memories.into_iter().map(|m| WireMemory::from(m).0).collect(),
     }
 }
 
@@ -354,6 +425,11 @@ fn numeric_range_from_proto(range: ProtoNumericRange) -> LibNumericRange {
 
 #[cfg(test)]
 mod tests {
+    use memoir_core::client::ClientError;
+    use memoir_core::jobs::JobsError;
+    use memoir_core::store::StoreError;
+    use memoir_core::vector::VectorError;
+
     use super::*;
 
     #[test]
@@ -459,28 +535,28 @@ mod tests {
     #[test]
     fn should_map_store_not_found_to_grpc_not_found() {
         let err = ClientError::Store(StoreError::NotFound("abc".into()));
-        let status = Status::from(err);
+        let status = crate::services::wire::WireError::into_status(err);
         assert_eq!(status.code(), tonic::Code::NotFound);
     }
 
     #[test]
     fn should_map_store_invalid_scope_to_grpc_invalid_argument() {
         let err = ClientError::Store(StoreError::InvalidScope("empty".into()));
-        let status = Status::from(err);
+        let status = crate::services::wire::WireError::into_status(err);
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
     }
 
     #[test]
     fn should_map_vector_connection_to_grpc_unavailable() {
         let err = ClientError::Vector(VectorError::Connection("dial failed".into()));
-        let status = Status::from(err);
+        let status = crate::services::wire::WireError::into_status(err);
         assert_eq!(status.code(), tonic::Code::Unavailable);
     }
 
     #[test]
     fn should_map_jobs_not_found_to_grpc_not_found() {
         let err = ClientError::Jobs(JobsError::NotFound("42".into()));
-        let status = Status::from(err);
+        let status = crate::services::wire::WireError::into_status(err);
         assert_eq!(status.code(), tonic::Code::NotFound);
     }
 
@@ -489,7 +565,7 @@ mod tests {
         let err = ClientError::Store(StoreError::Database(sea_orm::DbErr::Custom(
             "connection string: postgres://user:s3cret@host/db".into(),
         )));
-        let status = Status::from(err);
+        let status = crate::services::wire::WireError::into_status(err);
         let message = status.message();
         assert!(!message.contains("s3cret"));
         assert!(!message.contains("postgres://"));
@@ -627,6 +703,110 @@ mod tests {
             ..ProtoMemoryFilter::default()
         };
         let err = metadata_filter_from_proto(Some(proto)).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    fn timeline_scope() -> ProtoScope {
+        ProtoScope {
+            agent_id: "a".into(),
+            org_id: "o".into(),
+            user_id: "u".into(),
+        }
+    }
+
+    /// Test helper: convert a request and project to its `TimelineParams`.
+    fn timeline_args(request: TimelineRequest) -> Result<TimelineParams, Status> {
+        TimelineArgs::try_from(request).map(|args| args.params)
+    }
+
+    #[test]
+    fn should_map_omitted_kind_selector_to_all_kinds() {
+        let selector = kind_selector_from_proto(None);
+        assert!(selector.episodic && selector.semantic, "omitted selector = all kinds");
+    }
+
+    #[test]
+    fn should_map_both_false_kind_selector_to_all_kinds() {
+        let selector = kind_selector_from_proto(Some(ProtoKindSelector {
+            episodic: false,
+            semantic: false,
+        }));
+        assert!(
+            selector.episodic && selector.semantic,
+            "both-false selector = all kinds, matching the library's neither-toggled rule",
+        );
+    }
+
+    #[test]
+    fn should_map_single_kind_selector_to_that_kind_only() {
+        let selector = kind_selector_from_proto(Some(ProtoKindSelector {
+            episodic: true,
+            semantic: false,
+        }));
+        assert!(selector.episodic && !selector.semantic);
+    }
+
+    #[test]
+    fn should_default_include_superseded_when_exclude_flag_false() {
+        let params = timeline_args(TimelineRequest {
+            scope: Some(timeline_scope()),
+            exclude_superseded: false,
+            ..TimelineRequest::default()
+        })
+        .unwrap();
+        assert!(
+            params.include_superseded,
+            "exclude_superseded=false must map to include_superseded=true (audit-view default)",
+        );
+    }
+
+    #[test]
+    fn should_exclude_superseded_when_exclude_flag_true() {
+        let params = timeline_args(TimelineRequest {
+            scope: Some(timeline_scope()),
+            exclude_superseded: true,
+            ..TimelineRequest::default()
+        })
+        .unwrap();
+        assert!(!params.include_superseded);
+    }
+
+    #[test]
+    fn should_default_to_descending_when_ascending_flag_false() {
+        let params = timeline_args(TimelineRequest {
+            scope: Some(timeline_scope()),
+            ascending: false,
+            ..TimelineRequest::default()
+        })
+        .unwrap();
+        assert_eq!(params.direction, TimelineDirection::Descending);
+    }
+
+    #[test]
+    fn should_map_ascending_flag_to_ascending_direction() {
+        let params = timeline_args(TimelineRequest {
+            scope: Some(timeline_scope()),
+            ascending: true,
+            ..TimelineRequest::default()
+        })
+        .unwrap();
+        assert_eq!(params.direction, TimelineDirection::Ascending);
+    }
+
+    #[test]
+    fn should_map_zero_limit_to_library_default() {
+        let params = timeline_args(TimelineRequest {
+            scope: Some(timeline_scope()),
+            limit: 0,
+            ..TimelineRequest::default()
+        })
+        .unwrap();
+        assert_eq!(params.limit, DEFAULT_TIMELINE_LIMIT);
+    }
+
+    #[test]
+    fn should_reject_timeline_with_unset_scope() {
+        let err = TimelineArgs::try_from(TimelineRequest::default()).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
     }
 }

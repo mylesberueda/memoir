@@ -472,6 +472,39 @@ pub struct Memory {
     /// FAILED at the handler boundary.
     #[prost(enumeration="MemoryStatus", tag="7")]
     pub status: i32,
+    /// Wall-clock time of the row's last in-place edit. Equals `created_at`
+    /// for memories never edited. Maps from memoir-core's `Memory.updated_at`.
+    #[prost(message, optional, tag="8")]
+    pub updated_at: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Event-time of the thing being remembered, distinct from `created_at`
+    /// (when memoir was told). Unset when no event-time is known (preferences,
+    /// identity facts). Maps from memoir-core's `Memory.event_at`.
+    #[prost(message, optional, tag="9")]
+    pub event_at: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Soft-deletion marker; unset when the memory is active. Maps from
+    /// memoir-core's `Memory.supersession` (`SupersessionInfo`).
+    #[prost(message, optional, tag="10")]
+    pub supersession: ::core::option::Option<Supersession>,
+}
+/// Latest supersession state for a Memory — winner pid and decision time.
+/// Mirrors memoir-core's `SupersessionInfo`. Present only on superseded rows.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Supersession {
+    #[prost(string, tag="1")]
+    pub winner_pid: ::prost::alloc::string::String,
+    #[prost(message, optional, tag="2")]
+    pub at: ::core::option::Option<::pbjson_types::Timestamp>,
+}
+/// Selects which memory kinds a read includes. Mirrors memoir-core's
+/// `KindSelector`. Per the library's semantics, a selector with BOTH fields
+/// false (the proto3 default, or an omitted selector) means "all kinds" —
+/// not "no kinds". Setting exactly one field filters to that kind.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct KindSelector {
+    #[prost(bool, tag="1")]
+    pub episodic: bool,
+    #[prost(bool, tag="2")]
+    pub semantic: bool,
 }
 /// Search result with similarity score attached.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -511,6 +544,11 @@ pub struct SearchRequest {
     /// Unset = no floor.
     #[prost(float, optional, tag="5")]
     pub min_similarity: ::core::option::Option<f32>,
+    /// Restricts retrieval to the selected memory kind(s). Omitted or
+    /// both-false = all kinds (see `KindSelector`). Maps to the library's
+    /// `SearchBuilder::episodic` / `::semantic` toggles.
+    #[prost(message, optional, tag="6")]
+    pub kinds: ::core::option::Option<KindSelector>,
 }
 /// Caller-supplied filter applied at search time. Mirrors Qdrant's payload
 /// filter structure one-to-one but is a memoir-owned type so consumers do not
@@ -672,6 +710,47 @@ pub struct ForgetResponse {
     /// `Client::forget` return shape (`Vec<String>`).
     #[prost(string, repeated, tag="1")]
     pub deleted_pids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct TimelineRequest {
+    #[prost(message, optional, tag="1")]
+    pub scope: ::core::option::Option<Scope>,
+    /// Restricts to the selected kind(s). Omitted or both-false = all kinds.
+    #[prost(message, optional, tag="2")]
+    pub kinds: ::core::option::Option<KindSelector>,
+    /// Half-open time windows. `*_after` is inclusive (>=), `*_before` is
+    /// exclusive (<), matching the library's `start..end` convention. All
+    /// optional; unset = unbounded on that side. `created_*` filters on
+    /// write-time, `event_at_*` on event-time (rows with no event_at are
+    /// excluded by an event_at bound).
+    #[prost(message, optional, tag="3")]
+    pub created_after: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="4")]
+    pub created_before: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="5")]
+    pub event_at_after: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="6")]
+    pub event_at_before: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Drops superseded rows when true. Default (false/omitted) INCLUDES them —
+    /// timeline is the audit view. The field is named for the non-default
+    /// action so proto3's false-default aligns with the library's
+    /// include-by-default behavior.
+    #[prost(bool, tag="7")]
+    pub exclude_superseded: bool,
+    /// Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
+    #[prost(int32, tag="8")]
+    pub limit: i32,
+    /// Oldest-first when true. Default (false/omitted) is newest-first by
+    /// created_at, matching the library default.
+    #[prost(bool, tag="9")]
+    pub ascending: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TimelineResponse {
+    /// Memories in the requested order. `score` is never set (timeline computes
+    /// no similarity). Mirrors `Client::timeline`'s `Vec<Memory>` return.
+    #[prost(message, repeated, tag="1")]
+    pub memories: ::prost::alloc::vec::Vec<Memory>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
