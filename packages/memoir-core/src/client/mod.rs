@@ -5,6 +5,7 @@ mod edit;
 mod embed;
 mod error;
 mod extract;
+mod query;
 mod recall_as_of;
 mod reconcile;
 mod remember;
@@ -15,6 +16,10 @@ mod worker;
 pub use admin::RetryBuilder;
 pub use edit::EditBuilder;
 pub use error::ClientError;
+pub use query::{
+    DEFAULT_HYBRID_ALPHA, DEFAULT_HYBRID_HALF_LIFE_DAYS, DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, QueryBuilder,
+    RankingStrategy,
+};
 pub use recall_as_of::RecallAsOfBuilder;
 pub use reconcile::{ReconcileBuilder, ReconcileSummary};
 pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
@@ -331,6 +336,34 @@ impl Client {
     /// [`crate::store::StoreError::Database`] for database failures.
     pub fn timeline(&self, scope: crate::memory::Scope) -> TimelineBuilder<'_> {
         TimelineBuilder::new(self, scope)
+    }
+
+    /// Retrieves memories in `scope` ranked by hybrid cosine-and-recency, as
+    /// a prompt-shaped [`MemoryContext`].
+    ///
+    /// Mirrors [`Client::search`]'s candidate-retrieval primitives but
+    /// re-ranks the top-K candidates by combining vector similarity with
+    /// recency before returning. Default strategy is
+    /// [`RankingStrategy::default_hybrid`]; override via
+    /// [`QueryBuilder::ranking`]. **The default strategy's parameter values
+    /// are explicitly allowed to drift pre-1.0** — callers depending on a
+    /// specific ranking must pass an explicit `RankingStrategy::Hybrid {
+    /// .. }`.
+    ///
+    /// Returns a [`MemoryContext`] suitable for dropping into a system
+    /// prompt via [`Display`]. See [`MemoryContext`] for the rendering
+    /// shape and the staleness caveat for cached output.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Embedding`] if the query cannot be embedded,
+    /// [`ClientError::Vector`] if the vector index search fails, and
+    /// [`ClientError::Store`] wrapping a database failure when the matched
+    /// pids cannot be hydrated to full rows.
+    ///
+    /// [`Display`]: std::fmt::Display
+    pub fn query(&self, query: impl Into<String>, scope: crate::memory::Scope) -> QueryBuilder<'_> {
+        QueryBuilder::new(self, query.into(), scope)
     }
 
     /// Returns memoir's state of knowledge in `scope` as of `as_of`.
