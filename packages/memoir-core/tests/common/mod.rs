@@ -114,13 +114,16 @@ async fn build_test_client(extraction: Option<LlmConfig>) -> Result<TestClient> 
     // waiting for `wait_until_indexed` to never succeed (the row stays
     // `pending` and `Client::search` filters it out).
     //
-    // Short poll interval is appropriate for tests — production deployments
-    // use the default 1-second interval. Short lease so a misbehaving test
-    // doesn't pin a job for a minute.
+    // The lease must exceed a single extraction inference. Capable local
+    // models (qwen3:14b and up) take 10-30s per call on consumer hardware,
+    // especially on a cold load. A lease shorter than that expires
+    // mid-inference, the reconciler assumes the worker died and re-leases
+    // the job, and the same call restarts until max_attempts — the job
+    // never completes. 60s clears a cold large-model inference.
     let worker = client
         .spawn_worker()
         .poll_interval(Duration::from_millis(50))
-        .lease_duration(Duration::from_secs(10))
+        .lease_duration(Duration::from_secs(60))
         .drain_timeout(Duration::from_secs(5))
         .start()
         .await

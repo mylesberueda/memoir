@@ -21,7 +21,8 @@ pub use config::{
 };
 pub use error::LlmError;
 pub use extraction::{
-    DEFAULT_EXTRACTION_PROMPT, ExtractionOutput, Fact, MAX_CONTENT_CHARS, parse_extraction,
+    AcceptAllEventAt, DEFAULT_EXTRACTION_PROMPT, EXTRACTION_MAX_TOKENS, EventAtValidator, ExtractionOutput, Fact,
+    MAX_CONTENT_CHARS, build_extraction_content, parse_extraction,
 };
 pub use role::{LlmRegistry, LlmRole};
 
@@ -130,21 +131,35 @@ impl LlmProvider for RigLlmProvider {
         // construct one per `extract` to let callers vary the preamble.
         match &self.inner {
             InnerLlm::Ollama(client) => {
-                let agent = client.agent(&self.model).preamble(preamble).build();
+                // rig (through 0.37) sends `max_tokens` top-level, which Ollama ignores;
+                // only `options.num_predict` is honored, reachable via additional_params.
+                let agent = client
+                    .agent(&self.model)
+                    .preamble(preamble)
+                    .additional_params(serde_json::json!({ "num_predict": EXTRACTION_MAX_TOKENS }))
+                    .build();
                 agent
                     .prompt(content)
                     .await
                     .map_err(|err| LlmError::Provider(err.to_string()))
             }
             InnerLlm::OpenAI(client) => {
-                let agent = client.agent(&self.model).preamble(preamble).build();
+                let agent = client
+                    .agent(&self.model)
+                    .preamble(preamble)
+                    .max_tokens(EXTRACTION_MAX_TOKENS)
+                    .build();
                 agent
                     .prompt(content)
                     .await
                     .map_err(|err| LlmError::Provider(err.to_string()))
             }
             InnerLlm::Anthropic(client) => {
-                let agent = client.agent(&self.model).preamble(preamble).build();
+                let agent = client
+                    .agent(&self.model)
+                    .preamble(preamble)
+                    .max_tokens(EXTRACTION_MAX_TOKENS)
+                    .build();
                 agent
                     .prompt(content)
                     .await

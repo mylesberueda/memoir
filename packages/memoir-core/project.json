@@ -41,7 +41,7 @@
 					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_service_test",
 					"QDRANT_URL": "http://localhost:6334",
 					"OLLAMA_URL": "http://localhost:11434",
-					"OLLAMA_MODEL": "llama3.2:1b"
+					"OLLAMA_MODEL": "qwen3:14b"
 				}
 			},
 			"cache": true,

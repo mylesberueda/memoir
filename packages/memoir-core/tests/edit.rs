@@ -5,7 +5,6 @@
 use std::time::Duration;
 
 use memoir_core::client::ClientError;
-use memoir_core::store::StoreError;
 use sea_orm::{ConnectionTrait, Statement, Value};
 
 mod common;
@@ -49,57 +48,10 @@ async fn should_preserve_created_at_on_edit() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn should_return_notfound_when_editing_unknown_pid() -> anyhow::Result<()> {
-    let client = common::fresh_client().await?;
-
-    let result = client.edit("not-a-real-pid").content("anything").await;
-
-    match result {
-        Err(ClientError::Store(StoreError::NotFound(pid))) => {
-            assert_eq!(pid, "not-a-real-pid");
-        }
-        other => panic!("expected NotFound for missing pid; got {other:?}"),
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn should_reject_edit_on_semantic_memory() -> anyhow::Result<()> {
-    let client = common::fresh_client().await?;
-    let scope = common::fresh_scope();
-
-    let source = client.remember("source episodic", scope.clone()).await?;
-    let db = client.raw_db().await?;
-
-    db.execute_raw(Statement::from_sql_and_values(
-        sea_orm::DatabaseBackend::Postgres,
-        r#"
-        INSERT INTO memories (pid, agent_id, org_id, user_id, content, kind, source_pid)
-        VALUES ($1, $2, $3, $4, $5, 'semantic', $6)
-        "#,
-        [
-            Value::from("test_edit_semantic"),
-            Value::from(scope.agent_id.as_str()),
-            Value::from(scope.org_id.as_str()),
-            Value::from(scope.user_id.as_str()),
-            Value::from("derived fact"),
-            Value::from(source.pid.as_str()),
-        ],
-    ))
-    .await?;
-
-    let result = client.edit("test_edit_semantic").content("hand-edit attempt").await;
-
-    match result {
-        Err(ClientError::Store(StoreError::UnsupportedEdit { pid, kind })) => {
-            assert_eq!(pid, "test_edit_semantic");
-            assert_eq!(kind, memoir_core::memory::MemoryKind::Semantic);
-        }
-        other => panic!("expected UnsupportedEdit for semantic kind; got {other:?}"),
-    }
-    Ok(())
-}
+// `edit` rejecting an unknown pid (NotFound) and a non-episodic kind
+// (UnsupportedEdit) are pure pre-UPDATE checks, unit-tested against
+// StubStore::edit in `store::mod` tests — they bail before any SQL runs,
+// so a real DB proves nothing the stub doesn't.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_allow_edit_on_superseded_memory() -> anyhow::Result<()> {
@@ -171,6 +123,13 @@ async fn should_replace_metadata_on_edit() -> anyhow::Result<()> {
     Ok(())
 }
 
+// NOTE: this asserts pure validation (the reserved-key check in
+// `client/edit.rs::execute`, which runs before any store call). It is an
+// integration test only because the validation is coupled to `Client`,
+// which needs live Postgres + Qdrant to construct. To make it a unit test,
+// the reserved-key check should move onto the type that owns
+// RESERVED_PAYLOAD_KEYS as a method, then be unit-tested there — tracked as
+// a future testability refactor, out of scope for the 2026-05-28 audit.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_reject_edit_with_reserved_metadata_key() -> anyhow::Result<()> {
     let client = common::fresh_client().await?;

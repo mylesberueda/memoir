@@ -789,4 +789,48 @@ mod tests {
 
         assert!(result.is_none(), "unsupersede event clears the as-of answer");
     }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_reject_edit_when_kind_is_not_episodic() {
+        let store = StubStore::default();
+        let semantic = write(&store, "derived fact").await;
+
+        let result = store
+            .edit(
+                &semantic.pid,
+                EditPatch {
+                    content: Some("hand edit".to_string()),
+                    ..EditPatch::default()
+                },
+            )
+            .await;
+
+        match result {
+            Err(StoreError::UnsupportedEdit { pid, kind }) => {
+                assert_eq!(pid, semantic.pid);
+                assert_eq!(kind, MemoryKind::Semantic);
+            }
+            other => panic!("expected UnsupportedEdit for semantic kind; got {other:?}"),
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_return_not_found_when_editing_missing_pid() {
+        let store = StubStore::default();
+
+        let result = store
+            .edit(
+                "no-such-pid",
+                EditPatch {
+                    content: Some("anything".to_string()),
+                    ..EditPatch::default()
+                },
+            )
+            .await;
+
+        match result {
+            Err(StoreError::NotFound(pid)) => assert_eq!(pid, "no-such-pid"),
+            other => panic!("expected NotFound for missing pid; got {other:?}"),
+        }
+    }
 }
