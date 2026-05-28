@@ -3,6 +3,7 @@ import 'server-only';
 import { type Client, createClient } from '@connectrpc/connect';
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import { AuthService } from '@polypixel/memoir-sdk/memoir/v1/auth_pb';
+import { MemoryService } from '@polypixel/memoir-sdk/memoir/v1/memory_pb';
 
 /**
  * Server-to-server transport pointed at memoir-service's gRPC endpoint.
@@ -30,4 +31,16 @@ function transport() {
  */
 export function authClient(): Client<typeof AuthService> {
 	return createClient(AuthService, transport());
+}
+
+/**
+ * Connect-RPC client for memoir-service's MemoryService.
+ *
+ * Same credential model as `authClient`: the client carries none; callers
+ * attach `authorization: Bearer <jwt>` per call via the `headers` option.
+ * Used by the memory-facing server actions (timeline, query, recall-as-of,
+ * edit).
+ */
+export function memoryClient(): Client<typeof MemoryService> {
+	return createClient(MemoryService, transport());
 }
