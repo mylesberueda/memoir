@@ -21,10 +21,10 @@
 //!   `serde_json::to_value` / `serde_json::from_value` pair is the
 //!   canonical conversion path per the pbjson-types maintainer.
 
-use memoir_core::client::ReconcileSummary;
+use memoir_core::client::{DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, RankingStrategy, ReconcileSummary};
 use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind};
 use memoir_core::memory::{ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory, Scope as LibScope};
-use memoir_core::store::{DEFAULT_TIMELINE_LIMIT, TimelineDirection, TimelineParams};
+use memoir_core::store::{AsOfParams, DEFAULT_TIMELINE_LIMIT, TimelineDirection, TimelineParams};
 use memoir_core::vector::{
     FilterCondition as LibFilterCondition, MatchValue as LibMatchValue, MatchValues as LibMatchValues,
     MemoryFilter as LibMemoryFilter, NumericRange as LibNumericRange,
@@ -32,9 +32,11 @@ use memoir_core::vector::{
 use memoir_sdk::memoir::v1::{
     FailedJob as ProtoFailedJob, FilterCondition as ProtoFilterCondition, ForgetRequest, JobKind as ProtoJobKind,
     KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues,
-    Memory as ProtoMemory, MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, ReconcileResponse,
-    Scope as ProtoScope, TimelineRequest, TimelineResponse, filter_condition, forget_request, match_value,
-    match_values,
+    Decay as ProtoDecay, DecayBucket as ProtoDecayBucket, EditRequest, ExponentialDecay, Hybrid as ProtoHybrid,
+    Memory as ProtoMemory, MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit,
+    QueryRequest, QueryResponse, Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReconcileResponse,
+    ReciprocalDecay, Scope as ProtoScope, StepDecay, TimelineRequest, TimelineResponse, decay, filter_condition,
+    forget_request, match_value, match_values, ranking,
 };
 use tonic::Status;
 
@@ -230,6 +232,268 @@ pub(crate) fn timeline_response(memories: Vec<LibMemory>) -> TimelineResponse {
     use crate::services::wire::WireMemory;
     TimelineResponse {
         memories: memories.into_iter().map(|m| WireMemory::from(m).0).collect(),
+    }
+}
+
+/// A validated `RecallAsOf` request: scope plus point-in-time parameters.
+#[derive(Debug)]
+pub(crate) struct RecallAsOfArgs {
+    pub scope: LibScope,
+    pub params: AsOfParams,
+}
+
+impl TryFrom<RecallAsOfRequest> for RecallAsOfArgs {
+    type Error = Status;
+
+    fn try_from(request: RecallAsOfRequest) -> Result<Self, Status> {
+        let as_of = request
+            .as_of
+            .ok_or_else(|| Status::invalid_argument("as_of: required"))?;
+        let limit = if request.limit > 0 {
+            request.limit as usize
+        } else {
+            DEFAULT_TIMELINE_LIMIT
+        };
+        Ok(Self {
+            scope: scope_from_proto(request.scope)?,
+            params: AsOfParams {
+                as_of: timestamp_to_chrono(as_of)?,
+                kinds: kind_selector_from_proto(request.kinds),
+                limit,
+            },
+        })
+    }
+}
+
+/// Wraps a library recall-as-of result in the wire response shape.
+pub(crate) fn recall_as_of_response(memories: Vec<LibMemory>) -> RecallAsOfResponse {
+    use crate::services::wire::WireMemory;
+    RecallAsOfResponse {
+        memories: memories.into_iter().map(|m| WireMemory::from(m).0).collect(),
+    }
+}
+
+/// Converts a wire `Duration` to a `chrono::Duration` at seconds granularity.
+///
+/// The library's decay functions operate on whole seconds (`num_seconds`),
+/// so sub-second precision is intentionally dropped.
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when the value is out of
+/// `chrono::Duration`'s representable range.
+fn duration_to_chrono(d: pbjson_types::Duration) -> Result<chrono::Duration, Status> {
+    chrono::Duration::try_seconds(d.seconds)
+        .ok_or_else(|| Status::invalid_argument("duration: out of representable range"))
+}
+
+/// Converts a `chrono::Duration` to a wire `Duration` (seconds, no nanos).
+fn duration_to_proto(d: chrono::Duration) -> pbjson_types::Duration {
+    pbjson_types::Duration {
+        seconds: d.num_seconds(),
+        nanos: 0,
+    }
+}
+
+/// Converts a wire `Ranking` to the library [`RankingStrategy`].
+///
+/// `None` (unset) maps to [`RankingStrategy::default_hybrid`], matching the
+/// library's "no strategy = default hybrid" behavior.
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when a `Hybrid` lacks its `decay`,
+/// a `Decay` lacks its function, or a duration is out of range.
+fn ranking_from_proto(proto: Option<ProtoRanking>) -> Result<RankingStrategy, Status> {
+    let Some(ranking) = proto.and_then(|r| r.strategy) else {
+        return Ok(RankingStrategy::default_hybrid());
+    };
+    match ranking {
+        ranking::Strategy::Hybrid(h) => {
+            let decay = h
+                .decay
+                .and_then(|d| d.function)
+                .ok_or_else(|| Status::invalid_argument("ranking.hybrid.decay: required"))?;
+            let decay = match decay {
+                decay::Function::Exponential(e) => DecayFn::Exponential {
+                    half_life: duration_to_chrono(
+                        e.half_life
+                            .ok_or_else(|| Status::invalid_argument("decay.exponential.half_life: required"))?,
+                    )?,
+                },
+                decay::Function::Reciprocal(r) => DecayFn::Reciprocal {
+                    scale: duration_to_chrono(
+                        r.scale
+                            .ok_or_else(|| Status::invalid_argument("decay.reciprocal.scale: required"))?,
+                    )?,
+                },
+                decay::Function::Step(s) => {
+                    let mut thresholds = Vec::with_capacity(s.buckets.len());
+                    for bucket in s.buckets {
+                        let boundary = duration_to_chrono(
+                            bucket
+                                .boundary
+                                .ok_or_else(|| Status::invalid_argument("decay.step.bucket.boundary: required"))?,
+                        )?;
+                        thresholds.push((boundary, bucket.value));
+                    }
+                    DecayFn::Step { thresholds }
+                }
+            };
+            Ok(RankingStrategy::Hybrid { alpha: h.alpha, decay })
+        }
+    }
+}
+
+/// Converts a library [`RankingStrategy`] back to the wire `Ranking`.
+fn ranking_to_proto(strategy: &RankingStrategy) -> ProtoRanking {
+    let strategy = match strategy {
+        RankingStrategy::Hybrid { alpha, decay } => ranking::Strategy::Hybrid(ProtoHybrid {
+            alpha: *alpha,
+            decay: Some(ProtoDecay {
+                function: Some(decay_fn_to_proto(decay)),
+            }),
+        }),
+        // `RankingStrategy` is #[non_exhaustive]: a core build newer than this
+        // service could carry a variant we can't represent. Treat it as
+        // version skew and echo the default hybrid so the response stays
+        // well-formed.
+        other => {
+            tracing::warn!(strategy = ?other, "unknown RankingStrategy variant; echoing default hybrid");
+            return ranking_to_proto(&RankingStrategy::default_hybrid());
+        }
+    };
+    ProtoRanking { strategy: Some(strategy) }
+}
+
+/// Converts a library [`DecayFn`] to the wire `Decay`'s oneof function.
+fn decay_fn_to_proto(decay: &DecayFn) -> decay::Function {
+    match decay {
+        DecayFn::Exponential { half_life } => decay::Function::Exponential(ExponentialDecay {
+            half_life: Some(duration_to_proto(*half_life)),
+        }),
+        DecayFn::Reciprocal { scale } => decay::Function::Reciprocal(ReciprocalDecay {
+            scale: Some(duration_to_proto(*scale)),
+        }),
+        DecayFn::Step { thresholds } => decay::Function::Step(StepDecay {
+            buckets: thresholds
+                .iter()
+                .map(|(boundary, value)| ProtoDecayBucket {
+                    boundary: Some(duration_to_proto(*boundary)),
+                    value: *value,
+                })
+                .collect(),
+        }),
+        // #[non_exhaustive] forward-compat: fall back to the default decay.
+        other => {
+            tracing::warn!(decay = ?other, "unknown DecayFn variant; echoing default exponential");
+            decay::Function::Exponential(ExponentialDecay {
+                half_life: Some(duration_to_proto(chrono::Duration::days(7))),
+            })
+        }
+    }
+}
+
+/// A validated `Query` request: scope, query text, and all builder knobs.
+#[derive(Debug)]
+pub(crate) struct QueryArgs {
+    pub query: String,
+    pub scope: LibScope,
+    pub limit: usize,
+    pub kinds: memoir_core::memory::KindSelector,
+    pub metadata_filter: Option<LibMemoryFilter>,
+    pub min_similarity: Option<f32>,
+    pub created_after: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub created_before: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub event_at_after: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub event_at_before: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub ranking: RankingStrategy,
+}
+
+impl TryFrom<QueryRequest> for QueryArgs {
+    type Error = Status;
+
+    fn try_from(request: QueryRequest) -> Result<Self, Status> {
+        if request.query.is_empty() {
+            return Err(Status::invalid_argument("query: required"));
+        }
+        let limit = if request.limit > 0 {
+            request.limit as usize
+        } else {
+            DEFAULT_QUERY_LIMIT
+        };
+        Ok(Self {
+            query: request.query,
+            scope: scope_from_proto(request.scope)?,
+            limit,
+            kinds: kind_selector_from_proto(request.kinds),
+            metadata_filter: metadata_filter_from_proto(request.metadata_filter)?,
+            min_similarity: request.min_similarity,
+            created_after: request.created_after.map(timestamp_to_chrono).transpose()?,
+            created_before: request.created_before.map(timestamp_to_chrono).transpose()?,
+            event_at_after: request.event_at_after.map(timestamp_to_chrono).transpose()?,
+            event_at_before: request.event_at_before.map(timestamp_to_chrono).transpose()?,
+            ranking: ranking_from_proto(request.ranking)?,
+        })
+    }
+}
+
+/// Wraps a library `MemoryContext` in the wire `QueryResponse`.
+///
+/// Each hit carries its hybrid score (from `Memory.score`, populated by
+/// `query`). `ranking_used` echoes the strategy that produced the result.
+pub(crate) fn query_response(context: MemoryContext) -> QueryResponse {
+    use crate::services::wire::WireMemory;
+    let ranking_used = Some(ranking_to_proto(context.strategy_used()));
+    let hits = context
+        .memories()
+        .iter()
+        .cloned()
+        .map(|m| {
+            let score = m.score.unwrap_or(0.0);
+            QueryHit {
+                memory: Some(WireMemory::from(m).0),
+                score,
+            }
+        })
+        .collect();
+    QueryResponse { hits, ranking_used }
+}
+
+/// A validated `Edit` request: the target pid plus the optional field edits.
+///
+/// Each `Option` is "untouched when `None`, overwrite when `Some`", mirroring
+/// the library's `EditBuilder`. Reserved-metadata-key validation runs
+/// library-side in `Client::edit`; the handler maps the resulting error.
+#[derive(Debug)]
+pub(crate) struct EditArgs {
+    pub pid: String,
+    pub content: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+    pub event_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+}
+
+impl TryFrom<EditRequest> for EditArgs {
+    type Error = Status;
+
+    fn try_from(request: EditRequest) -> Result<Self, Status> {
+        if request.pid.is_empty() {
+            return Err(Status::invalid_argument("pid: required"));
+        }
+        let metadata = request
+            .metadata
+            .map(serde_json::to_value)
+            .transpose()
+            .map_err(|err| {
+                tracing::warn!(error.message = %err, "rejected EditRequest with malformed metadata");
+                Status::invalid_argument("metadata: not representable as JSON")
+            })?;
+        Ok(Self {
+            pid: request.pid,
+            content: request.content,
+            metadata,
+            event_at: request.event_at.map(timestamp_to_chrono).transpose()?,
+        })
     }
 }
 
@@ -808,5 +1072,157 @@ mod tests {
     fn should_reject_timeline_with_unset_scope() {
         let err = TimelineArgs::try_from(TimelineRequest::default()).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    fn as_of_ts() -> pbjson_types::Timestamp {
+        pbjson_types::Timestamp { seconds: 1_900_000_000, nanos: 0 }
+    }
+
+    #[test]
+    fn should_reject_recall_as_of_with_unset_as_of() {
+        let err = RecallAsOfArgs::try_from(RecallAsOfRequest {
+            scope: Some(timeline_scope()),
+            as_of: None,
+            ..RecallAsOfRequest::default()
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_reject_recall_as_of_with_unset_scope() {
+        let err = RecallAsOfArgs::try_from(RecallAsOfRequest {
+            scope: None,
+            as_of: Some(as_of_ts()),
+            ..RecallAsOfRequest::default()
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_map_recall_as_of_zero_limit_to_library_default() {
+        let args = RecallAsOfArgs::try_from(RecallAsOfRequest {
+            scope: Some(timeline_scope()),
+            as_of: Some(as_of_ts()),
+            limit: 0,
+            ..RecallAsOfRequest::default()
+        })
+        .unwrap();
+        assert_eq!(args.params.limit, DEFAULT_TIMELINE_LIMIT);
+    }
+
+    #[test]
+    fn should_map_recall_as_of_both_false_kinds_to_all() {
+        let args = RecallAsOfArgs::try_from(RecallAsOfRequest {
+            scope: Some(timeline_scope()),
+            as_of: Some(as_of_ts()),
+            kinds: Some(ProtoKindSelector { episodic: false, semantic: false }),
+            ..RecallAsOfRequest::default()
+        })
+        .unwrap();
+        assert!(args.params.kinds.episodic && args.params.kinds.semantic);
+    }
+
+    #[test]
+    fn should_default_ranking_to_hybrid_when_unset() {
+        let strategy = ranking_from_proto(None).unwrap();
+        assert_eq!(strategy, RankingStrategy::default_hybrid());
+    }
+
+    #[test]
+    fn should_round_trip_hybrid_exponential_ranking() {
+        let original = RankingStrategy::Hybrid {
+            alpha: 0.6,
+            decay: DecayFn::Exponential {
+                half_life: chrono::Duration::days(3),
+            },
+        };
+        let proto = ranking_to_proto(&original);
+        let back = ranking_from_proto(Some(proto)).unwrap();
+        assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_round_trip_hybrid_step_ranking() {
+        let original = RankingStrategy::Hybrid {
+            alpha: 0.4,
+            decay: DecayFn::Step {
+                thresholds: vec![
+                    (chrono::Duration::hours(1), 1.0),
+                    (chrono::Duration::days(1), 0.5),
+                ],
+            },
+        };
+        let proto = ranking_to_proto(&original);
+        let back = ranking_from_proto(Some(proto)).unwrap();
+        assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_reject_hybrid_ranking_missing_decay() {
+        let proto = ProtoRanking {
+            strategy: Some(ranking::Strategy::Hybrid(ProtoHybrid { alpha: 0.5, decay: None })),
+        };
+        let err = ranking_from_proto(Some(proto)).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_reject_query_with_empty_query_string() {
+        let err = QueryArgs::try_from(QueryRequest {
+            scope: Some(timeline_scope()),
+            query: String::new(),
+            ..QueryRequest::default()
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_map_query_zero_limit_to_library_default() {
+        let args = QueryArgs::try_from(QueryRequest {
+            scope: Some(timeline_scope()),
+            query: "hello".into(),
+            limit: 0,
+            ..QueryRequest::default()
+        })
+        .unwrap();
+        assert_eq!(args.limit, DEFAULT_QUERY_LIMIT);
+        assert_eq!(args.ranking, RankingStrategy::default_hybrid());
+    }
+
+    #[test]
+    fn should_reject_edit_with_empty_pid() {
+        let err = EditArgs::try_from(EditRequest {
+            pid: String::new(),
+            content: Some("x".into()),
+            ..EditRequest::default()
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_map_empty_edit_request_to_all_none_patch() {
+        let args = EditArgs::try_from(EditRequest {
+            pid: "p1".into(),
+            ..EditRequest::default()
+        })
+        .unwrap();
+        assert!(args.content.is_none() && args.metadata.is_none() && args.event_at.is_none());
+    }
+
+    #[test]
+    fn should_pass_through_edit_fields_when_set() {
+        let args = EditArgs::try_from(EditRequest {
+            pid: "p1".into(),
+            content: Some("new".into()),
+            event_at: Some(as_of_ts()),
+            ..EditRequest::default()
+        })
+        .unwrap();
+        assert_eq!(args.content.as_deref(), Some("new"));
+        assert!(args.event_at.is_some());
     }
 }

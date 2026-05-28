@@ -752,6 +752,185 @@ pub struct TimelineResponse {
     #[prost(message, repeated, tag="1")]
     pub memories: ::prost::alloc::vec::Vec<Memory>,
 }
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RecallAsOfRequest {
+    #[prost(message, optional, tag="1")]
+    pub scope: ::core::option::Option<Scope>,
+    /// The point in time to reconstruct. Memories created on or before this
+    /// instant that were active (not yet superseded) as of it are returned.
+    /// A future `as_of` yields current state; one before any memory existed
+    /// yields empty — both fall out of the library semantics.
+    #[prost(message, optional, tag="2")]
+    pub as_of: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Restricts to the selected kind(s). Omitted or both-false = all kinds.
+    #[prost(message, optional, tag="3")]
+    pub kinds: ::core::option::Option<KindSelector>,
+    /// Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
+    #[prost(int32, tag="4")]
+    pub limit: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RecallAsOfResponse {
+    /// Memories active as of the requested instant, newest-first. `score` is
+    /// never set. Mirrors `Client::recall_as_of`'s `Vec<Memory>` return.
+    #[prost(message, repeated, tag="1")]
+    pub memories: ::prost::alloc::vec::Vec<Memory>,
+}
+/// How Query orders candidates. Mirrors memoir-core's `RankingStrategy`.
+/// A message-with-oneof (not a bare enum) so new strategies and their
+/// parameters are additive — matching the Rust enum's `#\[non_exhaustive\]`
+/// posture. An unset oneof means "use the library default" (hybrid).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Ranking {
+    #[prost(oneof="ranking::Strategy", tags="1")]
+    pub strategy: ::core::option::Option<ranking::Strategy>,
+}
+/// Nested message and enum types in `Ranking`.
+pub mod ranking {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Strategy {
+        #[prost(message, tag="1")]
+        Hybrid(super::Hybrid),
+    }
+}
+/// Blend of cosine similarity and recency. Mirrors `RankingStrategy::Hybrid`.
+/// score = alpha * cosine + (1 - alpha) * decay(age).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Hybrid {
+    /// Weight on cosine in \[0.0, 1.0\]; (1 - alpha) weights recency.
+    #[prost(float, tag="1")]
+    pub alpha: f32,
+    /// Recency-decay function applied to the memory's age.
+    #[prost(message, optional, tag="2")]
+    pub decay: ::core::option::Option<Decay>,
+}
+/// Recency-decay function. Mirrors memoir-core's `DecayFn`. Message-with-oneof
+/// for the same additive-forward-compat reason as `Ranking`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Decay {
+    #[prost(oneof="decay::Function", tags="1, 2, 3")]
+    pub function: ::core::option::Option<decay::Function>,
+}
+/// Nested message and enum types in `Decay`.
+pub mod decay {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Function {
+        #[prost(message, tag="1")]
+        Exponential(super::ExponentialDecay),
+        #[prost(message, tag="2")]
+        Reciprocal(super::ReciprocalDecay),
+        #[prost(message, tag="3")]
+        Step(super::StepDecay),
+    }
+}
+/// exp(-ln(2) * age / half_life); reaches 0.5 at half_life.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ExponentialDecay {
+    #[prost(message, optional, tag="1")]
+    pub half_life: ::core::option::Option<::pbjson_types::Duration>,
+}
+/// 1 / (1 + age / scale); reaches 0.5 at scale, slower tail than exponential.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReciprocalDecay {
+    #[prost(message, optional, tag="1")]
+    pub scale: ::core::option::Option<::pbjson_types::Duration>,
+}
+/// Bucketed decay. Buckets are ordered by ascending boundary; an age within
+/// \[prev_boundary, boundary\] takes that bucket's value; ages past the last
+/// boundary take the last value.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StepDecay {
+    #[prost(message, repeated, tag="1")]
+    pub buckets: ::prost::alloc::vec::Vec<DecayBucket>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct DecayBucket {
+    #[prost(message, optional, tag="1")]
+    pub boundary: ::core::option::Option<::pbjson_types::Duration>,
+    #[prost(float, tag="2")]
+    pub value: f32,
+}
+/// Query result with its hybrid (blended cosine + recency) score attached.
+/// Distinct from `SearchHit`: that hit's `score` is raw cosine; this one's
+/// is the post-re-rank hybrid score.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryHit {
+    #[prost(message, optional, tag="1")]
+    pub memory: ::core::option::Option<Memory>,
+    #[prost(float, tag="2")]
+    pub score: f32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryRequest {
+    #[prost(message, optional, tag="1")]
+    pub scope: ::core::option::Option<Scope>,
+    #[prost(string, tag="2")]
+    pub query: ::prost::alloc::string::String,
+    /// Maximum hits to return. `0` = library default (10, `DEFAULT_QUERY_LIMIT`).
+    #[prost(int32, tag="3")]
+    pub limit: i32,
+    /// Restricts to the selected kind(s). Omitted or both-false = all kinds.
+    #[prost(message, optional, tag="4")]
+    pub kinds: ::core::option::Option<KindSelector>,
+    /// Optional caller-supplied metadata filter, AND-joined with scope+kind.
+    #[prost(message, optional, tag="5")]
+    pub metadata_filter: ::core::option::Option<MemoryFilter>,
+    /// Optional cosine floor applied at CANDIDATE-RETRIEVAL, before hybrid
+    /// re-ranking — NOT a floor on the final hybrid score. Candidates below
+    /// this raw-cosine value never enter the re-rank. Unset = no floor.
+    #[prost(float, optional, tag="6")]
+    pub min_similarity: ::core::option::Option<f32>,
+    /// Half-open time windows on write-time / event-time. See `TimelineRequest`
+    /// for the inclusive-after / exclusive-before convention.
+    #[prost(message, optional, tag="7")]
+    pub created_after: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="8")]
+    pub created_before: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="9")]
+    pub event_at_after: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="10")]
+    pub event_at_before: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Ranking strategy. Unset = library default hybrid (parameters may drift
+    /// pre-1.0; pin an explicit Ranking for stable behavior).
+    #[prost(message, optional, tag="11")]
+    pub ranking: ::core::option::Option<Ranking>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryResponse {
+    /// Ranked hits, best-first. Each carries its hybrid score.
+    #[prost(message, repeated, tag="1")]
+    pub hits: ::prost::alloc::vec::Vec<QueryHit>,
+    /// The ranking that produced this result, with library defaults filled in
+    /// when the request left `ranking` unset. Mirrors
+    /// `MemoryContext::strategy_used()`.
+    #[prost(message, optional, tag="2")]
+    pub ranking_used: ::core::option::Option<Ranking>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditRequest {
+    /// The memory to edit.
+    #[prost(string, tag="1")]
+    pub pid: ::prost::alloc::string::String,
+    /// Fields to overwrite. Each is independent: an unset field is left
+    /// untouched, a set field is overwritten. An EditRequest with no fields
+    /// set is a no-op that returns the current row. There is no way to clear
+    /// `event_at` back to unset over the wire (mirrors the library, which
+    /// only supports setting it).
+    #[prost(string, optional, tag="2")]
+    pub content: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, optional, tag="3")]
+    pub metadata: ::core::option::Option<::pbjson_types::Struct>,
+    #[prost(message, optional, tag="4")]
+    pub event_at: ::core::option::Option<::pbjson_types::Timestamp>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditResponse {
+    /// The updated memory. After a content edit the row is re-embedding, so
+    /// `status` is PENDING and the row is briefly excluded from search —
+    /// same lifecycle as a fresh Remember.
+    #[prost(message, optional, tag="1")]
+    pub memory: ::core::option::Option<Memory>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum MemoryStatus {

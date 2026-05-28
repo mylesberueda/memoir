@@ -29,18 +29,20 @@ use std::sync::Arc;
 use memoir_core::store::TimelineDirection;
 use memoir_sdk::memoir::v1::memory_service_server::MemoryService;
 use memoir_sdk::memoir::v1::{
-    ForgetRequest, ForgetResponse, RecallRequest, RecallResponse, RememberRequest, RememberResponse, SearchHit,
-    SearchRequest, SearchResponse, TimelineRequest, TimelineResponse,
+    EditRequest, EditResponse, ForgetRequest, ForgetResponse, QueryRequest, QueryResponse, RecallAsOfRequest,
+    RecallAsOfResponse, RecallRequest, RecallResponse, RememberRequest, RememberResponse, SearchHit, SearchRequest,
+    SearchResponse, TimelineRequest, TimelineResponse,
 };
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
-    TimelineArgs, forget_target_from_proto, memory_to_proto, metadata_filter_from_proto, metadata_from_proto,
-    scope_from_proto, timeline_response,
+    EditArgs, QueryArgs, RecallAsOfArgs, TimelineArgs, forget_target_from_proto, memory_to_proto,
+    metadata_filter_from_proto, metadata_from_proto, query_response, recall_as_of_response, scope_from_proto,
+    timeline_response,
 };
-use crate::services::wire::WireError;
+use crate::services::wire::{WireError, WireMemory};
 
 /// `MemoryService` RPC handler.
 ///
@@ -297,6 +299,134 @@ impl MemoryService for Memory {
 
         let memories = builder.await.map_err(WireError::into_status)?;
         Ok(Response::new(timeline_response(memories)))
+    }
+
+    /// Point-in-time read: what memoir knew as of a timestamp. Postgres-only.
+    ///
+    /// Read-tier auth. Logs the `as_of` value and result count so the
+    /// point-in-time read is auditable ("who checked what memoir knew, when").
+    async fn recall_as_of(
+        &self,
+        request: Request<RecallAsOfRequest>,
+    ) -> Result<Response<RecallAsOfResponse>, Status> {
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let RecallAsOfArgs { scope, params } = request.into_inner().try_into()?;
+
+        tracing::event!(
+            name: "memoir.service.memory.recall_as_of.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            scope.agent_id = %scope.agent_id,
+            scope.org_id = %scope.org_id,
+            scope.user_id = %scope.user_id,
+            memory.as_of = %params.as_of,
+            limit = params.limit,
+            "MemoryService.RecallAsOf invoked",
+        );
+
+        let mut builder = self.ctx.memoir.recall_as_of(scope, params.as_of).limit(params.limit);
+        if params.kinds.episodic && !params.kinds.semantic {
+            builder = builder.episodic();
+        }
+        if params.kinds.semantic && !params.kinds.episodic {
+            builder = builder.semantic();
+        }
+
+        let memories = builder.await.map_err(WireError::into_status)?;
+        Ok(Response::new(recall_as_of_response(memories)))
+    }
+
+    /// Hybrid-ranked retrieval returning prompt-shaped context.
+    ///
+    /// Read-tier auth. The response carries raw memories + hybrid score +
+    /// the strategy used; the SDK renders the prompt string, not the wire.
+    async fn query(&self, request: Request<QueryRequest>) -> Result<Response<QueryResponse>, Status> {
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let args: QueryArgs = request.into_inner().try_into()?;
+
+        tracing::event!(
+            name: "memoir.service.memory.query.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            scope.agent_id = %args.scope.agent_id,
+            scope.org_id = %args.scope.org_id,
+            scope.user_id = %args.scope.user_id,
+            query.len = args.query.len(),
+            limit = args.limit,
+            "MemoryService.Query invoked",
+        );
+
+        let mut builder = self.ctx.memoir.query(args.query, args.scope).limit(args.limit).ranking(args.ranking);
+        if args.kinds.episodic && !args.kinds.semantic {
+            builder = builder.episodic();
+        }
+        if args.kinds.semantic && !args.kinds.episodic {
+            builder = builder.semantic();
+        }
+        if let Some(filter) = args.metadata_filter {
+            builder = builder.metadata_filter(filter);
+        }
+        if let Some(threshold) = args.min_similarity {
+            builder = builder.min_similarity(threshold);
+        }
+        if let Some(t) = args.created_after {
+            builder = builder.created_after(t);
+        }
+        if let Some(t) = args.created_before {
+            builder = builder.created_before(t);
+        }
+        if let Some(t) = args.event_at_after {
+            builder = builder.event_at_after(t);
+        }
+        if let Some(t) = args.event_at_before {
+            builder = builder.event_at_before(t);
+        }
+
+        let context = builder.await.map_err(WireError::into_status)?;
+        Ok(Response::new(query_response(context)))
+    }
+
+    /// In-place correction of an existing memory. Distinct from supersession.
+    ///
+    /// Write-tier intent: this is the one mutating RPC of the temporality
+    /// set. v0.1 enforces no per-tier policy (Remember authenticates the
+    /// same way), so this authenticates like every handler; when role-tiers
+    /// land, Edit needs write authorization. Reserved-metadata-key and
+    /// unsupported-kind (non-episodic) rejections are mapped from the
+    /// library error via `WireError`.
+    async fn edit(&self, request: Request<EditRequest>) -> Result<Response<EditResponse>, Status> {
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let args: EditArgs = request.into_inner().try_into()?;
+
+        tracing::event!(
+            name: "memoir.service.memory.edit.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            memory.pid = %args.pid,
+            content.set = args.content.is_some(),
+            metadata.set = args.metadata.is_some(),
+            event_at.set = args.event_at.is_some(),
+            "MemoryService.Edit invoked",
+        );
+
+        let mut builder = self.ctx.memoir.edit(args.pid);
+        if let Some(content) = args.content {
+            builder = builder.content(content);
+        }
+        if let Some(metadata) = args.metadata {
+            builder = builder.metadata(metadata);
+        }
+        if let Some(event_at) = args.event_at {
+            builder = builder.event_at(event_at);
+        }
+
+        let updated = builder.await.map_err(WireError::into_status)?;
+        Ok(Response::new(EditResponse {
+            memory: Some(WireMemory::from(updated).0),
+        }))
     }
 }
 

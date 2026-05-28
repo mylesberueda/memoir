@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package memoir.v1;
 
+import "google/protobuf/duration.proto";
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
@@ -30,6 +31,25 @@ service MemoryService {
   // Newest-first unless `ascending` is set. Wraps memoir-core's
   // `Client::timeline`.
   rpc Timeline(TimelineRequest) returns (TimelineResponse);
+
+  // Point-in-time read: memoir's state of knowledge as of a timestamp.
+  // Returns memories created on or before `as_of` that were not yet
+  // superseded then. Postgres-only. Wraps memoir-core's
+  // `Client::recall_as_of`.
+  rpc RecallAsOf(RecallAsOfRequest) returns (RecallAsOfResponse);
+
+  // Hybrid-ranked retrieval: vector candidates re-ranked by a blend of
+  // cosine similarity and recency, returning prompt-shaped context. Wraps
+  // memoir-core's `Client::query`. The response carries raw memories +
+  // their hybrid score + the strategy used; rendering to a prompt string
+  // is the SDK's job, not the wire's.
+  rpc Query(QueryRequest) returns (QueryResponse);
+
+  // In-place correction of an existing memory — distinct from supersession
+  // (edit overwrites because the original was wrong; supersede preserves
+  // because new info obsoletes old). Content changes trigger re-embedding,
+  // so the row is briefly unsearchable. Wraps memoir-core's `Client::edit`.
+  rpc Edit(EditRequest) returns (EditResponse);
 }
 
 // ─── Scope ──────────────────────────────────────────────────────────────────
@@ -283,4 +303,146 @@ message TimelineResponse {
   // Memories in the requested order. `score` is never set (timeline computes
   // no similarity). Mirrors `Client::timeline`'s `Vec<Memory>` return.
   repeated Memory memories = 1;
+}
+
+message RecallAsOfRequest {
+  Scope scope = 1;
+
+  // The point in time to reconstruct. Memories created on or before this
+  // instant that were active (not yet superseded) as of it are returned.
+  // A future `as_of` yields current state; one before any memory existed
+  // yields empty — both fall out of the library semantics.
+  google.protobuf.Timestamp as_of = 2;
+
+  // Restricts to the selected kind(s). Omitted or both-false = all kinds.
+  optional KindSelector kinds = 3;
+
+  // Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
+  int32 limit = 4;
+}
+
+message RecallAsOfResponse {
+  // Memories active as of the requested instant, newest-first. `score` is
+  // never set. Mirrors `Client::recall_as_of`'s `Vec<Memory>` return.
+  repeated Memory memories = 1;
+}
+
+// How Query orders candidates. Mirrors memoir-core's `RankingStrategy`.
+// A message-with-oneof (not a bare enum) so new strategies and their
+// parameters are additive — matching the Rust enum's `#[non_exhaustive]`
+// posture. An unset oneof means "use the library default" (hybrid).
+message Ranking {
+  oneof strategy {
+    Hybrid hybrid = 1;
+  }
+}
+
+// Blend of cosine similarity and recency. Mirrors `RankingStrategy::Hybrid`.
+// score = alpha * cosine + (1 - alpha) * decay(age).
+message Hybrid {
+  // Weight on cosine in [0.0, 1.0]; (1 - alpha) weights recency.
+  float alpha = 1;
+  // Recency-decay function applied to the memory's age.
+  Decay decay = 2;
+}
+
+// Recency-decay function. Mirrors memoir-core's `DecayFn`. Message-with-oneof
+// for the same additive-forward-compat reason as `Ranking`.
+message Decay {
+  oneof function {
+    ExponentialDecay exponential = 1;
+    ReciprocalDecay reciprocal = 2;
+    StepDecay step = 3;
+  }
+}
+
+// exp(-ln(2) * age / half_life); reaches 0.5 at half_life.
+message ExponentialDecay {
+  google.protobuf.Duration half_life = 1;
+}
+
+// 1 / (1 + age / scale); reaches 0.5 at scale, slower tail than exponential.
+message ReciprocalDecay {
+  google.protobuf.Duration scale = 1;
+}
+
+// Bucketed decay. Buckets are ordered by ascending boundary; an age within
+// [prev_boundary, boundary] takes that bucket's value; ages past the last
+// boundary take the last value.
+message StepDecay {
+  repeated DecayBucket buckets = 1;
+}
+
+message DecayBucket {
+  google.protobuf.Duration boundary = 1;
+  float value = 2;
+}
+
+// Query result with its hybrid (blended cosine + recency) score attached.
+// Distinct from `SearchHit`: that hit's `score` is raw cosine; this one's
+// is the post-re-rank hybrid score.
+message QueryHit {
+  Memory memory = 1;
+  float score = 2;
+}
+
+message QueryRequest {
+  Scope scope = 1;
+  string query = 2;
+
+  // Maximum hits to return. `0` = library default (10, `DEFAULT_QUERY_LIMIT`).
+  int32 limit = 3;
+
+  // Restricts to the selected kind(s). Omitted or both-false = all kinds.
+  optional KindSelector kinds = 4;
+
+  // Optional caller-supplied metadata filter, AND-joined with scope+kind.
+  optional MemoryFilter metadata_filter = 5;
+
+  // Optional cosine floor applied at CANDIDATE-RETRIEVAL, before hybrid
+  // re-ranking — NOT a floor on the final hybrid score. Candidates below
+  // this raw-cosine value never enter the re-rank. Unset = no floor.
+  optional float min_similarity = 6;
+
+  // Half-open time windows on write-time / event-time. See `TimelineRequest`
+  // for the inclusive-after / exclusive-before convention.
+  optional google.protobuf.Timestamp created_after = 7;
+  optional google.protobuf.Timestamp created_before = 8;
+  optional google.protobuf.Timestamp event_at_after = 9;
+  optional google.protobuf.Timestamp event_at_before = 10;
+
+  // Ranking strategy. Unset = library default hybrid (parameters may drift
+  // pre-1.0; pin an explicit Ranking for stable behavior).
+  optional Ranking ranking = 11;
+}
+
+message QueryResponse {
+  // Ranked hits, best-first. Each carries its hybrid score.
+  repeated QueryHit hits = 1;
+
+  // The ranking that produced this result, with library defaults filled in
+  // when the request left `ranking` unset. Mirrors
+  // `MemoryContext::strategy_used()`.
+  Ranking ranking_used = 2;
+}
+
+message EditRequest {
+  // The memory to edit.
+  string pid = 1;
+
+  // Fields to overwrite. Each is independent: an unset field is left
+  // untouched, a set field is overwritten. An EditRequest with no fields
+  // set is a no-op that returns the current row. There is no way to clear
+  // `event_at` back to unset over the wire (mirrors the library, which
+  // only supports setting it).
+  optional string content = 2;
+  optional google.protobuf.Struct metadata = 3;
+  optional google.protobuf.Timestamp event_at = 4;
+}
+
+message EditResponse {
+  // The updated memory. After a content edit the row is re-embedding, so
+  // `status` is PENDING and the row is briefly excluded from search —
+  // same lifecycle as a fresh Remember.
+  Memory memory = 1;
 }
