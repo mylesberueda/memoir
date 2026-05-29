@@ -2,14 +2,11 @@
 
 import { create } from '@bufbuild/protobuf';
 import { timestampFromDate } from '@bufbuild/protobuf/wkt';
-import {
-	type Memory,
-	TimelineRequestSchema,
-} from '@polypixel/memoir-sdk/memoir/v1/memory_pb';
+import { type Memory, TimelineRequestSchema } from '@polypixel/memoir-sdk/memoir/v1/memory_pb';
 
 import { getAccessToken } from '@/actions/auth';
-import { getOrganizationContext } from '@/lib/grpc/transport';
 import { memoryClient } from '@/lib/grpc/client';
+import { getOrganizationContext } from '@/lib/grpc/transport';
 import { getSession } from '@/lib/session';
 
 import type { ActionResult } from '.';
@@ -67,16 +64,9 @@ export async function getTimeline(params: TimelineParams): Promise<ActionResult<
 		return { success: false, error: 'Not authenticated' };
 	}
 
-	const kinds =
-		params.kind === 'episodic'
-			? { episodic: true, semantic: false }
-			: params.kind === 'semantic'
-				? { episodic: false, semantic: true }
-				: undefined;
-
 	const request = create(TimelineRequestSchema, {
 		scope: { agentId, orgId, userId: session.userId },
-		kinds,
+		kinds: { episodic: params.kind === 'episodic', semantic: params.kind === 'semantic' },
 		createdAfter: params.createdAfter ? timestampFromDate(params.createdAfter) : undefined,
 		createdBefore: params.createdBefore ? timestampFromDate(params.createdBefore) : undefined,
 		eventAtAfter: params.eventAtAfter ? timestampFromDate(params.eventAtAfter) : undefined,

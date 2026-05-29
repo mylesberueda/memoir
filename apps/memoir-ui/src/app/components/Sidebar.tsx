@@ -4,7 +4,7 @@ import useAuth from '@hooks/useAuth';
 import { useLayoutContext } from '@providers';
 import { useOrganizationsOptional } from '@providers/OrganizationContextProvider';
 import cns from 'classnames';
-import { BrainCircuit, Building2, Home, Settings, Users2 } from 'lucide-react';
+import { BrainCircuit, Building2, Clock, Home, Search, Settings, Users2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import OrgSelectorWrapper from './OrgSelectorWrapper';
@@ -80,6 +80,18 @@ export default function Sidebar() {
 								<div className="space-y-1">
 									<NavItem href="/dashboard" icon={Home}>
 										Dashboard
+									</NavItem>
+								</div>
+							</div>
+
+							<div>
+								<SectionHeader>Memory</SectionHeader>
+								<div className="space-y-1">
+									<NavItem href="/memory/timeline" icon={Clock}>
+										Timeline
+									</NavItem>
+									<NavItem href="/memory/query" icon={Search}>
+										Query
 									</NavItem>
 								</div>
 							</div>
