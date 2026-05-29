@@ -5,6 +5,7 @@ import { Select } from '@components';
 import { Clock } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
+import EditMemoryModal from '../_components/EditMemoryModal';
 import MemoryRow from '../_components/MemoryRow';
 
 export default function TimelineClient() {
@@ -12,6 +13,7 @@ export default function TimelineClient() {
 	const [kind, setKind] = useState<KindFilter>('both');
 	const [excludeSuperseded, setExcludeSuperseded] = useState(false);
 	const [memories, setMemories] = useState<Memory[]>([]);
+	const [editing, setEditing] = useState<Memory | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loaded, setLoaded] = useState(false);
 	const [isPending, startTransition] = useTransition();
@@ -118,9 +120,18 @@ export default function TimelineClient() {
 
 			<ul id="timeline-list" className="space-y-3">
 				{memories.map((memory) => (
-					<MemoryRow key={memory.pid} memory={memory} />
+					<MemoryRow key={memory.pid} memory={memory} onEdit={setEditing} />
 				))}
 			</ul>
+
+			{editing && (
+				<EditMemoryModal
+					memory={editing}
+					open={true}
+					onClose={() => setEditing(null)}
+					onMemoryUpdated={(updated) => setMemories((prev) => prev.map((m) => (m.pid === updated.pid ? updated : m)))}
+				/>
+			)}
 		</div>
 	);
 }

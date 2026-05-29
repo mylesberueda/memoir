@@ -1,12 +1,13 @@
 'use client';
 
 import { type QueryHit, type Ranking, runQuery } from '@actions/query';
-import type { KindFilter } from '@actions/timeline';
+import type { KindFilter, Memory } from '@actions/timeline';
 
 import { Select } from '@components';
 import { Search } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
+import EditMemoryModal from '../_components/EditMemoryModal';
 import MemoryRow from '../_components/MemoryRow';
 
 export default function QueryClient() {
@@ -15,6 +16,7 @@ export default function QueryClient() {
 	const [kind, setKind] = useState<KindFilter>('both');
 	const [hits, setHits] = useState<QueryHit[]>([]);
 	const [rankingUsed, setRankingUsed] = useState<Ranking | undefined>(undefined);
+	const [editing, setEditing] = useState<Memory | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loaded, setLoaded] = useState(false);
 	const [isPending, startTransition] = useTransition();
@@ -136,8 +138,22 @@ export default function QueryClient() {
 			)}
 
 			<ul id="query-list" className="space-y-3">
-				{hits.map((hit) => hit.memory && <MemoryRow key={hit.memory.pid} memory={hit.memory} score={hit.score} />)}
+				{hits.map(
+					(hit) =>
+						hit.memory && <MemoryRow key={hit.memory.pid} memory={hit.memory} score={hit.score} onEdit={setEditing} />,
+				)}
 			</ul>
+
+			{editing && (
+				<EditMemoryModal
+					memory={editing}
+					open={true}
+					onClose={() => setEditing(null)}
+					onMemoryUpdated={(updated) =>
+						setHits((prev) => prev.map((h) => (h.memory?.pid === updated.pid ? { ...h, memory: updated } : h)))
+					}
+				/>
+			)}
 		</div>
 	);
 }
