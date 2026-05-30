@@ -4,7 +4,7 @@ import useAuth from '@hooks/useAuth';
 import { useLayoutContext } from '@providers';
 import { useOrganizationsOptional } from '@providers/OrganizationContextProvider';
 import cns from 'classnames';
-import { BrainCircuit, Building2, Clock, History, Home, Search, Settings, Users2 } from 'lucide-react';
+import { BrainCircuit, Building2, Clock, GitBranch, History, Home, Search, Settings, Users2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import OrgSelectorWrapper from './OrgSelectorWrapper';
@@ -95,6 +95,9 @@ export default function Sidebar() {
 									</NavItem>
 									<NavItem href="/memory/as-of" icon={History}>
 										Point-in-time
+									</NavItem>
+									<NavItem href="/memory/audit" icon={GitBranch}>
+										Audit
 									</NavItem>
 								</div>
 							</div>
