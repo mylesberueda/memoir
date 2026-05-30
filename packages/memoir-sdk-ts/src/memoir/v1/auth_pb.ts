@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file memoir/v1/auth.proto.
  */
 export const file_memoir_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChRtZW1vaXIvdjEvYXV0aC5wcm90bxIJbWVtb2lyLnYxIpcBCgRVc2VyEgsKA3BpZBgBIAEoCRIQCgh1c2VybmFtZRgCIAEoCRIQCghpc19hZG1pbhgDIAEoCBIuCgpjcmVhdGVkX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCLJAgoGQXBpS2V5EgsKA3BpZBgBIAEoCRIOCgZrZXlfaWQYAiABKAkSDAoEbmFtZRgDIAEoCRIjCgRyb2xlGAQgASgOMhUubWVtb2lyLnYxLkFwaUtleVJvbGUSEwoGb3JnX2lkGAUgASgJSACIAQESJwoGc3RhdHVzGAYgASgOMhcubWVtb2lyLnYxLkFwaUtleVN0YXR1cxIuCgpjcmVhdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBI1CgxsYXN0X3VzZWRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAGIAQFCCQoHX29yZ19pZEIPCg1fbGFzdF91c2VkX2F0IlEKHENvbnN1bWVCb290c3RyYXBUb2tlblJlcXVlc3QSDQoFdG9rZW4YASABKAkSEAoIdXNlcm5hbWUYAiABKAkSEAoIcGFzc3dvcmQYAyABKAkiPgodQ29uc3VtZUJvb3RzdHJhcFRva2VuUmVzcG9uc2USHQoEdXNlchgBIAEoCzIPLm1lbW9pci52MS5Vc2VyIkkKEUNyZWF0ZVVzZXJSZXF1ZXN0EhAKCHVzZXJuYW1lGAEgASgJEhAKCHBhc3N3b3JkGAIgASgJEhAKCGlzX2FkbWluGAMgASgIIjMKEkNyZWF0ZVVzZXJSZXNwb25zZRIdCgR1c2VyGAEgASgLMg8ubWVtb2lyLnYxLlVzZXIiHQoOR2V0VXNlclJlcXVlc3QSCwoDcGlkGAEgASgJIjAKD0dldFVzZXJSZXNwb25zZRIdCgR1c2VyGAEgASgLMg8ubWVtb2lyLnYxLlVzZXIiQQoQTGlzdFVzZXJzUmVxdWVzdBINCgVsaW1pdBgBIAEoBRITCgZjdXJzb3IYAiABKAlIAIgBAUIJCgdfY3Vyc29yIl0KEUxpc3RVc2Vyc1Jlc3BvbnNlEh4KBXVzZXJzGAEgAygLMg8ubWVtb2lyLnYxLlVzZXISGAoLbmV4dF9jdXJzb3IYAiABKAlIAIgBAUIOCgxfbmV4dF9jdXJzb3IiIAoRRGVsZXRlVXNlclJlcXVlc3QSCwoDcGlkGAEgASgJIhQKEkRlbGV0ZVVzZXJSZXNwb25zZSJoChNDcmVhdGVBcGlLZXlSZXF1ZXN0EgwKBG5hbWUYASABKAkSIwoEcm9sZRgCIAEoDjIVLm1lbW9pci52MS5BcGlLZXlSb2xlEhMKBm9yZ19pZBgDIAEoCUgAiAEBQgkKB19vcmdfaWQiSQoUQ3JlYXRlQXBpS2V5UmVzcG9uc2USHgoDa2V5GAEgASgLMhEubWVtb2lyLnYxLkFwaUtleRIRCglwbGFpbnRleHQYAiABKAkiHwoQR2V0QXBpS2V5UmVxdWVzdBILCgNwaWQYASABKAkiMwoRR2V0QXBpS2V5UmVzcG9uc2USHgoDa2V5GAEgASgLMhEubWVtb2lyLnYxLkFwaUtleSJ8ChJMaXN0QXBpS2V5c1JlcXVlc3QSDQoFbGltaXQYASABKAUSEwoGY3Vyc29yGAIgASgJSACIAQESLAoGc3RhdHVzGAMgASgOMhcubWVtb2lyLnYxLkFwaUtleVN0YXR1c0gBiAEBQgkKB19jdXJzb3JCCQoHX3N0YXR1cyJgChNMaXN0QXBpS2V5c1Jlc3BvbnNlEh8KBGtleXMYASADKAsyES5tZW1vaXIudjEuQXBpS2V5EhgKC25leHRfY3Vyc29yGAIgASgJSACIAQFCDgoMX25leHRfY3Vyc29yIiIKE1JvdGF0ZUFwaUtleVJlcXVlc3QSCwoDcGlkGAEgASgJIkkKFFJvdGF0ZUFwaUtleVJlc3BvbnNlEh4KA2tleRgBIAEoCzIRLm1lbW9pci52MS5BcGlLZXkSEQoJcGxhaW50ZXh0GAIgASgJIiIKE1Jldm9rZUFwaUtleVJlcXVlc3QSCwoDcGlkGAEgASgJIhYKFFJldm9rZUFwaUtleVJlc3BvbnNlKmAKCkFwaUtleVJvbGUSHAoYQVBJX0tFWV9ST0xFX1VOU1BFQ0lGSUVEEAASFgoSQVBJX0tFWV9ST0xFX0FETUlOEAESHAoYQVBJX0tFWV9ST0xFX0lOVEVHUkFUSU9OEAIqZQoMQXBpS2V5U3RhdHVzEh4KGkFQSV9LRVlfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGQoVQVBJX0tFWV9TVEFUVVNfQUNUSVZFEAESGgoWQVBJX0tFWV9TVEFUVVNfUkVWT0tFRBACMqIGCgtBdXRoU2VydmljZRJqChVDb25zdW1lQm9vdHN0cmFwVG9rZW4SJy5tZW1vaXIudjEuQ29uc3VtZUJvb3RzdHJhcFRva2VuUmVxdWVzdBooLm1lbW9pci52MS5Db25zdW1lQm9vdHN0cmFwVG9rZW5SZXNwb25zZRJJCgpDcmVhdGVVc2VyEhwubWVtb2lyLnYxLkNyZWF0ZVVzZXJSZXF1ZXN0Gh0ubWVtb2lyLnYxLkNyZWF0ZVVzZXJSZXNwb25zZRJACgdHZXRVc2VyEhkubWVtb2lyLnYxLkdldFVzZXJSZXF1ZXN0GhoubWVtb2lyLnYxLkdldFVzZXJSZXNwb25zZRJGCglMaXN0VXNlcnMSGy5tZW1vaXIudjEuTGlzdFVzZXJzUmVxdWVzdBocLm1lbW9pci52MS5MaXN0VXNlcnNSZXNwb25zZRJJCgpEZWxldGVVc2VyEhwubWVtb2lyLnYxLkRlbGV0ZVVzZXJSZXF1ZXN0Gh0ubWVtb2lyLnYxLkRlbGV0ZVVzZXJSZXNwb25zZRJPCgxDcmVhdGVBcGlLZXkSHi5tZW1vaXIudjEuQ3JlYXRlQXBpS2V5UmVxdWVzdBofLm1lbW9pci52MS5DcmVhdGVBcGlLZXlSZXNwb25zZRJGCglHZXRBcGlLZXkSGy5tZW1vaXIudjEuR2V0QXBpS2V5UmVxdWVzdBocLm1lbW9pci52MS5HZXRBcGlLZXlSZXNwb25zZRJMCgtMaXN0QXBpS2V5cxIdLm1lbW9pci52MS5MaXN0QXBpS2V5c1JlcXVlc3QaHi5tZW1vaXIudjEuTGlzdEFwaUtleXNSZXNwb25zZRJPCgxSb3RhdGVBcGlLZXkSHi5tZW1vaXIudjEuUm90YXRlQXBpS2V5UmVxdWVzdBofLm1lbW9pci52MS5Sb3RhdGVBcGlLZXlSZXNwb25zZRJPCgxSZXZva2VBcGlLZXkSHi5tZW1vaXIudjEuUmV2b2tlQXBpS2V5UmVxdWVzdBofLm1lbW9pci52MS5SZXZva2VBcGlLZXlSZXNwb25zZWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("ChRtZW1vaXIvdjEvYXV0aC5wcm90bxIJbWVtb2lyLnYxIpcBCgRVc2VyEgsKA3BpZBgBIAEoCRIQCgh1c2VybmFtZRgCIAEoCRIQCghpc19hZG1pbhgDIAEoCBIuCgpjcmVhdGVkX2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCLJAgoGQXBpS2V5EgsKA3BpZBgBIAEoCRIOCgZrZXlfaWQYAiABKAkSDAoEbmFtZRgDIAEoCRIjCgRyb2xlGAQgASgOMhUubWVtb2lyLnYxLkFwaUtleVJvbGUSEwoGb3JnX2lkGAUgASgJSACIAQESJwoGc3RhdHVzGAYgASgOMhcubWVtb2lyLnYxLkFwaUtleVN0YXR1cxIuCgpjcmVhdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBI1CgxsYXN0X3VzZWRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAGIAQFCCQoHX29yZ19pZEIPCg1fbGFzdF91c2VkX2F0IlEKHENvbnN1bWVCb290c3RyYXBUb2tlblJlcXVlc3QSDQoFdG9rZW4YASABKAkSEAoIdXNlcm5hbWUYAiABKAkSEAoIcGFzc3dvcmQYAyABKAkiPgodQ29uc3VtZUJvb3RzdHJhcFRva2VuUmVzcG9uc2USHQoEdXNlchgBIAEoCzIPLm1lbW9pci52MS5Vc2VyIjIKDExvZ2luUmVxdWVzdBIQCgh1c2VybmFtZRgBIAEoCRIQCghwYXNzd29yZBgCIAEoCSJbCg1Mb2dpblJlc3BvbnNlEhQKDGFjY2Vzc190b2tlbhgBIAEoCRIVCg1yZWZyZXNoX3Rva2VuGAIgASgJEh0KBHVzZXIYAyABKAsyDy5tZW1vaXIudjEuVXNlciIsChNSZWZyZXNoVG9rZW5SZXF1ZXN0EhUKDXJlZnJlc2hfdG9rZW4YASABKAkiLAoUUmVmcmVzaFRva2VuUmVzcG9uc2USFAoMYWNjZXNzX3Rva2VuGAEgASgJIkkKEUNyZWF0ZVVzZXJSZXF1ZXN0EhAKCHVzZXJuYW1lGAEgASgJEhAKCHBhc3N3b3JkGAIgASgJEhAKCGlzX2FkbWluGAMgASgIIjMKEkNyZWF0ZVVzZXJSZXNwb25zZRIdCgR1c2VyGAEgASgLMg8ubWVtb2lyLnYxLlVzZXIiHQoOR2V0VXNlclJlcXVlc3QSCwoDcGlkGAEgASgJIjAKD0dldFVzZXJSZXNwb25zZRIdCgR1c2VyGAEgASgLMg8ubWVtb2lyLnYxLlVzZXIiQQoQTGlzdFVzZXJzUmVxdWVzdBINCgVsaW1pdBgBIAEoBRITCgZjdXJzb3IYAiABKAlIAIgBAUIJCgdfY3Vyc29yIl0KEUxpc3RVc2Vyc1Jlc3BvbnNlEh4KBXVzZXJzGAEgAygLMg8ubWVtb2lyLnYxLlVzZXISGAoLbmV4dF9jdXJzb3IYAiABKAlIAIgBAUIOCgxfbmV4dF9jdXJzb3IiIAoRRGVsZXRlVXNlclJlcXVlc3QSCwoDcGlkGAEgASgJIhQKEkRlbGV0ZVVzZXJSZXNwb25zZSJoChNDcmVhdGVBcGlLZXlSZXF1ZXN0EgwKBG5hbWUYASABKAkSIwoEcm9sZRgCIAEoDjIVLm1lbW9pci52MS5BcGlLZXlSb2xlEhMKBm9yZ19pZBgDIAEoCUgAiAEBQgkKB19vcmdfaWQiSQoUQ3JlYXRlQXBpS2V5UmVzcG9uc2USHgoDa2V5GAEgASgLMhEubWVtb2lyLnYxLkFwaUtleRIRCglwbGFpbnRleHQYAiABKAkiHwoQR2V0QXBpS2V5UmVxdWVzdBILCgNwaWQYASABKAkiMwoRR2V0QXBpS2V5UmVzcG9uc2USHgoDa2V5GAEgASgLMhEubWVtb2lyLnYxLkFwaUtleSJ8ChJMaXN0QXBpS2V5c1JlcXVlc3QSDQoFbGltaXQYASABKAUSEwoGY3Vyc29yGAIgASgJSACIAQESLAoGc3RhdHVzGAMgASgOMhcubWVtb2lyLnYxLkFwaUtleVN0YXR1c0gBiAEBQgkKB19jdXJzb3JCCQoHX3N0YXR1cyJgChNMaXN0QXBpS2V5c1Jlc3BvbnNlEh8KBGtleXMYASADKAsyES5tZW1vaXIudjEuQXBpS2V5EhgKC25leHRfY3Vyc29yGAIgASgJSACIAQFCDgoMX25leHRfY3Vyc29yIiIKE1JvdGF0ZUFwaUtleVJlcXVlc3QSCwoDcGlkGAEgASgJIkkKFFJvdGF0ZUFwaUtleVJlc3BvbnNlEh4KA2tleRgBIAEoCzIRLm1lbW9pci52MS5BcGlLZXkSEQoJcGxhaW50ZXh0GAIgASgJIiIKE1Jldm9rZUFwaUtleVJlcXVlc3QSCwoDcGlkGAEgASgJIhYKFFJldm9rZUFwaUtleVJlc3BvbnNlKmAKCkFwaUtleVJvbGUSHAoYQVBJX0tFWV9ST0xFX1VOU1BFQ0lGSUVEEAASFgoSQVBJX0tFWV9ST0xFX0FETUlOEAESHAoYQVBJX0tFWV9ST0xFX0lOVEVHUkFUSU9OEAIqZQoMQXBpS2V5U3RhdHVzEh4KGkFQSV9LRVlfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGQoVQVBJX0tFWV9TVEFUVVNfQUNUSVZFEAESGgoWQVBJX0tFWV9TVEFUVVNfUkVWT0tFRBACMq8HCgtBdXRoU2VydmljZRJqChVDb25zdW1lQm9vdHN0cmFwVG9rZW4SJy5tZW1vaXIudjEuQ29uc3VtZUJvb3RzdHJhcFRva2VuUmVxdWVzdBooLm1lbW9pci52MS5Db25zdW1lQm9vdHN0cmFwVG9rZW5SZXNwb25zZRI6CgVMb2dpbhIXLm1lbW9pci52MS5Mb2dpblJlcXVlc3QaGC5tZW1vaXIudjEuTG9naW5SZXNwb25zZRJPCgxSZWZyZXNoVG9rZW4SHi5tZW1vaXIudjEuUmVmcmVzaFRva2VuUmVxdWVzdBofLm1lbW9pci52MS5SZWZyZXNoVG9rZW5SZXNwb25zZRJJCgpDcmVhdGVVc2VyEhwubWVtb2lyLnYxLkNyZWF0ZVVzZXJSZXF1ZXN0Gh0ubWVtb2lyLnYxLkNyZWF0ZVVzZXJSZXNwb25zZRJACgdHZXRVc2VyEhkubWVtb2lyLnYxLkdldFVzZXJSZXF1ZXN0GhoubWVtb2lyLnYxLkdldFVzZXJSZXNwb25zZRJGCglMaXN0VXNlcnMSGy5tZW1vaXIudjEuTGlzdFVzZXJzUmVxdWVzdBocLm1lbW9pci52MS5MaXN0VXNlcnNSZXNwb25zZRJJCgpEZWxldGVVc2VyEhwubWVtb2lyLnYxLkRlbGV0ZVVzZXJSZXF1ZXN0Gh0ubWVtb2lyLnYxLkRlbGV0ZVVzZXJSZXNwb25zZRJPCgxDcmVhdGVBcGlLZXkSHi5tZW1vaXIudjEuQ3JlYXRlQXBpS2V5UmVxdWVzdBofLm1lbW9pci52MS5DcmVhdGVBcGlLZXlSZXNwb25zZRJGCglHZXRBcGlLZXkSGy5tZW1vaXIudjEuR2V0QXBpS2V5UmVxdWVzdBocLm1lbW9pci52MS5HZXRBcGlLZXlSZXNwb25zZRJMCgtMaXN0QXBpS2V5cxIdLm1lbW9pci52MS5MaXN0QXBpS2V5c1JlcXVlc3QaHi5tZW1vaXIudjEuTGlzdEFwaUtleXNSZXNwb25zZRJPCgxSb3RhdGVBcGlLZXkSHi5tZW1vaXIudjEuUm90YXRlQXBpS2V5UmVxdWVzdBofLm1lbW9pci52MS5Sb3RhdGVBcGlLZXlSZXNwb25zZRJPCgxSZXZva2VBcGlLZXkSHi5tZW1vaXIudjEuUmV2b2tlQXBpS2V5UmVxdWVzdBofLm1lbW9pci52MS5SZXZva2VBcGlLZXlSZXNwb25zZWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message memoir.v1.User
@@ -64,7 +64,7 @@ export type ApiKey = Message<"memoir.v1.ApiKey"> & {
   pid: string;
 
   /**
-   * The lookup half of `mk_<key_id>_<secret>`. Non-secret.
+   * The lookup half of `mk.<key_id>.<secret>`. Non-secret.
    *
    * @generated from field: string key_id = 2;
    */
@@ -164,6 +164,102 @@ export const ConsumeBootstrapTokenResponseSchema: GenMessage<ConsumeBootstrapTok
   messageDesc(file_memoir_v1_auth, 3);
 
 /**
+ * @generated from message memoir.v1.LoginRequest
+ */
+export type LoginRequest = Message<"memoir.v1.LoginRequest"> & {
+  /**
+   * @generated from field: string username = 1;
+   */
+  username: string;
+
+  /**
+   * @generated from field: string password = 2;
+   */
+  password: string;
+};
+
+/**
+ * Describes the message memoir.v1.LoginRequest.
+ * Use `create(LoginRequestSchema)` to create a new message.
+ */
+export const LoginRequestSchema: GenMessage<LoginRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_auth, 4);
+
+/**
+ * @generated from message memoir.v1.LoginResponse
+ */
+export type LoginResponse = Message<"memoir.v1.LoginResponse"> & {
+  /**
+   * Short-lived JWT presented as `authorization: Bearer <access_token>` on
+   * subsequent RPCs. TTL is server-configured (default 15 minutes).
+   *
+   * @generated from field: string access_token = 1;
+   */
+  accessToken: string;
+
+  /**
+   * Long-lived JWT exchanged via RefreshToken when the access token expires.
+   * Audience-bound to refresh use; rejected by the authenticate middleware.
+   * TTL is server-configured (default 7 days).
+   *
+   * @generated from field: string refresh_token = 2;
+   */
+  refreshToken: string;
+
+  /**
+   * Convenience copy of the authenticated user. Saves a follow-up GetUser
+   * call on a successful login.
+   *
+   * @generated from field: memoir.v1.User user = 3;
+   */
+  user?: User;
+};
+
+/**
+ * Describes the message memoir.v1.LoginResponse.
+ * Use `create(LoginResponseSchema)` to create a new message.
+ */
+export const LoginResponseSchema: GenMessage<LoginResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_auth, 5);
+
+/**
+ * @generated from message memoir.v1.RefreshTokenRequest
+ */
+export type RefreshTokenRequest = Message<"memoir.v1.RefreshTokenRequest"> & {
+  /**
+   * @generated from field: string refresh_token = 1;
+   */
+  refreshToken: string;
+};
+
+/**
+ * Describes the message memoir.v1.RefreshTokenRequest.
+ * Use `create(RefreshTokenRequestSchema)` to create a new message.
+ */
+export const RefreshTokenRequestSchema: GenMessage<RefreshTokenRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_auth, 6);
+
+/**
+ * @generated from message memoir.v1.RefreshTokenResponse
+ */
+export type RefreshTokenResponse = Message<"memoir.v1.RefreshTokenResponse"> & {
+  /**
+   * A freshly-minted access JWT. The refresh token is unchanged — clients
+   * continue to use the original until it expires.
+   *
+   * @generated from field: string access_token = 1;
+   */
+  accessToken: string;
+};
+
+/**
+ * Describes the message memoir.v1.RefreshTokenResponse.
+ * Use `create(RefreshTokenResponseSchema)` to create a new message.
+ */
+export const RefreshTokenResponseSchema: GenMessage<RefreshTokenResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_auth, 7);
+
+/**
  * @generated from message memoir.v1.CreateUserRequest
  */
 export type CreateUserRequest = Message<"memoir.v1.CreateUserRequest"> & {
@@ -188,7 +284,7 @@ export type CreateUserRequest = Message<"memoir.v1.CreateUserRequest"> & {
  * Use `create(CreateUserRequestSchema)` to create a new message.
  */
 export const CreateUserRequestSchema: GenMessage<CreateUserRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 4);
+  messageDesc(file_memoir_v1_auth, 8);
 
 /**
  * @generated from message memoir.v1.CreateUserResponse
@@ -205,7 +301,7 @@ export type CreateUserResponse = Message<"memoir.v1.CreateUserResponse"> & {
  * Use `create(CreateUserResponseSchema)` to create a new message.
  */
 export const CreateUserResponseSchema: GenMessage<CreateUserResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 5);
+  messageDesc(file_memoir_v1_auth, 9);
 
 /**
  * @generated from message memoir.v1.GetUserRequest
@@ -222,7 +318,7 @@ export type GetUserRequest = Message<"memoir.v1.GetUserRequest"> & {
  * Use `create(GetUserRequestSchema)` to create a new message.
  */
 export const GetUserRequestSchema: GenMessage<GetUserRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 6);
+  messageDesc(file_memoir_v1_auth, 10);
 
 /**
  * @generated from message memoir.v1.GetUserResponse
@@ -239,7 +335,7 @@ export type GetUserResponse = Message<"memoir.v1.GetUserResponse"> & {
  * Use `create(GetUserResponseSchema)` to create a new message.
  */
 export const GetUserResponseSchema: GenMessage<GetUserResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 7);
+  messageDesc(file_memoir_v1_auth, 11);
 
 /**
  * @generated from message memoir.v1.ListUsersRequest
@@ -261,7 +357,7 @@ export type ListUsersRequest = Message<"memoir.v1.ListUsersRequest"> & {
  * Use `create(ListUsersRequestSchema)` to create a new message.
  */
 export const ListUsersRequestSchema: GenMessage<ListUsersRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 8);
+  messageDesc(file_memoir_v1_auth, 12);
 
 /**
  * @generated from message memoir.v1.ListUsersResponse
@@ -283,7 +379,7 @@ export type ListUsersResponse = Message<"memoir.v1.ListUsersResponse"> & {
  * Use `create(ListUsersResponseSchema)` to create a new message.
  */
 export const ListUsersResponseSchema: GenMessage<ListUsersResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 9);
+  messageDesc(file_memoir_v1_auth, 13);
 
 /**
  * @generated from message memoir.v1.DeleteUserRequest
@@ -300,7 +396,7 @@ export type DeleteUserRequest = Message<"memoir.v1.DeleteUserRequest"> & {
  * Use `create(DeleteUserRequestSchema)` to create a new message.
  */
 export const DeleteUserRequestSchema: GenMessage<DeleteUserRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 10);
+  messageDesc(file_memoir_v1_auth, 14);
 
 /**
  * @generated from message memoir.v1.DeleteUserResponse
@@ -313,7 +409,7 @@ export type DeleteUserResponse = Message<"memoir.v1.DeleteUserResponse"> & {
  * Use `create(DeleteUserResponseSchema)` to create a new message.
  */
 export const DeleteUserResponseSchema: GenMessage<DeleteUserResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 11);
+  messageDesc(file_memoir_v1_auth, 15);
 
 /**
  * @generated from message memoir.v1.CreateApiKeyRequest
@@ -340,7 +436,7 @@ export type CreateApiKeyRequest = Message<"memoir.v1.CreateApiKeyRequest"> & {
  * Use `create(CreateApiKeyRequestSchema)` to create a new message.
  */
 export const CreateApiKeyRequestSchema: GenMessage<CreateApiKeyRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 12);
+  messageDesc(file_memoir_v1_auth, 16);
 
 /**
  * @generated from message memoir.v1.CreateApiKeyResponse
@@ -352,7 +448,7 @@ export type CreateApiKeyResponse = Message<"memoir.v1.CreateApiKeyResponse"> & {
   key?: ApiKey;
 
   /**
-   * The full `mk_<key_id>_<secret>` string. Shown ONCE.
+   * The full `mk.<key_id>.<secret>` string. Shown ONCE.
    *
    * @generated from field: string plaintext = 2;
    */
@@ -364,7 +460,7 @@ export type CreateApiKeyResponse = Message<"memoir.v1.CreateApiKeyResponse"> & {
  * Use `create(CreateApiKeyResponseSchema)` to create a new message.
  */
 export const CreateApiKeyResponseSchema: GenMessage<CreateApiKeyResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 13);
+  messageDesc(file_memoir_v1_auth, 17);
 
 /**
  * @generated from message memoir.v1.GetApiKeyRequest
@@ -381,7 +477,7 @@ export type GetApiKeyRequest = Message<"memoir.v1.GetApiKeyRequest"> & {
  * Use `create(GetApiKeyRequestSchema)` to create a new message.
  */
 export const GetApiKeyRequestSchema: GenMessage<GetApiKeyRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 14);
+  messageDesc(file_memoir_v1_auth, 18);
 
 /**
  * @generated from message memoir.v1.GetApiKeyResponse
@@ -398,7 +494,7 @@ export type GetApiKeyResponse = Message<"memoir.v1.GetApiKeyResponse"> & {
  * Use `create(GetApiKeyResponseSchema)` to create a new message.
  */
 export const GetApiKeyResponseSchema: GenMessage<GetApiKeyResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 15);
+  messageDesc(file_memoir_v1_auth, 19);
 
 /**
  * @generated from message memoir.v1.ListApiKeysRequest
@@ -425,7 +521,7 @@ export type ListApiKeysRequest = Message<"memoir.v1.ListApiKeysRequest"> & {
  * Use `create(ListApiKeysRequestSchema)` to create a new message.
  */
 export const ListApiKeysRequestSchema: GenMessage<ListApiKeysRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 16);
+  messageDesc(file_memoir_v1_auth, 20);
 
 /**
  * @generated from message memoir.v1.ListApiKeysResponse
@@ -447,7 +543,7 @@ export type ListApiKeysResponse = Message<"memoir.v1.ListApiKeysResponse"> & {
  * Use `create(ListApiKeysResponseSchema)` to create a new message.
  */
 export const ListApiKeysResponseSchema: GenMessage<ListApiKeysResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 17);
+  messageDesc(file_memoir_v1_auth, 21);
 
 /**
  * @generated from message memoir.v1.RotateApiKeyRequest
@@ -464,7 +560,7 @@ export type RotateApiKeyRequest = Message<"memoir.v1.RotateApiKeyRequest"> & {
  * Use `create(RotateApiKeyRequestSchema)` to create a new message.
  */
 export const RotateApiKeyRequestSchema: GenMessage<RotateApiKeyRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 18);
+  messageDesc(file_memoir_v1_auth, 22);
 
 /**
  * @generated from message memoir.v1.RotateApiKeyResponse
@@ -476,7 +572,7 @@ export type RotateApiKeyResponse = Message<"memoir.v1.RotateApiKeyResponse"> & {
   key?: ApiKey;
 
   /**
-   * The new `mk_<key_id>_<secret>` string. Shown ONCE.
+   * The new `mk.<key_id>.<secret>` string. Shown ONCE.
    *
    * @generated from field: string plaintext = 2;
    */
@@ -488,7 +584,7 @@ export type RotateApiKeyResponse = Message<"memoir.v1.RotateApiKeyResponse"> & {
  * Use `create(RotateApiKeyResponseSchema)` to create a new message.
  */
 export const RotateApiKeyResponseSchema: GenMessage<RotateApiKeyResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 19);
+  messageDesc(file_memoir_v1_auth, 23);
 
 /**
  * @generated from message memoir.v1.RevokeApiKeyRequest
@@ -505,7 +601,7 @@ export type RevokeApiKeyRequest = Message<"memoir.v1.RevokeApiKeyRequest"> & {
  * Use `create(RevokeApiKeyRequestSchema)` to create a new message.
  */
 export const RevokeApiKeyRequestSchema: GenMessage<RevokeApiKeyRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 20);
+  messageDesc(file_memoir_v1_auth, 24);
 
 /**
  * @generated from message memoir.v1.RevokeApiKeyResponse
@@ -518,7 +614,7 @@ export type RevokeApiKeyResponse = Message<"memoir.v1.RevokeApiKeyResponse"> & {
  * Use `create(RevokeApiKeyResponseSchema)` to create a new message.
  */
 export const RevokeApiKeyResponseSchema: GenMessage<RevokeApiKeyResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_auth, 21);
+  messageDesc(file_memoir_v1_auth, 25);
 
 /**
  * @generated from enum memoir.v1.ApiKeyRole
@@ -575,17 +671,25 @@ export const ApiKeyStatusSchema: GenEnum<ApiKeyStatus> = /*@__PURE__*/
 /**
  * AuthService manages the credentials that gate every other Memoir RPC.
  *
- * Two principal types:
+ * Two principal credential types:
  *   - User: an operator with username + password. Bootstrap creates the first
- *     admin; subsequent users are created by existing admins.
- *   - ApiKey: a bearer token (string of shape `mk_<key_id>_<secret>`) presented
- *     in request metadata to authenticate calls. Keys have a role
- *     (admin | integration) and optionally bind to an org_id scope.
+ *     admin; subsequent users are created by existing admins. Users
+ *     authenticate via Login, which returns a pair of JWTs (access + refresh)
+ *     that the caller presents as bearer tokens on subsequent RPCs.
+ *   - ApiKey: a long-lived bearer token (string of shape
+ *     `mk.<key_id>.<secret>`) for service-to-service / integration callers.
+ *     Keys have a role (admin | integration) and optionally bind to an
+ *     org_id scope.
+ *
+ * The authenticate middleware accepts either credential in the
+ * `authorization: Bearer ...` header. JWTs are routed via signature
+ * verification; API keys are routed via Argon2 verification of the secret
+ * half against the api_keys row.
  *
  * Bootstrap exception:
  *   ConsumeBootstrapToken runs pre-auth — it consumes the one-time token that
- *   memoir-server logs to stdout on first start when no admin exists. The
- *   gRPC interceptor exempts this RPC from key validation.
+ *   memoir-server logs to stdout on first start when no admin exists. Login
+ *   and RefreshToken are also pre-auth (they ARE the auth path).
  *
  * ── Bootstrap ────────────────────────────────────────────────────────────
  *
@@ -602,6 +706,29 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof ConsumeBootstrapTokenRequestSchema;
     output: typeof ConsumeBootstrapTokenResponseSchema;
+  },
+  /**
+   * Verify username + password and issue an access/refresh JWT pair. The
+   * access token authenticates RPC calls (short TTL); the refresh token is
+   * exchanged via RefreshToken when the access token expires.
+   *
+   * @generated from rpc memoir.v1.AuthService.Login
+   */
+  login: {
+    methodKind: "unary";
+    input: typeof LoginRequestSchema;
+    output: typeof LoginResponseSchema;
+  },
+  /**
+   * Exchange a valid refresh JWT for a new access JWT. The refresh token
+   * itself is unchanged — clients reuse it until it expires, then re-Login.
+   *
+   * @generated from rpc memoir.v1.AuthService.RefreshToken
+   */
+  refreshToken: {
+    methodKind: "unary";
+    input: typeof RefreshTokenRequestSchema;
+    output: typeof RefreshTokenResponseSchema;
   },
   /**
    * @generated from rpc memoir.v1.AuthService.CreateUser

@@ -1,5 +1,9 @@
 -- @source https://github.com/viascom/nanoid-postgres
-CREATE EXTENSION IF NOT EXISTS pgcrypto; -- noqa
+-- Install pgcrypto in `public` so its functions are reachable from any schema
+-- via the implicit `public` entry in search_path. Without WITH SCHEMA, the
+-- extension lands in whichever schema is first in search_path at migration
+-- time, breaking deployments that pin search_path away from that schema.
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public; -- noqa
 
 -- The `nanoid()` function generates a compact, URL-friendly unique identifier.
 -- Based on the given size and alphabet, it creates a randomized string that's ideal for

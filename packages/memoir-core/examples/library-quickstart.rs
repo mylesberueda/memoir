@@ -7,7 +7,7 @@
 //! 2. Build a `memoir_core::Client` from them.
 //! 3. Run migrations to provision memoir-core's schema.
 //! 4. `remember` a few conversation turns under a scope tuple.
-//! 5. Render the returned `Memories` via `Display` for system-prompt injection.
+//! 5. `search` for related memories and render via `Display` for system-prompt injection.
 //! 6. `recall` a specific memory by pid.
 //! 7. `forget` cleanups by Pid and by Scope.
 //!
@@ -52,12 +52,11 @@ async fn main() -> Result<(), BoxError> {
     let qdrant_url = std::env::var("QDRANT_URL")
         .map_err(|_| "QDRANT_URL must be set (e.g. http://localhost:6334)")?;
 
-    // Step 1 — caller-owned connections.
-    // memoir-core never opens a pool or dials Qdrant itself; the consumer
-    // brings the handles. This is the seam that lets memoir-core embed in
-    // any tokio app without imposing a connection-lifecycle.
-    println!("→ Connecting to Postgres + Qdrant...");
-    let db = sea_orm::Database::connect(&database_url).await?;
+    // Step 1 — bring the Qdrant handle. memoir-core owns its own Postgres
+    // pool internally (built from the connection string we hand it in
+    // step 2); Qdrant is brought by the consumer because the qdrant-client
+    // crate's builder pattern is too useful to hide.
+    println!("→ Connecting to Qdrant...");
     let qdrant = qdrant_client::Qdrant::from_url(&qdrant_url).build()?;
 
     // Step 2 — build the Client.
@@ -67,7 +66,7 @@ async fn main() -> Result<(), BoxError> {
     let example_schema = format!("memoir_example_{}", std::process::id());
     println!("→ Building memoir Client (schema = {example_schema})...");
     let client = Client::builder()
-        .db(db)
+        .database_url(database_url)
         .qdrant(qdrant)
         .schema(example_schema.clone())
         .system_prompt(DEFAULT_SYSTEM_PROMPT)
@@ -79,6 +78,14 @@ async fn main() -> Result<(), BoxError> {
     // versioned via sea-orm-migration just like any other crate's.
     println!("→ Applying memoir migrations...");
     client.migrate().await?;
+
+    // Step 3.5 — spawn the worker.
+    // memoir-core's write path is persistent: `Client::remember` enqueues an
+    // embed job rather than running it inline. The worker drains the queue.
+    // Without `spawn_worker`, writes land in the database but never reach
+    // the vector index, so search returns nothing.
+    println!("→ Spawning background worker...");
+    let worker = client.spawn_worker().start().await?;
 
     // Step 4 — write some conversation turns.
     // Scope is the (agent_id, org_id, user_id) partition. memoir-core never
@@ -99,19 +106,19 @@ async fn main() -> Result<(), BoxError> {
         .remember("the user is building a memory substrate called Memoir", scope.clone())
         .await?;
 
-    // The async embed substrate (ticket 0010) indexes the writes in the
-    // background. For demo purposes we briefly wait before retrieving; in a
-    // real handler you would just send the response and let the next request
-    // pick up the freshly-indexed rows.
+    // The async embed substrate indexes the writes in the background. For
+    // demo purposes we briefly wait before searching; in a real handler you
+    // would just send the response and let the next request pick up the
+    // freshly-indexed rows.
     println!("→ Waiting briefly for the background indexer...");
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    // Step 5 — render Memories via Display.
+    // Step 5 — search for related memories and render via Display.
     // The `Memories` type's `Display` impl emits the configured system prompt
     // (we passed `DEFAULT_SYSTEM_PROMPT`) followed by a bullet list of memory
     // content. Drop this directly into your LLM's system prompt.
     let memories = client
-        .remember("what is the user working on?", scope.clone())
+        .search("what is the user working on?", scope.clone())
         .limit(5)
         .await?;
 
@@ -121,7 +128,7 @@ async fn main() -> Result<(), BoxError> {
 
     // Step 6 — recall a specific memory by pid.
     // `recall` works at any lifecycle state (pending / indexed / failed),
-    // unlike `remember` which only returns indexed rows.
+    // unlike `search` which only returns indexed rows.
     if let Some(first) = memories.list().first() {
         let row = client.recall(&first.pid).await?;
         println!("=== Recalled pid={} ===", row.pid);
@@ -139,6 +146,10 @@ async fn main() -> Result<(), BoxError> {
     println!("→ Cleaning up — forgetting the entire example scope...");
     let deleted = client.forget(ForgetTarget::Scope(scope)).await?;
     println!("Deleted {} memories.", deleted.len());
+
+    // Step 8 — shut the worker down gracefully.
+    println!("→ Shutting down worker...");
+    worker.shutdown().await;
 
     println!();
     println!("Done. To run again, just re-invoke the example — each run uses");

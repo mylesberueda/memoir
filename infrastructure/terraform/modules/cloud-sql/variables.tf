@@ -42,7 +42,7 @@ variable "disk_size_gb" {
 }
 
 variable "databases" {
-  description = "List of database names to create. Empty until the memoir-server epic adds memoir_server."
+  description = "List of database names to create. Empty until memoir-service adds memoir_service."
   type        = list(string)
   default     = []
 }

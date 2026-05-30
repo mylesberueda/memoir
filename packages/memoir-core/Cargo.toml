@@ -16,11 +16,15 @@ fastembed = { version = "5.13" }
 memoir-core-migration = { package = "polypixel-memoir-core-migration", path = "./migration" }
 nanoid = { version = "0.4" }
 qdrant-client = { version = "1.18" }
+rig-core = { version = "0.31" }
 sea-orm = { version = "2.0.0-rc.20", features = ["sqlx-postgres", "runtime-tokio-rustls"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+tokio-util = { version = "0.7" }
 tracing = { workspace = true }
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 anyhow = { version = "1" }

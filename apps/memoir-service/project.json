@@ -48,9 +48,11 @@
 			"executor": "nx:run-commands",
 			"options": {
 				"cwd": "{projectRoot}",
-				"commands": ["cargo test --release --features integration"],
+				"commands": ["cargo test --release --features integration -- --test-threads 1"],
 				"env": {
-					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_service_test"
+					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_service_test",
+					"QDRANT_URL": "http://localhost:6334",
+					"MEMOIR_JWT_SECRET": "9dbJde/2FypoYXPKRr1MabCdqT143GUKPgfDRRSAGEM="
 				}
 			},
 			"cache": true,
@@ -135,7 +137,11 @@
 			"executor": "nx:run-commands",
 			"options": {
 				"cwd": "{projectRoot}",
-				"command": "sea generate entity --with-serde both --enum-extra-derives 'strum::Display,strum::EnumString' --output-dir ./src/models/_entity",
+				"commands": [
+					"sea generate entity --database-schema memoir_service --with-serde both --enum-extra-derives 'strum::Display,strum::EnumString' --output-dir ./src/models/_entity",
+					"sed -i 's/#\\[sea_orm(schema_name = \"memoir_service\", table_name/#[sea_orm(table_name/g' ./src/models/_entity/*.rs"
+				],
+				"parallel": false,
 				"envFile": "{projectRoot}/.env"
 			},
 			"inputs": ["{projectRoot}/migration/src/**/*.rs"],

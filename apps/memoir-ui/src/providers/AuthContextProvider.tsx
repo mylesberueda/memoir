@@ -6,8 +6,8 @@ import { createContext, useCallback, useEffect, useState, useTransition } from '
 
 export interface User {
 	id: string;
-	email: string;
-	name: string;
+	email: string | null;
+	name: string | null;
 }
 
 export interface AuthContextValue {

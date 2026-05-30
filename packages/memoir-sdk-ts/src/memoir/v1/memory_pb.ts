@@ -12,7 +12,7 @@ import type { JsonObject, Message } from "@bufbuild/protobuf";
  * Describes the file memoir/v1/memory.proto.
  */
 export const file_memoir_v1_memory: GenFile = /*@__PURE__*/
-  fileDesc("ChZtZW1vaXIvdjEvbWVtb3J5LnByb3RvEgltZW1vaXIudjEiOgoFU2NvcGUSEAoIYWdlbnRfaWQYASABKAkSDgoGb3JnX2lkGAIgASgJEg8KB3VzZXJfaWQYAyABKAkikwIKBk1lbW9yeRILCgNwaWQYASABKAkSHwoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgDIAEoCRIpCghtZXRhZGF0YRgEIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoMcHJvY2Vzc2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgAiAEBEicKBnN0YXR1cxgHIAEoDjIXLm1lbW9pci52MS5NZW1vcnlTdGF0dXNCDwoNX3Byb2Nlc3NlZF9hdCI9CglTZWFyY2hIaXQSIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeRINCgVzY29yZRgCIAEoAiKZAQoNU2VhcmNoUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRINCgVxdWVyeRgCIAEoCRINCgVsaW1pdBgDIAEoBRI1Cg9tZXRhZGF0YV9maWx0ZXIYBCABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0SACIAQFCEgoQX21ldGFkYXRhX2ZpbHRlciI0Cg5TZWFyY2hSZXNwb25zZRIiCgRoaXRzGAEgAygLMhQubWVtb2lyLnYxLlNlYXJjaEhpdCIcCg1SZWNhbGxSZXF1ZXN0EgsKA3BpZBgBIAEoCSIzCg5SZWNhbGxSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5IoABCg9SZW1lbWJlclJlcXVlc3QSHwoFc2NvcGUYASABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgCIAEoCRIuCghtZXRhZGF0YRgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3RIAIgBAUILCglfbWV0YWRhdGEiNQoQUmVtZW1iZXJSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5ImAKDUZvcmdldFJlcXVlc3QSDQoDcGlkGAEgASgJSAASIQoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGVIABITCgtoYXJkX2RlbGV0ZRgDIAEoCEIICgZ0YXJnZXQiEAoORm9yZ2V0UmVzcG9uc2UqfwoMTWVtb3J5U3RhdHVzEh0KGU1FTU9SWV9TVEFUVVNfVU5TUEVDSUZJRUQQABIZChVNRU1PUllfU1RBVFVTX1BFTkRJTkcQARIbChdNRU1PUllfU1RBVFVTX1BST0NFU1NFRBACEhgKFE1FTU9SWV9TVEFUVVNfRkFJTEVEEAMykQIKDU1lbW9yeVNlcnZpY2USPQoGU2VhcmNoEhgubWVtb2lyLnYxLlNlYXJjaFJlcXVlc3QaGS5tZW1vaXIudjEuU2VhcmNoUmVzcG9uc2USPQoGUmVjYWxsEhgubWVtb2lyLnYxLlJlY2FsbFJlcXVlc3QaGS5tZW1vaXIudjEuUmVjYWxsUmVzcG9uc2USQwoIUmVtZW1iZXISGi5tZW1vaXIudjEuUmVtZW1iZXJSZXF1ZXN0GhsubWVtb2lyLnYxLlJlbWVtYmVyUmVzcG9uc2USPQoGRm9yZ2V0EhgubWVtb2lyLnYxLkZvcmdldFJlcXVlc3QaGS5tZW1vaXIudjEuRm9yZ2V0UmVzcG9uc2ViBnByb3RvMw", [file_google_protobuf_struct, file_google_protobuf_timestamp]);
+  fileDesc("ChZtZW1vaXIvdjEvbWVtb3J5LnByb3RvEgltZW1vaXIudjEiOgoFU2NvcGUSEAoIYWdlbnRfaWQYASABKAkSDgoGb3JnX2lkGAIgASgJEg8KB3VzZXJfaWQYAyABKAkikwIKBk1lbW9yeRILCgNwaWQYASABKAkSHwoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgDIAEoCRIpCghtZXRhZGF0YRgEIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoMcHJvY2Vzc2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgAiAEBEicKBnN0YXR1cxgHIAEoDjIXLm1lbW9pci52MS5NZW1vcnlTdGF0dXNCDwoNX3Byb2Nlc3NlZF9hdCI9CglTZWFyY2hIaXQSIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeRINCgVzY29yZRgCIAEoAiKZAQoNU2VhcmNoUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRINCgVxdWVyeRgCIAEoCRINCgVsaW1pdBgDIAEoBRI1Cg9tZXRhZGF0YV9maWx0ZXIYBCABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0SACIAQFCEgoQX21ldGFkYXRhX2ZpbHRlciI0Cg5TZWFyY2hSZXNwb25zZRIiCgRoaXRzGAEgAygLMhQubWVtb2lyLnYxLlNlYXJjaEhpdCIcCg1SZWNhbGxSZXF1ZXN0EgsKA3BpZBgBIAEoCSIzCg5SZWNhbGxSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5IoABCg9SZW1lbWJlclJlcXVlc3QSHwoFc2NvcGUYASABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgCIAEoCRIuCghtZXRhZGF0YRgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3RIAIgBAUILCglfbWV0YWRhdGEiNQoQUmVtZW1iZXJSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5ImAKDUZvcmdldFJlcXVlc3QSDQoDcGlkGAEgASgJSAASIQoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGVIABITCgtoYXJkX2RlbGV0ZRgDIAEoCEIICgZ0YXJnZXQiJgoORm9yZ2V0UmVzcG9uc2USFAoMZGVsZXRlZF9waWRzGAEgAygJKn8KDE1lbW9yeVN0YXR1cxIdChlNRU1PUllfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGQoVTUVNT1JZX1NUQVRVU19QRU5ESU5HEAESGwoXTUVNT1JZX1NUQVRVU19QUk9DRVNTRUQQAhIYChRNRU1PUllfU1RBVFVTX0ZBSUxFRBADMpECCg1NZW1vcnlTZXJ2aWNlEj0KBlNlYXJjaBIYLm1lbW9pci52MS5TZWFyY2hSZXF1ZXN0GhkubWVtb2lyLnYxLlNlYXJjaFJlc3BvbnNlEj0KBlJlY2FsbBIYLm1lbW9pci52MS5SZWNhbGxSZXF1ZXN0GhkubWVtb2lyLnYxLlJlY2FsbFJlc3BvbnNlEkMKCFJlbWVtYmVyEhoubWVtb2lyLnYxLlJlbWVtYmVyUmVxdWVzdBobLm1lbW9pci52MS5SZW1lbWJlclJlc3BvbnNlEj0KBkZvcmdldBIYLm1lbW9pci52MS5Gb3JnZXRSZXF1ZXN0GhkubWVtb2lyLnYxLkZvcmdldFJlc3BvbnNlYgZwcm90bzM", [file_google_protobuf_struct, file_google_protobuf_timestamp]);
 
 /**
  * Scope uniquely identifies a memory partition. Memories written under one
@@ -75,11 +75,22 @@ export type Memory = Message<"memoir.v1.Memory"> & {
   createdAt?: Timestamp;
 
   /**
+   * Set when the worker has fully processed the memory (embedding + any
+   * extraction). As of memoir-core v0.1 the library does not yet populate
+   * a dedicated `processed_at` column — the field stays unset for now;
+   * consumers should rely on `status == MEMORY_STATUS_PROCESSED` as the
+   * canonical "ready" signal. The proto field is preserved so a future
+   * library schema migration can backfill it without a proto bump.
+   *
    * @generated from field: optional google.protobuf.Timestamp processed_at = 6;
    */
   processedAt?: Timestamp;
 
   /**
+   * Lifecycle state. Maps from memoir-core's `memories.qdrant_status`
+   * column (`pending` / `indexed` / `failed`) to PENDING / PROCESSED /
+   * FAILED at the handler boundary.
+   *
    * @generated from field: memoir.v1.MemoryStatus status = 7;
    */
   status: MemoryStatus;
@@ -104,7 +115,11 @@ export type SearchHit = Message<"memoir.v1.SearchHit"> & {
   memory?: Memory;
 
   /**
-   * Vector similarity score, higher is closer.
+   * Cosine similarity, higher = closer. Range [-1.0, 1.0]; in practice
+   * memoir-core's embedding model yields scores in [0.0, 1.0] for typical
+   * semantic content. memoir-core's vector index returns this value
+   * verbatim (no rank normalization), sourced from Qdrant's `query`
+   * response per `packages/memoir-core/src/vector/qdrant.rs`.
    *
    * @generated from field: float score = 2;
    */
@@ -133,13 +148,22 @@ export type SearchRequest = Message<"memoir.v1.SearchRequest"> & {
   query: string;
 
   /**
+   * Maximum hits to return. memoir-core treats `limit = 0` as "use library
+   * default" (currently 10, per `packages/memoir-core/src/client/search.rs`
+   * `DEFAULT_LIMIT`). The handler in memoir-service enforces a soft cap on
+   * very large values — agents typically request 5-50. No cursor-based
+   * pagination in v0.1.
+   *
    * @generated from field: int32 limit = 3;
    */
   limit: number;
 
   /**
    * Optional metadata filter — JSON-encoded Qdrant payload filter.
-   * Exact shape is implementation-defined and may evolve.
+   * Exact shape is implementation-defined and may evolve. NOTE: as of
+   * memoir-core v0.1 the library does not consume this field; handler
+   * implementations may return Unimplemented or drop it until the library
+   * gains a metadata-filter builder option.
    *
    * @generated from field: optional google.protobuf.Struct metadata_filter = 4;
    */
@@ -236,6 +260,11 @@ export const RememberRequestSchema: GenMessage<RememberRequest> = /*@__PURE__*/
  */
 export type RememberResponse = Message<"memoir.v1.RememberResponse"> & {
   /**
+   * The persisted memory. `status` is always `MEMORY_STATUS_PENDING` at
+   * write time — the worker drains the embed (and, if configured, extract)
+   * queue asynchronously. Consumers needing job-state visibility use the
+   * `AdminService` (see `admin.proto`) rather than additional fields here.
+   *
    * @generated from field: memoir.v1.Memory memory = 1;
    */
   memory?: Memory;
@@ -291,6 +320,14 @@ export const ForgetRequestSchema: GenMessage<ForgetRequest> = /*@__PURE__*/
  * @generated from message memoir.v1.ForgetResponse
  */
 export type ForgetResponse = Message<"memoir.v1.ForgetResponse"> & {
+  /**
+   * The pids that were actually removed from the source of truth. Empty
+   * when the target matched no rows (not an error). Mirrors the library's
+   * `Client::forget` return shape (`Vec<String>`).
+   *
+   * @generated from field: repeated string deleted_pids = 1;
+   */
+  deletedPids: string[];
 };
 
 /**

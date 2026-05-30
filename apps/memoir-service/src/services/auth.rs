@@ -22,8 +22,8 @@ use memoir_sdk::memoir::v1::{
     ApiKey, ApiKeyRole, ApiKeyStatus, ConsumeBootstrapTokenRequest, ConsumeBootstrapTokenResponse, CreateApiKeyRequest,
     CreateApiKeyResponse, CreateUserRequest, CreateUserResponse, DeleteUserRequest, DeleteUserResponse,
     GetApiKeyRequest, GetApiKeyResponse, GetUserRequest, GetUserResponse, ListApiKeysRequest, ListApiKeysResponse,
-    ListUsersRequest, ListUsersResponse, RevokeApiKeyRequest, RevokeApiKeyResponse, RotateApiKeyRequest,
-    RotateApiKeyResponse, User,
+    ListUsersRequest, ListUsersResponse, LoginRequest, LoginResponse, RefreshTokenRequest, RefreshTokenResponse,
+    RevokeApiKeyRequest, RevokeApiKeyResponse, RotateApiKeyRequest, RotateApiKeyResponse, User,
 };
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait, QueryFilter, QueryOrder,
@@ -32,7 +32,8 @@ use sea_orm::{
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
-use crate::middleware::auth::authenticate;
+use crate::middleware::auth::Authenticator;
+use crate::middleware::jwt::TokenKind;
 use crate::models::_entity::{api_keys, bootstrap_tokens, users};
 use crate::models::{ApiKeys, BootstrapTokens, Users};
 
@@ -123,6 +124,10 @@ impl Auth {
     fn db(&self) -> &DatabaseConnection {
         self.ctx.db.as_ref()
     }
+
+    fn auth(&self) -> &Authenticator {
+        &self.ctx.auth
+    }
 }
 
 #[tonic::async_trait]
@@ -174,8 +179,71 @@ impl AuthService for Auth {
         }))
     }
 
+    async fn login(&self, request: Request<LoginRequest>) -> Result<Response<LoginResponse>, Status> {
+        let req = request.into_inner();
+        validate_non_empty("username", &req.username)?;
+        validate_non_empty("password", &req.password)?;
+
+        let user = Users::find()
+            .filter(users::Column::Username.eq(&req.username))
+            .one(self.db())
+            .await
+            .map_err(internal_error)?
+            .ok_or_else(|| Status::unauthenticated("invalid credentials"))?;
+
+        let verified = verify_password(&req.password, &user.password_hash).map_err(|err| {
+            tracing::error!(error.message = %err, "hash verify error during login");
+            Status::internal("internal error")
+        })?;
+        if !verified {
+            // Same error as the user-not-found branch so probing callers
+            // can't distinguish "no such username" from "wrong password".
+            return Err(Status::unauthenticated("invalid credentials"));
+        }
+
+        let access_token = self.auth().jwt().issue(&user.pid, TokenKind::Access).map_err(|err| {
+            tracing::error!(error.message = %err, "access token issue failed");
+            Status::internal("internal error")
+        })?;
+        let refresh_token = self.auth().jwt().issue(&user.pid, TokenKind::Refresh).map_err(|err| {
+            tracing::error!(error.message = %err, "refresh token issue failed");
+            Status::internal("internal error")
+        })?;
+
+        tracing::info!(user.pid = %user.pid, "user logged in");
+
+        Ok(Response::new(LoginResponse {
+            access_token,
+            refresh_token,
+            user: Some(user_to_proto(&user)),
+        }))
+    }
+
+    async fn refresh_token(
+        &self,
+        request: Request<RefreshTokenRequest>,
+    ) -> Result<Response<RefreshTokenResponse>, Status> {
+        let req = request.into_inner();
+        validate_non_empty("refresh_token", &req.refresh_token)?;
+
+        let claims = self
+            .auth()
+            .jwt()
+            .verify(&req.refresh_token, TokenKind::Refresh)
+            .map_err(|_| Status::unauthenticated("invalid refresh token"))?;
+
+        let access_token = self.auth().jwt().issue(&claims.sub, TokenKind::Access).map_err(|err| {
+            tracing::error!(error.message = %err, "access token issue failed during refresh");
+            Status::internal("internal error")
+        })?;
+
+        tracing::debug!(user.pid = %claims.sub, "access token refreshed");
+
+        Ok(Response::new(RefreshTokenResponse { access_token }))
+    }
+
     async fn create_user(&self, request: Request<CreateUserRequest>) -> Result<Response<CreateUserResponse>, Status> {
-        let caller = authenticate(self.db(), &request).await?;
+        let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
         let req = request.into_inner();
         validate_non_empty("username", &req.username)?;
@@ -193,7 +261,7 @@ impl AuthService for Auth {
     }
 
     async fn get_user(&self, request: Request<GetUserRequest>) -> Result<Response<GetUserResponse>, Status> {
-        let _caller = authenticate(self.db(), &request).await?;
+        let _caller = self.auth().authenticate(&request).await?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
 
@@ -210,7 +278,7 @@ impl AuthService for Auth {
     }
 
     async fn list_users(&self, request: Request<ListUsersRequest>) -> Result<Response<ListUsersResponse>, Status> {
-        let _caller = authenticate(self.db(), &request).await?;
+        let _caller = self.auth().authenticate(&request).await?;
         let req = request.into_inner();
         let limit = resolve_limit(req.limit);
         let after = decode_cursor(req.cursor.as_deref())?;
@@ -240,7 +308,7 @@ impl AuthService for Auth {
     }
 
     async fn delete_user(&self, request: Request<DeleteUserRequest>) -> Result<Response<DeleteUserResponse>, Status> {
-        let caller = authenticate(self.db(), &request).await?;
+        let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
@@ -262,7 +330,7 @@ impl AuthService for Auth {
         &self,
         request: Request<CreateApiKeyRequest>,
     ) -> Result<Response<CreateApiKeyResponse>, Status> {
-        let caller = authenticate(self.db(), &request).await?;
+        let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
         let req = request.into_inner();
         validate_non_empty("name", &req.name)?;
@@ -294,7 +362,7 @@ impl AuthService for Auth {
     }
 
     async fn get_api_key(&self, request: Request<GetApiKeyRequest>) -> Result<Response<GetApiKeyResponse>, Status> {
-        let _caller = authenticate(self.db(), &request).await?;
+        let _caller = self.auth().authenticate(&request).await?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
 
@@ -314,7 +382,7 @@ impl AuthService for Auth {
         &self,
         request: Request<ListApiKeysRequest>,
     ) -> Result<Response<ListApiKeysResponse>, Status> {
-        let _caller = authenticate(self.db(), &request).await?;
+        let _caller = self.auth().authenticate(&request).await?;
         let req = request.into_inner();
         let limit = resolve_limit(req.limit);
         let after = decode_cursor(req.cursor.as_deref())?;
@@ -352,7 +420,7 @@ impl AuthService for Auth {
         &self,
         request: Request<RotateApiKeyRequest>,
     ) -> Result<Response<RotateApiKeyResponse>, Status> {
-        let caller = authenticate(self.db(), &request).await?;
+        let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;
@@ -384,7 +452,7 @@ impl AuthService for Auth {
         &self,
         request: Request<RevokeApiKeyRequest>,
     ) -> Result<Response<RevokeApiKeyResponse>, Status> {
-        let caller = authenticate(self.db(), &request).await?;
+        let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
         let req = request.into_inner();
         validate_non_empty("pid", &req.pid)?;

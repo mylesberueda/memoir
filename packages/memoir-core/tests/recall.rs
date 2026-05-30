@@ -53,7 +53,7 @@ async fn wait_for_first_pid(
     let mut delay = Duration::from_millis(50);
 
     while std::time::Instant::now() < deadline {
-        let hits = client.remember(query, scope.clone()).limit(50).await?;
+        let hits = client.search(query, scope.clone()).limit(50).await?;
         if let Some(first) = hits.list().first() {
             return Ok(first.pid.clone());
         }

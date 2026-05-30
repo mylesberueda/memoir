@@ -1,4 +1,6 @@
 use crate::embedding::EmbeddingError;
+use crate::jobs::JobsError;
+use crate::llm::LlmError;
 use crate::store::StoreError;
 use crate::vector::VectorError;
 
@@ -14,6 +16,15 @@ pub enum ClientError {
     #[error("store failed: {0}")]
     Store(#[from] StoreError),
 
+    #[error("jobs failed: {0}")]
+    Jobs(#[from] JobsError),
+
+    #[error("llm provider failed: {0}")]
+    Llm(#[from] LlmError),
+
     #[error("migration failed: {0}")]
     Migration(#[from] memoir_core_migration::MigrationError),
+
+    #[error("database connection failed: {0}")]
+    Database(#[from] sea_orm::DbErr),
 }

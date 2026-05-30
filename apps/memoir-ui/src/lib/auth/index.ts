@@ -1,15 +1,15 @@
 import type { AuthProvider } from './base-provider';
-import { ZitadelAuthProvider } from './providers/zitadel';
+import { AuthServiceAuthProvider } from './providers/auth-service';
 
 /**
  * Get the configured auth provider instance.
  *
- * Currently returns ZitadelAuthProvider.
- * To switch providers: change the import/instantiation here.
+ * Returns AuthServiceAuthProvider — memoir-service's username/password
+ * → JWT flow. To switch providers: change the import/instantiation here.
  * NOT a runtime environment variable check.
  */
 export function getAuthProvider(): AuthProvider {
-	return new ZitadelAuthProvider();
+	return new AuthServiceAuthProvider();
 }
 
 export { AuthProvider } from './base-provider';

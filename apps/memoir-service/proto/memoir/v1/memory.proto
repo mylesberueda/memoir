@@ -45,7 +45,18 @@ message Memory {
   string content = 3;
   google.protobuf.Struct metadata = 4;
   google.protobuf.Timestamp created_at = 5;
+
+  // Set when the worker has fully processed the memory (embedding + any
+  // extraction). As of memoir-core v0.1 the library does not yet populate
+  // a dedicated `processed_at` column — the field stays unset for now;
+  // consumers should rely on `status == MEMORY_STATUS_PROCESSED` as the
+  // canonical "ready" signal. The proto field is preserved so a future
+  // library schema migration can backfill it without a proto bump.
   optional google.protobuf.Timestamp processed_at = 6;
+
+  // Lifecycle state. Maps from memoir-core's `memories.qdrant_status`
+  // column (`pending` / `indexed` / `failed`) to PENDING / PROCESSED /
+  // FAILED at the handler boundary.
   MemoryStatus status = 7;
 }
 
@@ -59,7 +70,13 @@ enum MemoryStatus {
 // Search result with similarity score attached.
 message SearchHit {
   Memory memory = 1;
-  float score = 2; // Vector similarity score, higher is closer.
+
+  // Cosine similarity, higher = closer. Range [-1.0, 1.0]; in practice
+  // memoir-core's embedding model yields scores in [0.0, 1.0] for typical
+  // semantic content. memoir-core's vector index returns this value
+  // verbatim (no rank normalization), sourced from Qdrant's `query`
+  // response per `packages/memoir-core/src/vector/qdrant.rs`.
+  float score = 2;
 }
 
 // ─── RPCs ───────────────────────────────────────────────────────────────────
@@ -67,9 +84,19 @@ message SearchHit {
 message SearchRequest {
   Scope scope = 1;
   string query = 2;
+
+  // Maximum hits to return. memoir-core treats `limit = 0` as "use library
+  // default" (currently 10, per `packages/memoir-core/src/client/search.rs`
+  // `DEFAULT_LIMIT`). The handler in memoir-service enforces a soft cap on
+  // very large values — agents typically request 5-50. No cursor-based
+  // pagination in v0.1.
   int32 limit = 3;
+
   // Optional metadata filter — JSON-encoded Qdrant payload filter.
-  // Exact shape is implementation-defined and may evolve.
+  // Exact shape is implementation-defined and may evolve. NOTE: as of
+  // memoir-core v0.1 the library does not consume this field; handler
+  // implementations may return Unimplemented or drop it until the library
+  // gains a metadata-filter builder option.
   optional google.protobuf.Struct metadata_filter = 4;
 }
 
@@ -92,6 +119,10 @@ message RememberRequest {
 }
 
 message RememberResponse {
+  // The persisted memory. `status` is always `MEMORY_STATUS_PENDING` at
+  // write time — the worker drains the embed (and, if configured, extract)
+  // queue asynchronously. Consumers needing job-state visibility use the
+  // `AdminService` (see `admin.proto`) rather than additional fields here.
   Memory memory = 1;
 }
 
@@ -105,4 +136,9 @@ message ForgetRequest {
   bool hard_delete = 3; // When false, soft-delete (status preserved, memory excluded from search).
 }
 
-message ForgetResponse {}
+message ForgetResponse {
+  // The pids that were actually removed from the source of truth. Empty
+  // when the target matched no rows (not an error). Mirrors the library's
+  // `Client::forget` return shape (`Vec<String>`).
+  repeated string deleted_pids = 1;
+}

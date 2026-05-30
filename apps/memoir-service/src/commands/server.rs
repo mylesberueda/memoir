@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use color_eyre::eyre::{Context as _, bail};
 use common_rs::crypto::hashing::{generate_bootstrap_token, hash_password};
+use memoir_sdk::memoir::v1::admin_service_server::AdminServiceServer;
 use memoir_sdk::memoir::v1::auth_service_server::AuthServiceServer;
 use memoir_sdk::memoir::v1::memory_service_server::MemoryServiceServer;
 use migration::MigratorTrait as _;
@@ -12,6 +13,7 @@ use tonic::transport::Server;
 use crate::AppContext;
 use crate::models::_entity::{bootstrap_tokens, users};
 use crate::models::{BootstrapTokens, Users};
+use crate::services::admin::Admin;
 use crate::services::auth::{Auth, create_user};
 use crate::services::memory::Memory;
 
@@ -67,6 +69,7 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
 
     bootstrap_admin(ctx.clone()).await?;
 
+    let admin_handler = Admin::new(ctx.clone());
     let auth_handler = Auth::new(ctx.clone());
     let memory_handler = Memory::new(ctx.clone());
 
@@ -77,6 +80,7 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     let addr: SocketAddr = format!("{host}:{port}").parse()?;
 
     let (health_reporter, health_service) = tonic_health::server::health_reporter();
+    health_reporter.set_serving::<AdminServiceServer<Admin>>().await;
     health_reporter.set_serving::<AuthServiceServer<Auth>>().await;
     health_reporter.set_serving::<MemoryServiceServer<Memory>>().await;
 
@@ -84,6 +88,7 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
 
     Server::builder()
         .add_service(health_service)
+        .add_service(AdminServiceServer::new(admin_handler))
         .add_service(AuthServiceServer::new(auth_handler))
         .add_service(MemoryServiceServer::new(memory_handler))
         .serve(addr)
