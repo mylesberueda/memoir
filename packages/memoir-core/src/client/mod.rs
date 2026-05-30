@@ -39,7 +39,7 @@ use sea_orm::{ConnectOptions, Database};
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
 use crate::jobs::{MemoryJobsStore, PostgresJobsStore};
 use crate::llm::{LlmConfig, LlmRegistry, LlmRole};
-use crate::memory::{ForgetTarget, Memory};
+use crate::memory::{ForgetTarget, Memory, SupersessionEvent};
 use crate::store::{MemoryStore, PostgresStore};
 use crate::vector::{QdrantIndex, VectorIndex};
 
@@ -620,6 +620,24 @@ impl Client {
             "unsuperseded memory {{pid}}",
         );
         Ok(())
+    }
+
+    /// Returns the full supersede/unsupersede event trail for `pid`.
+    ///
+    /// Each [`SupersessionEvent`] is one decision against the memory,
+    /// chronological (oldest first). An event with `winner_pid = None` is
+    /// an unsupersede. A pid with no events — never superseded, or simply
+    /// not present in the store — returns an empty vec, not an error.
+    ///
+    /// Surfaces the audit trail behind a row's current `Memory.supersession`
+    /// marker, for the supersession-audit UI and rig-service introspection
+    /// of contradiction-detection decisions over time.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping a database failure.
+    pub async fn supersession_history(&self, pid: &str) -> Result<Vec<SupersessionEvent>, ClientError> {
+        Ok(self.inner.store.supersession_history(pid).await?)
     }
 }
 

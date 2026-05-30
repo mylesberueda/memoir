@@ -50,6 +50,13 @@ service MemoryService {
   // because new info obsoletes old). Content changes trigger re-embedding,
   // so the row is briefly unsearchable. Wraps memoir-core's `Client::edit`.
   rpc Edit(EditRequest) returns (EditResponse);
+
+  // Returns every supersede/unsupersede decision against a memory in
+  // chronological order — the full audit trail behind a row's current
+  // `Memory.supersession` marker. A pid with no events (never superseded
+  // or simply absent) returns an empty list. Wraps memoir-core's
+  // `Client::supersession_history`.
+  rpc SupersessionHistory(SupersessionHistoryRequest) returns (SupersessionHistoryResponse);
 }
 
 // ─── Scope ──────────────────────────────────────────────────────────────────
@@ -445,4 +452,26 @@ message EditResponse {
   // `status` is PENDING and the row is briefly excluded from search —
   // same lifecycle as a fresh Remember.
   Memory memory = 1;
+}
+
+// ─── SupersessionHistory ───────────────────────────────────────────────────
+
+message SupersessionHistoryRequest {
+  // The memory whose supersession trail to read.
+  string pid = 1;
+}
+
+message SupersessionHistoryResponse {
+  // The full event trail, oldest first. Empty when the memory was never
+  // superseded (or doesn't exist — both produce no rows).
+  repeated SupersessionEvent events = 1;
+}
+
+// One supersede or unsupersede decision against a memory. Mirrors memoir-
+// core's `SupersessionEvent`. Distinct from `Supersession` (current marker,
+// non-null winner): `winner_pid` here is optional because unsupersede events
+// carry no winner.
+message SupersessionEvent {
+  optional string winner_pid = 1;
+  google.protobuf.Timestamp decided_at = 2;
 }

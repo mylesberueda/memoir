@@ -31,16 +31,16 @@ use memoir_sdk::memoir::v1::memory_service_server::MemoryService;
 use memoir_sdk::memoir::v1::{
     EditRequest, EditResponse, ForgetRequest, ForgetResponse, QueryRequest, QueryResponse, RecallAsOfRequest,
     RecallAsOfResponse, RecallRequest, RecallResponse, RememberRequest, RememberResponse, SearchHit, SearchRequest,
-    SearchResponse, TimelineRequest, TimelineResponse,
+    SearchResponse, SupersessionHistoryRequest, SupersessionHistoryResponse, TimelineRequest, TimelineResponse,
 };
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
-    EditArgs, QueryArgs, RecallAsOfArgs, TimelineArgs, forget_target_from_proto, memory_to_proto,
-    metadata_filter_from_proto, metadata_from_proto, query_response, recall_as_of_response, scope_from_proto,
-    timeline_response,
+    EditArgs, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs, WireSupersessionEvent,
+    forget_target_from_proto, memory_to_proto, metadata_filter_from_proto, metadata_from_proto, query_response,
+    recall_as_of_response, scope_from_proto, timeline_response,
 };
 use crate::services::wire::{WireError, WireMemory};
 
@@ -426,6 +426,35 @@ impl MemoryService for Memory {
         let updated = builder.await.map_err(WireError::into_status)?;
         Ok(Response::new(EditResponse {
             memory: Some(WireMemory::from(updated).0),
+        }))
+    }
+
+    async fn supersession_history(
+        &self,
+        request: Request<SupersessionHistoryRequest>,
+    ) -> Result<Response<SupersessionHistoryResponse>, Status> {
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let args: SupersessionHistoryArgs = request.into_inner().try_into()?;
+
+        let events = self
+            .ctx
+            .memoir
+            .supersession_history(&args.pid)
+            .await
+            .map_err(WireError::into_status)?;
+
+        tracing::event!(
+            name: "memoir.service.memory.supersession_history.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            memory.pid = %args.pid,
+            events.count = events.len(),
+            "MemoryService.SupersessionHistory invoked",
+        );
+
+        Ok(Response::new(SupersessionHistoryResponse {
+            events: events.into_iter().map(|e| WireSupersessionEvent::from(e).0).collect(),
         }))
     }
 }

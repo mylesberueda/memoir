@@ -931,6 +931,32 @@ pub struct EditResponse {
     #[prost(message, optional, tag="1")]
     pub memory: ::core::option::Option<Memory>,
 }
+// ─── SupersessionHistory ───────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SupersessionHistoryRequest {
+    /// The memory whose supersession trail to read.
+    #[prost(string, tag="1")]
+    pub pid: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SupersessionHistoryResponse {
+    /// The full event trail, oldest first. Empty when the memory was never
+    /// superseded (or doesn't exist — both produce no rows).
+    #[prost(message, repeated, tag="1")]
+    pub events: ::prost::alloc::vec::Vec<SupersessionEvent>,
+}
+/// One supersede or unsupersede decision against a memory. Mirrors memoir-
+/// core's `SupersessionEvent`. Distinct from `Supersession` (current marker,
+/// non-null winner): `winner_pid` here is optional because unsupersede events
+/// carry no winner.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SupersessionEvent {
+    #[prost(string, optional, tag="1")]
+    pub winner_pid: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, optional, tag="2")]
+    pub decided_at: ::core::option::Option<::pbjson_types::Timestamp>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum MemoryStatus {

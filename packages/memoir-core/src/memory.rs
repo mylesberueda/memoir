@@ -173,6 +173,23 @@ pub struct SupersessionInfo {
     pub at: DateTime<FixedOffset>,
 }
 
+/// One supersede or unsupersede decision against a memory.
+///
+/// Mirrors one row of the `supersession_events` audit table. A `winner_pid`
+/// of `None` is an unsupersede — the memory was restored to active.
+///
+/// Returned in chronological order by
+/// [`crate::store::MemoryStore::supersession_history`] and surfaced by
+/// [`crate::client::Client::supersession_history`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SupersessionEvent {
+    /// Pid of the memory that took precedence; `None` for an unsupersede event.
+    pub winner_pid: Option<String>,
+
+    /// Wall-clock time the decision was recorded.
+    pub decided_at: DateTime<FixedOffset>,
+}
+
 /// Target of a forget operation: a single memory or a whole scope.
 #[derive(Debug, Clone)]
 pub enum ForgetTarget {

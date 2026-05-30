@@ -23,7 +23,10 @@
 
 use memoir_core::client::{DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, RankingStrategy, ReconcileSummary};
 use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind};
-use memoir_core::memory::{ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory, Scope as LibScope};
+use memoir_core::memory::{
+    ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory, Scope as LibScope,
+    SupersessionEvent as LibSupersessionEvent,
+};
 use memoir_core::store::{AsOfParams, DEFAULT_TIMELINE_LIMIT, TimelineDirection, TimelineParams};
 use memoir_core::vector::{
     FilterCondition as LibFilterCondition, MatchValue as LibMatchValue, MatchValues as LibMatchValues,
@@ -35,8 +38,9 @@ use memoir_sdk::memoir::v1::{
     Decay as ProtoDecay, DecayBucket as ProtoDecayBucket, EditRequest, ExponentialDecay, Hybrid as ProtoHybrid,
     Memory as ProtoMemory, MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit,
     QueryRequest, QueryResponse, Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReconcileResponse,
-    ReciprocalDecay, Scope as ProtoScope, StepDecay, TimelineRequest, TimelineResponse, decay, filter_condition,
-    forget_request, match_value, match_values, ranking,
+    ReciprocalDecay, Scope as ProtoScope, StepDecay, SupersessionEvent as ProtoSupersessionEvent,
+    SupersessionHistoryRequest, TimelineRequest, TimelineResponse, decay, filter_condition, forget_request,
+    match_value, match_values, ranking,
 };
 use tonic::Status;
 
@@ -499,6 +503,35 @@ impl TryFrom<EditRequest> for EditArgs {
 
 // `ClientError → Status` lives in memoir-core behind the `grpc` feature.
 // Call sites use `.map_err(Status::from)` or `?` against tonic boundaries.
+
+/// A validated `SupersessionHistory` request: just the target pid.
+#[derive(Debug)]
+pub(crate) struct SupersessionHistoryArgs {
+    pub pid: String,
+}
+
+impl TryFrom<SupersessionHistoryRequest> for SupersessionHistoryArgs {
+    type Error = Status;
+
+    fn try_from(request: SupersessionHistoryRequest) -> Result<Self, Status> {
+        if request.pid.is_empty() {
+            return Err(Status::invalid_argument("pid: required"));
+        }
+        Ok(Self { pid: request.pid })
+    }
+}
+
+/// Wire form of a [`LibSupersessionEvent`]. Build via `WireSupersessionEvent::from(event)`.
+pub(crate) struct WireSupersessionEvent(pub ProtoSupersessionEvent);
+
+impl From<LibSupersessionEvent> for WireSupersessionEvent {
+    fn from(event: LibSupersessionEvent) -> Self {
+        Self(ProtoSupersessionEvent {
+            winner_pid: event.winner_pid,
+            decided_at: Some(timestamp_from_chrono(event.decided_at)),
+        })
+    }
+}
 
 // ─── AdminService conversions ──────────────────────────────────────────────
 
@@ -1224,5 +1257,22 @@ mod tests {
         .unwrap();
         assert_eq!(args.content.as_deref(), Some("new"));
         assert!(args.event_at.is_some());
+    }
+
+    #[test]
+    fn should_reject_supersession_history_request_with_empty_pid() {
+        let err = SupersessionHistoryArgs::try_from(SupersessionHistoryRequest { pid: String::new() }).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_map_unsupersede_event_to_proto_with_unset_winner() {
+        let event = LibSupersessionEvent {
+            winner_pid: None,
+            decided_at: chrono::Utc::now().into(),
+        };
+        let wire: WireSupersessionEvent = event.into();
+        assert!(wire.0.winner_pid.is_none(), "unsupersede preserves None on the wire");
+        assert!(wire.0.decided_at.is_some());
     }
 }

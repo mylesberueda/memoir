@@ -15,7 +15,7 @@ use std::future::Future;
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope};
+use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope, SupersessionEvent};
 
 /// Lifecycle state of a memory's vector index.
 ///
@@ -340,6 +340,27 @@ pub trait MemoryStore: Send + Sync + 'static {
         pid: &str,
         as_of: DateTime<FixedOffset>,
     ) -> impl Future<Output = Result<Option<String>, StoreError>> + Send;
+
+    /// Returns every supersession decision against `pid` in chronological order.
+    ///
+    /// Reads the `supersession_events` audit table for `pid` and returns
+    /// each event ascending by `decided_at`. An event with `winner_pid =
+    /// None` is an unsupersede. Used by the supersession-audit view to
+    /// render the full trail (supersede → unsupersede → re-supersede), in
+    /// contrast to [`Self::supersession_at`] which collapses the trail to
+    /// a single point-in-time answer.
+    ///
+    /// A `pid` with no events — whether it was never superseded or does
+    /// not exist — returns an empty vec, not an error. The events table is
+    /// the source of truth here.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Database`] for database failures.
+    fn supersession_history(
+        &self,
+        pid: &str,
+    ) -> impl Future<Output = Result<Vec<SupersessionEvent>, StoreError>> + Send;
 }
 
 #[cfg(test)]
@@ -624,6 +645,20 @@ mod tests {
                 .max_by_key(|e| e.decided_at);
             Ok(latest.and_then(|e| e.winner_pid.clone()))
         }
+
+        async fn supersession_history(&self, pid: &str) -> Result<Vec<SupersessionEvent>, StoreError> {
+            let events = self.events.lock().unwrap();
+            let mut trail: Vec<SupersessionEvent> = events
+                .iter()
+                .filter(|e| e.loser_pid == pid)
+                .map(|e| SupersessionEvent {
+                    winner_pid: e.winner_pid.clone(),
+                    decided_at: e.decided_at,
+                })
+                .collect();
+            trail.sort_by_key(|e| e.decided_at);
+            Ok(trail)
+        }
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -788,6 +823,50 @@ mod tests {
         let result = store.supersession_at(&loser.pid, now).await.unwrap();
 
         assert!(result.is_none(), "unsupersede event clears the as-of answer");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_return_empty_supersession_history_when_pid_has_no_events() {
+        let store = StubStore::default();
+        let solo = write(&store, "never superseded").await;
+
+        let trail = store.supersession_history(&solo.pid).await.unwrap();
+
+        assert!(trail.is_empty(), "no events = empty trail, not NotFound");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_return_supersession_history_in_ascending_order() {
+        let store = StubStore::default();
+        let loser = write(&store, "old").await;
+        let first = write(&store, "first").await;
+        let second = write(&store, "second").await;
+        store.supersede(&loser.pid, &first.pid).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        store.supersede(&loser.pid, &second.pid).await.unwrap();
+
+        let trail = store.supersession_history(&loser.pid).await.unwrap();
+
+        assert_eq!(trail.len(), 2, "both events present");
+        assert_eq!(trail[0].winner_pid.as_deref(), Some(first.pid.as_str()));
+        assert_eq!(trail[1].winner_pid.as_deref(), Some(second.pid.as_str()));
+        assert!(trail[0].decided_at <= trail[1].decided_at, "ascending by decided_at");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_include_unsupersede_events_in_supersession_history() {
+        let store = StubStore::default();
+        let loser = write(&store, "old").await;
+        let winner = write(&store, "winner").await;
+        store.supersede(&loser.pid, &winner.pid).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        store.unsupersede(&loser.pid).await.unwrap();
+
+        let trail = store.supersession_history(&loser.pid).await.unwrap();
+
+        assert_eq!(trail.len(), 2);
+        assert_eq!(trail[0].winner_pid.as_deref(), Some(winner.pid.as_str()), "supersede first");
+        assert!(trail[1].winner_pid.is_none(), "unsupersede represented as winner_pid=None");
     }
 
     #[tokio::test(flavor = "current_thread")]

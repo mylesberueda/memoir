@@ -4,7 +4,7 @@ use chrono::{DateTime, FixedOffset};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, Value as SeaOrmValue};
 
 use super::{AsOfParams, EditPatch, IndexStatus, MemoryStore, StoreError, TimelineDirection, TimelineParams};
-use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope};
+use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope, SupersessionEvent};
 
 const PID_LENGTH: usize = 21;
 
@@ -503,6 +503,32 @@ impl MemoryStore for PostgresStore {
             None => Ok(None),
             Some(row) => row.try_get("", "winner_pid").map_err(StoreError::from),
         }
+    }
+
+    async fn supersession_history(&self, pid: &str) -> Result<Vec<SupersessionEvent>, StoreError> {
+        // The compound index `supersession_events_loser_decided_idx` makes
+        // this an indexed forward scan. Per-pid trails are tiny (a handful
+        // of events) so no LIMIT.
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT winner_pid, decided_at
+            FROM supersession_events
+            WHERE loser_pid = $1
+            ORDER BY decided_at ASC
+            "#,
+            [SeaOrmValue::String(Some(pid.to_string()))],
+        );
+
+        let rows = self.db.query_all_raw(stmt).await?;
+        let mut trail = Vec::with_capacity(rows.len());
+        for row in &rows {
+            trail.push(SupersessionEvent {
+                winner_pid: row.try_get("", "winner_pid")?,
+                decided_at: row.try_get("", "decided_at")?,
+            });
+        }
+        Ok(trail)
     }
 }
 

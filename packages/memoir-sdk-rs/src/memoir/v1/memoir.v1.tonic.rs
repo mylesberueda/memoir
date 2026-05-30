@@ -2152,6 +2152,32 @@ pub mod memory_service_client {
                 .insert(GrpcMethod::new("memoir.v1.MemoryService", "Edit"));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn supersession_history(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SupersessionHistoryRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SupersessionHistoryResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/memoir.v1.MemoryService/SupersessionHistory",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("memoir.v1.MemoryService", "SupersessionHistory"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -2208,6 +2234,13 @@ pub mod memory_service_server {
             &self,
             request: tonic::Request<super::EditRequest>,
         ) -> std::result::Result<tonic::Response<super::EditResponse>, tonic::Status>;
+        async fn supersession_history(
+            &self,
+            request: tonic::Request<super::SupersessionHistoryRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SupersessionHistoryResponse>,
+            tonic::Status,
+        >;
     }
     #[derive(Debug)]
     pub struct MemoryServiceServer<T> {
@@ -2628,6 +2661,52 @@ pub mod memory_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = EditSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/memoir.v1.MemoryService/SupersessionHistory" => {
+                    #[allow(non_camel_case_types)]
+                    struct SupersessionHistorySvc<T: MemoryService>(pub Arc<T>);
+                    impl<
+                        T: MemoryService,
+                    > tonic::server::UnaryService<super::SupersessionHistoryRequest>
+                    for SupersessionHistorySvc<T> {
+                        type Response = super::SupersessionHistoryResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SupersessionHistoryRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as MemoryService>::supersession_history(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SupersessionHistorySvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
