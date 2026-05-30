@@ -29,9 +29,10 @@ use std::sync::Arc;
 use memoir_core::store::TimelineDirection;
 use memoir_sdk::memoir::v1::memory_service_server::MemoryService;
 use memoir_sdk::memoir::v1::{
-    EditRequest, EditResponse, ForgetRequest, ForgetResponse, QueryRequest, QueryResponse, RecallAsOfRequest,
-    RecallAsOfResponse, RecallRequest, RecallResponse, RememberRequest, RememberResponse, SearchHit, SearchRequest,
-    SearchResponse, SupersessionHistoryRequest, SupersessionHistoryResponse, TimelineRequest, TimelineResponse,
+    EditRequest, EditResponse, ForgetRequest, ForgetResponse, ListAgentsRequest, ListAgentsResponse, QueryRequest,
+    QueryResponse, RecallAsOfRequest, RecallAsOfResponse, RecallRequest, RecallResponse, RememberRequest,
+    RememberResponse, SearchHit, SearchRequest, SearchResponse, SupersessionHistoryRequest, SupersessionHistoryResponse,
+    TimelineRequest, TimelineResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -458,6 +459,36 @@ impl MemoryService for Memory {
         Ok(Response::new(SupersessionHistoryResponse {
             events: events.into_iter().map(|e| WireSupersessionEvent::from(e).0).collect(),
         }))
+    }
+
+    async fn list_agents(
+        &self,
+        request: Request<ListAgentsRequest>,
+    ) -> Result<Response<ListAgentsResponse>, Status> {
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let req = request.into_inner();
+
+        if req.org_id.is_empty() || req.user_id.is_empty() {
+            return Err(Status::invalid_argument("org_id and user_id must both be non-empty"));
+        }
+
+        let agent_ids = self
+            .ctx
+            .memoir
+            .list_agents(&req.org_id, &req.user_id)
+            .await
+            .map_err(WireError::into_status)?;
+
+        tracing::event!(
+            name: "memoir.service.memory.list_agents.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            agents.count = agent_ids.len(),
+            "MemoryService.ListAgents invoked",
+        );
+
+        Ok(Response::new(ListAgentsResponse { agent_ids }))
     }
 }
 

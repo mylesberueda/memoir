@@ -135,10 +135,29 @@ impl Authenticator {
     ///   The underlying error is logged at error level; the client sees
     ///   only a generic message.
     pub(crate) async fn authenticate<T>(&self, request: &Request<T>) -> Result<CallerIdentity, Status> {
-        if let Some(api_key) = extract_api_key(request)? {
+        self.authenticate_credentials(extract_api_key(request)?, extract_jwt(request)?)
+            .await
+    }
+
+    /// Verifies pre-extracted credential strings.
+    ///
+    /// Transport-independent shared core of [`Self::authenticate`]. The
+    /// tonic path extracts from `Request<T>` metadata; an axum middleware
+    /// extracts from `http::HeaderMap`. Both arrive here with the same
+    /// precedence: API key wins when both are present.
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::authenticate`].
+    pub(crate) async fn authenticate_credentials(
+        &self,
+        api_key: Option<&str>,
+        bearer: Option<&str>,
+    ) -> Result<CallerIdentity, Status> {
+        if let Some(api_key) = api_key {
             return self.verify_api_key(api_key).await;
         }
-        if let Some(jwt) = extract_jwt(request)? {
+        if let Some(jwt) = bearer {
             return self.verify_jwt(jwt).await;
         }
         Err(Status::unauthenticated("missing credentials"))

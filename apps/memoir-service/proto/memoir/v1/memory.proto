@@ -57,6 +57,12 @@ service MemoryService {
   // or simply absent) returns an empty list. Wraps memoir-core's
   // `Client::supersession_history`.
   rpc SupersessionHistory(SupersessionHistoryRequest) returns (SupersessionHistoryResponse);
+
+  // Lists the distinct agent ids that have memories under an org + user.
+  // Caller-scoped agent discovery for pickers/autocomplete — a tenant sees
+  // only their own agents. An empty org/user returns no agents. Wraps
+  // memoir-core's `Client::list_agents`.
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
 }
 
 // ─── Scope ──────────────────────────────────────────────────────────────────
@@ -104,6 +110,11 @@ message Memory {
   // Soft-deletion marker; unset when the memory is active. Maps from
   // memoir-core's `Memory.supersession` (`SupersessionInfo`).
   optional Supersession supersession = 10;
+
+  // Episodic (raw utterance written via Remember) or semantic (a fact the
+  // extraction worker derived from an episodic source). Maps from
+  // memoir-core's `Memory.kind`.
+  MemoryKind kind = 11;
 }
 
 // Latest supersession state for a Memory — winner pid and decision time.
@@ -127,6 +138,12 @@ enum MemoryStatus {
   MEMORY_STATUS_PENDING = 1; // Written, not yet processed by the worker.
   MEMORY_STATUS_PROCESSED = 2; // Extraction + embedding + graph update done.
   MEMORY_STATUS_FAILED = 3; // Processing failed after max retries. See admin "failed writes" view.
+}
+
+enum MemoryKind {
+  MEMORY_KIND_UNSPECIFIED = 0;
+  MEMORY_KIND_EPISODIC = 1; // Raw utterance written via Remember.
+  MEMORY_KIND_SEMANTIC = 2; // Fact derived from an episodic source by extraction.
 }
 
 // Search result with similarity score attached.
@@ -465,6 +482,21 @@ message SupersessionHistoryResponse {
   // The full event trail, oldest first. Empty when the memory was never
   // superseded (or doesn't exist — both produce no rows).
   repeated SupersessionEvent events = 1;
+}
+
+// ─── ListAgents ──────────────────────────────────────────────────────────────
+
+message ListAgentsRequest {
+  // The org whose agents to list.
+  string org_id = 1;
+  // The user whose agents to list.
+  string user_id = 2;
+}
+
+message ListAgentsResponse {
+  // Distinct agent ids in the org + user scope, sorted ascending. Empty
+  // when the scope has no memories yet.
+  repeated string agent_ids = 1;
 }
 
 // One supersede or unsupersede decision against a memory. Mirrors memoir-

@@ -70,7 +70,7 @@ export default function LoginClient({ initialMode, verified, error: initialError
 				const result = await login(data.email, data.password);
 
 				if (result.success) {
-					window.location.href = '/';
+					window.location.href = '/dashboard';
 				} else {
 					setError(result.error || 'Login failed');
 				}

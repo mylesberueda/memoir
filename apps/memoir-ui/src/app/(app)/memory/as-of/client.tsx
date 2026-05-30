@@ -3,7 +3,8 @@
 import { type RecallAsOfResult, recallAsOf } from '@actions/recall-as-of';
 import type { KindFilter } from '@actions/timeline';
 
-import { Select } from '@components';
+import { AgentIdInput, Field, FilterBar, PageContainer, PageHeader, Select } from '@components';
+import useAgentIds from '@hooks/useAgentIds';
 import { History } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
@@ -11,6 +12,7 @@ import MemoryRow from '../_components/MemoryRow';
 
 export default function AsOfClient() {
 	const [agentId, setAgentId] = useState('');
+	const agents = useAgentIds();
 	const [asOf, setAsOf] = useState('');
 	const [kind, setKind] = useState<KindFilter>('both');
 	const [result, setResult] = useState<RecallAsOfResult | null>(null);
@@ -39,55 +41,41 @@ export default function AsOfClient() {
 	}
 
 	return (
-		<div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-			<div className="mb-8">
-				<h1 className="text-3xl font-bold text-base-content">Point-in-time</h1>
-				<p className="mt-2 text-base-content/70">
-					Reconstruct memoir's active knowledge as of an instant. A future time shows current state; a time before
-					anything existed shows nothing.
-				</p>
-			</div>
+		<PageContainer width="list">
+			<PageHeader
+				eyebrow="Memory"
+				title="Point-in-time"
+				description="Reconstruct memoir's active knowledge as of an instant. A future time shows current state; a time before anything existed shows nothing."
+			/>
 
-			<form
+			<FilterBar
 				id="as-of-filters"
-				className="mb-6 flex flex-wrap items-end gap-4"
 				onSubmit={(e) => {
 					e.preventDefault();
 					reconstruct();
 				}}>
-				<div>
-					<label htmlFor="as-of-instant" className="label">
-						<span className="label-text">As of</span>
-					</label>
+				<Field label="As of" htmlFor="as-of-instant">
 					<input
 						id="as-of-instant"
 						type="datetime-local"
-						className="input input-bordered"
+						className="input input-bordered w-full"
 						value={asOf}
 						disabled={isPending}
 						onChange={(e) => setAsOf(e.target.value)}
 					/>
-				</div>
+				</Field>
 
-				<div className="min-w-48">
-					<label htmlFor="as-of-agent-id" className="label">
-						<span className="label-text">Agent ID</span>
-					</label>
-					<input
+				<Field label="Agent ID" htmlFor="as-of-agent-id" grow>
+					<AgentIdInput
 						id="as-of-agent-id"
-						type="text"
-						className="input input-bordered w-full"
-						placeholder="agent persona id"
 						value={agentId}
+						onChange={setAgentId}
+						agents={agents}
 						disabled={isPending}
-						onChange={(e) => setAgentId(e.target.value)}
 					/>
-				</div>
+				</Field>
 
-				<div>
-					<label htmlFor="as-of-kind" className="label">
-						<span className="label-text">Kind</span>
-					</label>
+				<Field label="Kind" htmlFor="as-of-kind">
 					<Select
 						id="as-of-kind"
 						className="w-40"
@@ -98,7 +86,7 @@ export default function AsOfClient() {
 						<option value="episodic">Episodic</option>
 						<option value="semantic">Semantic</option>
 					</Select>
-				</div>
+				</Field>
 
 				<button type="submit" className="btn btn-primary" disabled={isPending}>
 					{isPending ? (
@@ -110,7 +98,7 @@ export default function AsOfClient() {
 						'Reconstruct'
 					)}
 				</button>
-			</form>
+			</FilterBar>
 
 			{error && (
 				<div className="alert alert-error mb-6">
@@ -137,6 +125,6 @@ export default function AsOfClient() {
 					<MemoryRow key={memory.pid} memory={memory} />
 				))}
 			</ul>
-		</div>
+		</PageContainer>
 	);
 }

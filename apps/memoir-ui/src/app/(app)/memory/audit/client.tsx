@@ -1,6 +1,7 @@
 'use client';
 
 import { getSupersessionHistory, type SupersessionHistoryResult } from '@actions/supersession-history';
+import { Field, FilterBar, PageContainer, PageHeader } from '@components';
 import { GitBranch } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
@@ -29,25 +30,20 @@ export default function AuditClient() {
 	}
 
 	return (
-		<div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-			<div className="mb-8">
-				<h1 className="text-3xl font-bold text-base-content">Supersession audit</h1>
-				<p className="mt-2 text-base-content/70">
-					The chronological supersede/unsupersede trail behind a memory's current truth status.
-				</p>
-			</div>
+		<PageContainer width="list">
+			<PageHeader
+				eyebrow="Memory"
+				title="Supersession audit"
+				description="The chronological supersede/unsupersede trail behind a memory's current truth status."
+			/>
 
-			<form
+			<FilterBar
 				id="audit-filters"
-				className="mb-6 flex flex-wrap items-end gap-4"
 				onSubmit={(e) => {
 					e.preventDefault();
 					load();
 				}}>
-				<div className="flex-1 min-w-64">
-					<label htmlFor="audit-pid" className="label">
-						<span className="label-text">Memory pid</span>
-					</label>
+				<Field label="Memory pid" htmlFor="audit-pid" grow className="min-w-64">
 					<input
 						id="audit-pid"
 						type="text"
@@ -57,7 +53,7 @@ export default function AuditClient() {
 						disabled={isPending}
 						onChange={(e) => setPid(e.target.value)}
 					/>
-				</div>
+				</Field>
 
 				<button type="submit" className="btn btn-primary" disabled={isPending}>
 					{isPending ? (
@@ -69,7 +65,7 @@ export default function AuditClient() {
 						'Load history'
 					)}
 				</button>
-			</form>
+			</FilterBar>
 
 			{error && (
 				<div className="alert alert-error mb-6">
@@ -101,6 +97,6 @@ export default function AuditClient() {
 					/>
 				))}
 			</ul>
-		</div>
+		</PageContainer>
 	);
 }

@@ -9,8 +9,6 @@ import { resolveScopeAndToken } from '@/lib/grpc/scope';
 import type { ActionResult } from '.';
 import type { KindFilter } from './timeline';
 
-export type { QueryHit, Ranking };
-
 export interface QueryParams {
 	agentId: string;
 	query: string;

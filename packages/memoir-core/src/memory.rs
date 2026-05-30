@@ -158,6 +158,14 @@ pub struct Memory {
 
     /// Cosine similarity score; `Some` only on vector-search results.
     pub score: Option<f32>,
+
+    /// Processing lifecycle state of the row's vector index.
+    ///
+    /// `Pending` immediately after a write (embedding + vector upsert in
+    /// flight), `Indexed` once searchable, `Failed` if embedding errored.
+    /// Mirrors the `memories.qdrant_status` column. Consumers use this as the
+    /// canonical "is this memory fully processed yet" signal.
+    pub status: crate::store::IndexStatus,
 }
 
 /// Latest supersession state for a [`Memory`] — winner pid and decision time.
@@ -278,6 +286,7 @@ mod tests {
             updated_at: now,
             event_at: None,
             score: None,
+            status: crate::store::IndexStatus::Pending,
         }
     }
 

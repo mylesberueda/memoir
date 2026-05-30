@@ -1,9 +1,10 @@
 'use client';
 
-import { type QueryHit, type Ranking, runQuery } from '@actions/query';
-import type { KindFilter, Memory } from '@actions/timeline';
-
-import { Select } from '@components';
+import { runQuery } from '@actions/query';
+import type { KindFilter } from '@actions/timeline';
+import { AgentIdInput, Field, FilterBar, PageContainer, PageHeader, Select } from '@components';
+import useAgentIds from '@hooks/useAgentIds';
+import type { Memory, QueryHit, Ranking } from '@polypixel/memoir-sdk/memoir/v1/memory_pb';
 import { Search } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
@@ -12,6 +13,7 @@ import MemoryRow from '../_components/MemoryRow';
 
 export default function QueryClient() {
 	const [agentId, setAgentId] = useState('');
+	const agents = useAgentIds();
 	const [query, setQuery] = useState('');
 	const [kind, setKind] = useState<KindFilter>('both');
 	const [hits, setHits] = useState<QueryHit[]>([]);
@@ -41,25 +43,20 @@ export default function QueryClient() {
 	const hybrid = rankingUsed?.strategy.case === 'hybrid' ? rankingUsed.strategy.value : undefined;
 
 	return (
-		<div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-			<div className="mb-8">
-				<h1 className="text-3xl font-bold text-base-content">Query</h1>
-				<p className="mt-2 text-base-content/70">
-					Hybrid-ranked retrieval over a scope. Each hit shows its blended cosine-plus-recency score.
-				</p>
-			</div>
+		<PageContainer width="list">
+			<PageHeader
+				eyebrow="Memory"
+				title="Query"
+				description="Hybrid-ranked retrieval over a scope. Each hit shows its blended cosine-plus-recency score."
+			/>
 
-			<form
+			<FilterBar
 				id="query-filters"
-				className="mb-6 flex flex-wrap items-end gap-4"
 				onSubmit={(e) => {
 					e.preventDefault();
 					run();
 				}}>
-				<div className="flex-1 min-w-64">
-					<label htmlFor="query-text" className="label">
-						<span className="label-text">Query</span>
-					</label>
+				<Field label="Query" htmlFor="query-text" grow className="min-w-64">
 					<input
 						id="query-text"
 						type="text"
@@ -69,27 +66,19 @@ export default function QueryClient() {
 						disabled={isPending}
 						onChange={(e) => setQuery(e.target.value)}
 					/>
-				</div>
+				</Field>
 
-				<div className="min-w-48">
-					<label htmlFor="query-agent-id" className="label">
-						<span className="label-text">Agent ID</span>
-					</label>
-					<input
+				<Field label="Agent ID" htmlFor="query-agent-id">
+					<AgentIdInput
 						id="query-agent-id"
-						type="text"
-						className="input input-bordered w-full"
-						placeholder="agent persona id"
 						value={agentId}
+						onChange={setAgentId}
+						agents={agents}
 						disabled={isPending}
-						onChange={(e) => setAgentId(e.target.value)}
 					/>
-				</div>
+				</Field>
 
-				<div>
-					<label htmlFor="query-kind" className="label">
-						<span className="label-text">Kind</span>
-					</label>
+				<Field label="Kind" htmlFor="query-kind">
 					<Select
 						id="query-kind"
 						className="w-40"
@@ -100,7 +89,7 @@ export default function QueryClient() {
 						<option value="episodic">Episodic</option>
 						<option value="semantic">Semantic</option>
 					</Select>
-				</div>
+				</Field>
 
 				<button type="submit" className="btn btn-primary" disabled={isPending}>
 					{isPending ? (
@@ -112,7 +101,7 @@ export default function QueryClient() {
 						'Run query'
 					)}
 				</button>
-			</form>
+			</FilterBar>
 
 			{error && (
 				<div className="alert alert-error mb-6">
@@ -154,6 +143,6 @@ export default function QueryClient() {
 					}
 				/>
 			)}
-		</div>
+		</PageContainer>
 	);
 }

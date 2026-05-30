@@ -1,11 +1,10 @@
 'use client';
 
 import { type EditParams, editMemory } from '@actions/edit';
-import type { Memory } from '@actions/timeline';
 import { timestampDate } from '@bufbuild/protobuf/wkt';
-
 import { Modal } from '@components';
 import useToast from '@hooks/useToast';
+import type { Memory } from '@polypixel/memoir-sdk/memoir/v1/memory_pb';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect, useState, useTransition } from 'react';
 
@@ -104,7 +103,7 @@ export default function EditMemoryModal({ memory, open, onClose, onMemoryUpdated
 						<input
 							id="edit-memory-event-at"
 							type="datetime-local"
-							className="input input-bordered"
+							className="input input-bordered w-full"
 							value={eventAt}
 							disabled={isPending}
 							onChange={(e) => setEventAt(e.target.value)}

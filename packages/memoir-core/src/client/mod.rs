@@ -217,6 +217,11 @@ impl Client {
         &self.inner.index
     }
 
+    /// Returns the registry of LLM providers configured on this client.
+    pub fn llms(&self) -> &LlmRegistry {
+        &self.inner.llms
+    }
+
     /// Writes `prompt` as an episodic memory under `scope`.
     ///
     /// Returns a per-call builder; await it to persist the row and enqueue
@@ -638,6 +643,19 @@ impl Client {
     /// Returns [`ClientError::Store`] wrapping a database failure.
     pub async fn supersession_history(&self, pid: &str) -> Result<Vec<SupersessionEvent>, ClientError> {
         Ok(self.inner.store.supersession_history(pid).await?)
+    }
+
+    /// Lists the distinct agent ids with memories under `org_id` + `user_id`.
+    ///
+    /// Caller-scoped agent discovery: returns only the agents within the given
+    /// org and user, sorted ascending, so a tenant never sees another tenant's
+    /// agents. A scope with no memories yet returns an empty vec, not an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping a database failure.
+    pub async fn list_agents(&self, org_id: &str, user_id: &str) -> Result<Vec<String>, ClientError> {
+        Ok(self.inner.store.list_agent_ids(org_id, user_id).await?)
     }
 }
 

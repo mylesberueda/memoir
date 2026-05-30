@@ -14,10 +14,7 @@ export async function resolveScopeAndToken(agentId: string): Promise<Resolved> {
 		return { ok: false, failure: { success: false, error: 'Not authenticated' } };
 	}
 
-	const orgId = await getOrganizationContext();
-	if (!orgId) {
-		return { ok: false, failure: { success: false, error: 'No organization selected' } };
-	}
+	const orgId = (await getOrganizationContext()) ?? session.userId;
 
 	const trimmedAgentId = agentId.trim();
 	if (!trimmedAgentId) {

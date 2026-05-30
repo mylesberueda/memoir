@@ -9,8 +9,6 @@ import { getSession } from '@/lib/session';
 
 import type { ActionResult } from '.';
 
-export type { SupersessionEvent };
-
 export interface SupersessionHistoryParams {
 	pid: string;
 }

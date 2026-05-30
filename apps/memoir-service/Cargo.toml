@@ -12,12 +12,14 @@ name = "memoir"
 path = "src/main.rs"
 
 [dependencies]
+axum = { version = "0.8" }
 base64 = { version = "0.22" }
 chrono = "0.4"
 color-eyre = { workspace = true }
 common-rs = { path = "../../packages/common-rs" }
 dashmap = "6.1"
 dotenvy = "0.15"
+futures = { version = "0.3" }
 memoir-core = { package = "polypixel-memoir-core", path = "../../packages/memoir-core" }
 memoir-service-migration = { path = "./migration" }
 http = { version = "1.4" }

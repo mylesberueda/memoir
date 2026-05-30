@@ -9,8 +9,6 @@ import { resolveScopeAndToken } from '@/lib/grpc/scope';
 
 import type { ActionResult } from '.';
 
-export type { Memory };
-
 export type KindFilter = 'episodic' | 'semantic' | 'both';
 
 export interface TimelineParams {

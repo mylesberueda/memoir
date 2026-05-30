@@ -14,8 +14,11 @@
 use std::ops::Deref;
 
 use memoir_core::client::ClientError;
-use memoir_core::memory::Memory as LibMemory;
-use memoir_sdk::memoir::v1::{Memory as ProtoMemory, MemoryStatus, Supersession as ProtoSupersession};
+use memoir_core::memory::{Memory as LibMemory, MemoryKind as LibMemoryKind};
+use memoir_core::store::IndexStatus;
+use memoir_sdk::memoir::v1::{
+    Memory as ProtoMemory, MemoryKind as ProtoMemoryKind, MemoryStatus, Supersession as ProtoSupersession,
+};
 use tonic::Status;
 
 use super::conversions::{metadata_to_proto, scope_to_proto, timestamp_from_chrono};
@@ -40,13 +43,21 @@ impl From<LibMemory> for WireMemory {
             metadata: Some(metadata_to_proto(memory.metadata)),
             created_at: Some(timestamp_from_chrono(memory.created_at)),
             processed_at: None,
-            status: MemoryStatus::Pending as i32,
+            status: match memory.status {
+                IndexStatus::Pending => MemoryStatus::Pending as i32,
+                IndexStatus::Indexed => MemoryStatus::Processed as i32,
+                IndexStatus::Failed => MemoryStatus::Failed as i32,
+            },
             updated_at: Some(timestamp_from_chrono(memory.updated_at)),
             event_at: memory.event_at.map(timestamp_from_chrono),
             supersession: memory.supersession.map(|s| ProtoSupersession {
                 winner_pid: s.winner_pid,
                 at: Some(timestamp_from_chrono(s.at)),
             }),
+            kind: match memory.kind {
+                LibMemoryKind::Episodic => ProtoMemoryKind::Episodic as i32,
+                LibMemoryKind::Semantic => ProtoMemoryKind::Semantic as i32,
+            },
         })
     }
 }

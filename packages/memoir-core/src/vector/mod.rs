@@ -194,6 +194,7 @@ mod tests {
             updated_at: now,
             event_at: None,
             score: None,
+            status: crate::store::IndexStatus::Pending,
         };
 
         index.ensure_collection(4).await.unwrap();

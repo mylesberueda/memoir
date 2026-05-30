@@ -29,10 +29,41 @@ pub use role::{LlmRegistry, LlmRole};
 use std::future::Future;
 use std::sync::Arc;
 
+use futures::{Stream, StreamExt};
+use rig::agent::MultiTurnStreamItem;
 use rig::client::CompletionClient;
 use rig::completion::Prompt;
+use rig::message::Message;
+use rig::streaming::{StreamedAssistantContent, StreamingChat};
 
 use inner::InnerLlm;
+
+/// Conversational turn passed to [`RigLlmProvider::stream_chat`].
+///
+/// Mirrors [`rig::message::Message`]'s user/assistant distinction without
+/// leaking the rig type into the public surface — keeps the trait neutral
+/// on whether rig stays the underlying provider.
+#[derive(Debug, Clone)]
+pub struct ChatTurn {
+    pub role: ChatRole,
+    pub content: String,
+}
+
+/// Speaker for a [`ChatTurn`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatRole {
+    User,
+    Assistant,
+}
+
+impl From<ChatTurn> for Message {
+    fn from(turn: ChatTurn) -> Self {
+        match turn.role {
+            ChatRole::User => Message::user(turn.content),
+            ChatRole::Assistant => Message::assistant(turn.content),
+        }
+    }
+}
 
 /// Sends a preamble + content pair to an LLM and returns its raw text reply.
 ///
@@ -165,6 +196,55 @@ impl LlmProvider for RigLlmProvider {
                     .await
                     .map_err(|err| LlmError::Provider(err.to_string()))
             }
+        }
+    }
+}
+
+impl RigLlmProvider {
+    /// Streams a chat completion as a sequence of text deltas.
+    ///
+    /// `preamble` is the system prompt (typically the rendered
+    /// [`crate::client::MemoryContext`]); `history` is the prior
+    /// conversation; `prompt` is the current user turn. Returns a stream
+    /// of incremental text fragments — tool calls and reasoning chunks
+    /// are filtered out at this layer.
+    ///
+    /// Only the Ollama variant is implemented in this release; OpenAI and
+    /// Anthropic return [`LlmError::Provider`] until per-provider streaming
+    /// lands.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlmError::Provider`] immediately when the underlying
+    /// provider doesn't support streaming yet, or when the rig stream
+    /// builder fails. Per-token errors during streaming surface as
+    /// [`LlmError::Provider`] inside the returned stream's items.
+    pub async fn stream_chat(
+        &self,
+        preamble: &str,
+        prompt: &str,
+        history: Vec<ChatTurn>,
+    ) -> Result<Box<dyn Stream<Item = Result<String, LlmError>> + Send + Unpin>, LlmError> {
+        let rig_history: Vec<Message> = history.into_iter().map(Message::from).collect();
+        match &self.inner {
+            InnerLlm::Ollama(client) => {
+                let agent = client.agent(&self.model).preamble(preamble).build();
+                let stream = agent.stream_chat(prompt.to_string(), rig_history).await;
+                let text_only = stream.filter_map(|item| async move {
+                    match item {
+                        Ok(MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t))) => {
+                            Some(Ok(t.text))
+                        }
+                        Ok(_) => None,
+                        Err(err) => Some(Err(LlmError::Provider(err.to_string()))),
+                    }
+                });
+                Ok(Box::new(Box::pin(text_only)))
+            }
+            InnerLlm::OpenAI(_) | InnerLlm::Anthropic(_) => Err(LlmError::Provider(format!(
+                "streaming not yet supported for {:?}",
+                self.inner.kind()
+            ))),
         }
     }
 }

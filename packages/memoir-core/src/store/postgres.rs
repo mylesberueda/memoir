@@ -23,6 +23,7 @@ const MEMORY_SELECT_COLUMNS: &str = "
     m.content,
     m.metadata,
     m.kind,
+    m.qdrant_status,
     m.source_pid,
     m.superseded_by,
     m.created_at,
@@ -354,6 +355,28 @@ impl MemoryStore for PostgresStore {
         Ok(scopes)
     }
 
+    async fn list_agent_ids(&self, org_id: &str, user_id: &str) -> Result<Vec<String>, StoreError> {
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT DISTINCT agent_id FROM memories
+            WHERE org_id = $1 AND user_id = $2
+            ORDER BY agent_id ASC
+            "#,
+            [
+                SeaOrmValue::String(Some(org_id.to_owned())),
+                SeaOrmValue::String(Some(user_id.to_owned())),
+            ],
+        );
+
+        let rows = self.db.query_all_raw(stmt).await?;
+        let mut agent_ids = Vec::with_capacity(rows.len());
+        for row in &rows {
+            agent_ids.push(row.try_get::<String>("", "agent_id")?);
+        }
+        Ok(agent_ids)
+    }
+
     async fn indexed_pids_in_scope(&self, scope: &Scope) -> Result<Vec<String>, StoreError> {
         scope.validate()?;
 
@@ -579,6 +602,7 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
         let content: String = row.try_get("", "content")?;
         let metadata: serde_json::Value = row.try_get("", "metadata")?;
         let kind_str: String = row.try_get("", "kind")?;
+        let status_str: String = row.try_get("", "qdrant_status")?;
         let source_pid: Option<String> = row.try_get("", "source_pid")?;
         let superseded_by: Option<String> = row.try_get("", "superseded_by")?;
         let created_at: DateTime<FixedOffset> = row.try_get("", "created_at")?;
@@ -589,6 +613,10 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
         let kind: MemoryKind = kind_str
             .parse()
             .map_err(|_| StoreError::CacheInvariant(format!("unknown memory kind: {kind_str}")))?;
+
+        let status: IndexStatus = status_str
+            .parse()
+            .map_err(|_| StoreError::CacheInvariant(format!("unknown qdrant status: {status_str}")))?;
 
         let supersession = match (superseded_by, supersession_at) {
             (Some(winner_pid), Some(at)) => Some(crate::memory::SupersessionInfo { winner_pid, at }),
@@ -621,6 +649,7 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
             updated_at,
             event_at,
             score: None,
+            status,
         })
     }
 }

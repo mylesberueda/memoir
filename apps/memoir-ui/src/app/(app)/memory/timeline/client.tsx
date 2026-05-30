@@ -1,7 +1,9 @@
 'use client';
 
-import { getTimeline, type KindFilter, type Memory } from '@actions/timeline';
-import { Select } from '@components';
+import { getTimeline, type KindFilter } from '@actions/timeline';
+import { AgentIdInput, Field, FilterBar, PageContainer, PageHeader, Select } from '@components';
+import useAgentIds from '@hooks/useAgentIds';
+import type { Memory } from '@polypixel/memoir-sdk/memoir/v1/memory_pb';
 import { Clock } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
@@ -10,6 +12,7 @@ import MemoryRow from '../_components/MemoryRow';
 
 export default function TimelineClient() {
 	const [agentId, setAgentId] = useState('');
+	const agents = useAgentIds();
 	const [kind, setKind] = useState<KindFilter>('both');
 	const [excludeSuperseded, setExcludeSuperseded] = useState(false);
 	const [memories, setMemories] = useState<Memory[]>([]);
@@ -34,40 +37,30 @@ export default function TimelineClient() {
 	}
 
 	return (
-		<div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-			<div className="mb-8">
-				<h1 className="text-3xl font-bold text-base-content">Timeline</h1>
-				<p className="mt-2 text-base-content/70">
-					The chronological memory event-log for a scope. Superseded rows are kept as an audit trail.
-				</p>
-			</div>
+		<PageContainer width="list">
+			<PageHeader
+				eyebrow="Memory"
+				title="Timeline"
+				description="The chronological memory event-log for a scope. Superseded rows are kept as an audit trail."
+			/>
 
-			<form
+			<FilterBar
 				id="timeline-filters"
-				className="mb-6 flex flex-wrap items-end gap-4"
 				onSubmit={(e) => {
 					e.preventDefault();
 					load();
 				}}>
-				<div className="flex-1 min-w-48">
-					<label htmlFor="timeline-agent-id" className="label">
-						<span className="label-text">Agent ID</span>
-					</label>
-					<input
+				<Field label="Agent ID" htmlFor="timeline-agent-id" grow>
+					<AgentIdInput
 						id="timeline-agent-id"
-						type="text"
-						className="input input-bordered w-full"
-						placeholder="agent persona id"
 						value={agentId}
+						onChange={setAgentId}
+						agents={agents}
 						disabled={isPending}
-						onChange={(e) => setAgentId(e.target.value)}
 					/>
-				</div>
+				</Field>
 
-				<div>
-					<label htmlFor="timeline-kind" className="label">
-						<span className="label-text">Kind</span>
-					</label>
+				<Field label="Kind" htmlFor="timeline-kind">
 					<Select
 						id="timeline-kind"
 						className="w-40"
@@ -78,9 +71,9 @@ export default function TimelineClient() {
 						<option value="episodic">Episodic</option>
 						<option value="semantic">Semantic</option>
 					</Select>
-				</div>
+				</Field>
 
-				<label htmlFor="timeline-exclude-superseded" className="label cursor-pointer gap-2">
+				<label htmlFor="timeline-exclude-superseded" className="flex h-12 cursor-pointer items-center gap-2 text-sm">
 					<input
 						id="timeline-exclude-superseded"
 						type="checkbox"
@@ -89,7 +82,7 @@ export default function TimelineClient() {
 						disabled={isPending}
 						onChange={(e) => setExcludeSuperseded(e.target.checked)}
 					/>
-					<span className="label-text">Hide superseded</span>
+					<span>Hide superseded</span>
 				</label>
 
 				<button type="submit" className="btn btn-primary" disabled={isPending}>
@@ -102,7 +95,7 @@ export default function TimelineClient() {
 						'Load timeline'
 					)}
 				</button>
-			</form>
+			</FilterBar>
 
 			{error && (
 				<div className="alert alert-error mb-6">
@@ -132,6 +125,6 @@ export default function TimelineClient() {
 					onMemoryUpdated={(updated) => setMemories((prev) => prev.map((m) => (m.pid === updated.pid ? updated : m)))}
 				/>
 			)}
-		</div>
+		</PageContainer>
 	);
 }

@@ -11,6 +11,7 @@ use tonic::transport::Server;
 use tonic_reflection::server::Builder as ReflectionBuilder;
 
 use crate::AppContext;
+use crate::api::playground_router;
 use crate::models::_entity::{bootstrap_tokens, users};
 use crate::models::{BootstrapTokens, Users};
 use crate::services::admin::Admin;
@@ -90,14 +91,29 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
 
     tracing::info!(server.address = %addr, "starting gRPC server");
 
-    Server::builder()
+    let grpc_fut = Server::builder()
         .add_service(health_service)
         .add_service(reflection_service)
         .add_service(AdminServiceServer::new(admin_handler))
         .add_service(AuthServiceServer::new(auth_handler))
         .add_service(MemoryServiceServer::new(memory_handler))
-        .serve(addr)
-        .await?;
+        .serve(addr);
+
+    // Sidecar HTTP listener serves the playground chat (and any future
+    // non-gRPC routes). Separate port keeps crash isolation: a panic in the
+    // playground handler doesn't take gRPC down. Defaults to 5154 when
+    // unset; opt out by setting MEMOIR_HTTP_PORT=0 (TODO: not yet honored).
+    let http_port = std::env::var("MEMOIR_HTTP_PORT").unwrap_or_else(|_| "5154".to_string());
+    let http_addr: SocketAddr = format!("{host}:{http_port}").parse()?;
+    let app = axum::Router::new().merge(playground_router(ctx.clone()));
+    let listener = tokio::net::TcpListener::bind(http_addr).await?;
+    tracing::info!(server.address = %http_addr, "starting HTTP server");
+    let http_fut = axum::serve(listener, app).into_future();
+
+    tokio::try_join!(
+        async { grpc_fut.await.wrap_err("gRPC server crashed") },
+        async { http_fut.await.wrap_err("HTTP server crashed") },
+    )?;
 
     Ok(())
 }

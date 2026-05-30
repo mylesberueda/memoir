@@ -258,6 +258,22 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Returns [`StoreError::Database`] for database failures.
     fn list_scopes(&self) -> impl Future<Output = Result<Vec<Scope>, StoreError>> + Send;
 
+    /// Returns the distinct agent ids that have memories in the given
+    /// org + user scope, sorted ascending.
+    ///
+    /// Powers caller-scoped agent discovery (e.g. the UI's agent picker): a
+    /// user sees only the agents under their own org and user, never another
+    /// tenant's. Returns an empty vec when the scope has no memories yet.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Database`] for database failures.
+    fn list_agent_ids(
+        &self,
+        org_id: &str,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<String>, StoreError>> + Send;
+
     /// Returns every indexed pid for the given scope.
     ///
     /// Used by the reconciliation sweep's orphan-cleanup pass to compare
@@ -435,6 +451,7 @@ mod tests {
                 updated_at: now,
                 event_at,
                 score: None,
+                status: IndexStatus::Pending,
             };
             self.memories.lock().unwrap().push(memory.clone());
             Ok(memory)
@@ -566,6 +583,18 @@ mod tests {
             Ok(scopes.into_iter().collect())
         }
 
+        async fn list_agent_ids(&self, org_id: &str, user_id: &str) -> Result<Vec<String>, StoreError> {
+            let agent_ids: std::collections::BTreeSet<String> = self
+                .memories
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|m| m.scope.org_id == org_id && m.scope.user_id == user_id)
+                .map(|m| m.scope.agent_id.clone())
+                .collect();
+            Ok(agent_ids.into_iter().collect())
+        }
+
         async fn indexed_pids_in_scope(&self, scope: &Scope) -> Result<Vec<String>, StoreError> {
             Ok(self
                 .memories
@@ -691,6 +720,45 @@ mod tests {
 
         let not_found = store.recall(&memory.pid).await;
         assert!(matches!(not_found, Err(StoreError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn should_list_distinct_sorted_agent_ids_for_matching_org_and_user() {
+        let store = StubStore::default();
+        let remember = async |agent: &str, org: &str, user: &str| {
+            store
+                .remember(
+                    Scope {
+                        agent_id: agent.to_string(),
+                        org_id: org.to_string(),
+                        user_id: user.to_string(),
+                    },
+                    "c".to_string(),
+                    serde_json::json!({}),
+                    MemoryKind::Episodic,
+                    None,
+                    None,
+                )
+                .await
+                .unwrap();
+        };
+
+        remember("zeta", "o", "u").await;
+        remember("alpha", "o", "u").await;
+        remember("alpha", "o", "u").await; // duplicate agent — should collapse
+        remember("other-org", "o2", "u").await; // wrong org — excluded
+        remember("other-user", "o", "u2").await; // wrong user — excluded
+
+        let agents = store.list_agent_ids("o", "u").await.unwrap();
+
+        assert_eq!(agents, vec!["alpha".to_string(), "zeta".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn should_return_empty_agent_ids_when_scope_has_no_memories() {
+        let store = StubStore::default();
+        let agents = store.list_agent_ids("empty-org", "empty-user").await.unwrap();
+        assert!(agents.is_empty());
     }
 
     #[test]
