@@ -39,7 +39,6 @@ serde_json = { workspace = true }
 strum = { version = "0.28", features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
-tonic = { workspace = true, optional = true }
 tokio-util = { version = "0.7" }
 tracing = { workspace = true }
 uuid = { version = "1", features = ["v4"] }
@@ -54,6 +53,5 @@ tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 
 [features]
 default = []
-grpc = ["dep:tonic"]
 integration = []
 unit = []

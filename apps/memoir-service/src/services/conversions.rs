@@ -36,7 +36,7 @@ use memoir_sdk::memoir::v1::{
     FailedJob as ProtoFailedJob, FilterCondition as ProtoFilterCondition, ForgetRequest, JobKind as ProtoJobKind,
     KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues,
     Decay as ProtoDecay, DecayBucket as ProtoDecayBucket, EditRequest, ExponentialDecay, Hybrid as ProtoHybrid,
-    Memory as ProtoMemory, MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit,
+    MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit,
     QueryRequest, QueryResponse, Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReconcileResponse,
     ReciprocalDecay, Scope as ProtoScope, StepDecay, SupersessionEvent as ProtoSupersessionEvent,
     SupersessionHistoryRequest, TimelineRequest, TimelineResponse, decay, filter_condition, forget_request,
@@ -109,16 +109,6 @@ pub(crate) fn metadata_from_proto(meta: Option<pbjson_types::Struct>) -> Result<
 /// is handled defensively.
 pub(crate) fn metadata_to_proto(value: serde_json::Value) -> pbjson_types::Struct {
     serde_json::from_value::<pbjson_types::Struct>(value).unwrap_or_default()
-}
-
-/// Converts a library `Memory` into the wire shape.
-///
-/// Shim delegating to [`crate::services::wire::WireMemory`] — the canonical
-/// conversion. Retained so the not-yet-migrated handlers (search / recall /
-/// remember) keep compiling; ticket 0015 repoints them to `WireMemory` and
-/// removes this shim.
-pub(crate) fn memory_to_proto(memory: LibMemory) -> ProtoMemory {
-    crate::services::wire::WireMemory::from(memory).0
 }
 
 /// Converts `ForgetRequest.target` (oneof) into the library `ForgetTarget`.
@@ -501,8 +491,8 @@ impl TryFrom<EditRequest> for EditArgs {
     }
 }
 
-// `ClientError → Status` lives in memoir-core behind the `grpc` feature.
-// Call sites use `.map_err(Status::from)` or `?` against tonic boundaries.
+// `ClientError → Status` is owned by `services/wire::WireError`.
+// Call sites use `.map_err(WireError::into_status)?`.
 
 /// A validated `SupersessionHistory` request: just the target pid.
 #[derive(Debug)]
@@ -535,11 +525,15 @@ impl From<LibSupersessionEvent> for WireSupersessionEvent {
 
 // ─── AdminService conversions ──────────────────────────────────────────────
 
-/// Converts a library `JobKind` to the wire enum's discriminant.
-pub(crate) fn job_kind_to_proto(kind: LibJobKind) -> ProtoJobKind {
-    match kind {
-        LibJobKind::Embed => ProtoJobKind::Embed,
-        LibJobKind::Extract => ProtoJobKind::Extract,
+/// Wire form of a [`LibJobKind`]. Build via `WireJobKind::from(kind)`.
+pub(crate) struct WireJobKind(pub ProtoJobKind);
+
+impl From<LibJobKind> for WireJobKind {
+    fn from(kind: LibJobKind) -> Self {
+        Self(match kind {
+            LibJobKind::Embed => ProtoJobKind::Embed,
+            LibJobKind::Extract => ProtoJobKind::Extract,
+        })
     }
 }
 
@@ -549,6 +543,9 @@ pub(crate) fn job_kind_to_proto(kind: LibJobKind) -> ProtoJobKind {
 /// kinds" — matching the library's `RetryBuilder` default. Unknown
 /// discriminants (e.g., a forward-compatible proto carrying a value this
 /// build doesn't recognize) are rejected with `InvalidArgument`.
+///
+/// Left as a free function because there is no proto wrapper type to
+/// newtype — the wire shape is a naked `optional int32`, not a message.
 ///
 /// # Errors
 ///
@@ -567,25 +564,28 @@ pub(crate) fn job_kind_filter_from_proto(value: Option<i32>) -> Result<Option<Li
     }
 }
 
-/// Converts a library `FailedJob` row to the wire shape.
+/// Wire form of a [`LibFailedJob`]. Build via `WireFailedJob::from(job)`.
 ///
 /// Mirrors the library type exactly per `admin.proto`'s `FailedJob`
-/// message — id, source pid, kind, attempts, optional failure reason,
-/// last update. The original job payload and the referenced memory's
-/// content are **never** included; that PII boundary is enforced at
-/// the library by the type's shape.
-pub(crate) fn failed_job_to_proto(job: LibFailedJob) -> ProtoFailedJob {
-    ProtoFailedJob {
-        id: job.id,
-        source_pid: job.source_pid,
-        kind: job_kind_to_proto(job.kind) as i32,
-        attempts: job.attempts,
-        failure_reason: job.failure_reason,
-        updated_at: Some(timestamp_from_chrono(job.updated_at)),
+/// message. The original job payload and the referenced memory's content
+/// are **never** included; that PII boundary is enforced at the library
+/// by the type's shape.
+pub(crate) struct WireFailedJob(pub ProtoFailedJob);
+
+impl From<LibFailedJob> for WireFailedJob {
+    fn from(job: LibFailedJob) -> Self {
+        Self(ProtoFailedJob {
+            id: job.id,
+            source_pid: job.source_pid,
+            kind: WireJobKind::from(job.kind).0 as i32,
+            attempts: job.attempts,
+            failure_reason: job.failure_reason,
+            updated_at: Some(timestamp_from_chrono(job.updated_at)),
+        })
     }
 }
 
-/// Converts the library's `ReconcileSummary` to the wire `ReconcileResponse`.
+/// Wire form of a [`ReconcileSummary`]. Build via `WireReconcileResponse::from(summary)`.
 ///
 /// All three counters are `usize` in the library; `int64` on the wire.
 /// `usize as i64` is lossy only when `usize > i64::MAX` (impossible on
@@ -593,11 +593,15 @@ pub(crate) fn failed_job_to_proto(job: LibFailedJob) -> ProtoFailedJob {
 /// than 9 quintillion rows), so a saturating cast is safe enough; we
 /// use `i64::try_from` defensively and return zero on overflow with a
 /// loud warning so operators see something is wrong.
-pub(crate) fn reconcile_summary_to_proto(summary: ReconcileSummary) -> ReconcileResponse {
-    ReconcileResponse {
-        failed_retried: usize_to_i64_saturating(summary.failed_retried, "failed_retried"),
-        failed_recovered: usize_to_i64_saturating(summary.failed_recovered, "failed_recovered"),
-        orphans_deleted: usize_to_i64_saturating(summary.orphans_deleted, "orphans_deleted"),
+pub(crate) struct WireReconcileResponse(pub ReconcileResponse);
+
+impl From<ReconcileSummary> for WireReconcileResponse {
+    fn from(summary: ReconcileSummary) -> Self {
+        Self(ReconcileResponse {
+            failed_retried: usize_to_i64_saturating(summary.failed_retried, "failed_retried"),
+            failed_recovered: usize_to_i64_saturating(summary.failed_recovered, "failed_recovered"),
+            orphans_deleted: usize_to_i64_saturating(summary.orphans_deleted, "orphans_deleted"),
+        })
     }
 }
 
@@ -872,16 +876,14 @@ mod tests {
 
     #[test]
     fn should_round_trip_job_kind_embed() {
-        let lib = LibJobKind::Embed;
-        let proto = job_kind_to_proto(lib);
+        let proto = WireJobKind::from(LibJobKind::Embed).0;
         let back = job_kind_filter_from_proto(Some(proto as i32)).unwrap();
         assert_eq!(back, Some(LibJobKind::Embed));
     }
 
     #[test]
     fn should_round_trip_job_kind_extract() {
-        let lib = LibJobKind::Extract;
-        let proto = job_kind_to_proto(lib);
+        let proto = WireJobKind::from(LibJobKind::Extract).0;
         let back = job_kind_filter_from_proto(Some(proto as i32)).unwrap();
         assert_eq!(back, Some(LibJobKind::Extract));
     }
@@ -915,7 +917,7 @@ mod tests {
             failure_reason: Some("timeout".into()),
             updated_at,
         };
-        let proto = failed_job_to_proto(lib);
+        let proto = WireFailedJob::from(lib).0;
         assert_eq!(proto.id, 42);
         assert_eq!(proto.source_pid, "src_abc");
         assert_eq!(proto.kind, ProtoJobKind::Embed as i32);
@@ -931,7 +933,7 @@ mod tests {
             failed_recovered: 0,
             orphans_deleted: 0,
         };
-        let proto = reconcile_summary_to_proto(summary);
+        let proto = WireReconcileResponse::from(summary).0;
         assert_eq!(proto.failed_retried, 0);
         assert_eq!(proto.failed_recovered, 0);
         assert_eq!(proto.orphans_deleted, 0);
@@ -944,7 +946,7 @@ mod tests {
             failed_recovered: 3,
             orphans_deleted: 12,
         };
-        let proto = reconcile_summary_to_proto(summary);
+        let proto = WireReconcileResponse::from(summary).0;
         assert_eq!(proto.failed_retried, 5);
         assert_eq!(proto.failed_recovered, 3);
         assert_eq!(proto.orphans_deleted, 12);

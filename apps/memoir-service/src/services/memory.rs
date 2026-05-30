@@ -39,8 +39,8 @@ use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
     EditArgs, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs, WireSupersessionEvent,
-    forget_target_from_proto, memory_to_proto, metadata_filter_from_proto, metadata_from_proto, query_response,
-    recall_as_of_response, scope_from_proto, timeline_response,
+    forget_target_from_proto, metadata_filter_from_proto, metadata_from_proto, query_response, recall_as_of_response,
+    scope_from_proto, timeline_response,
 };
 use crate::services::wire::{WireError, WireMemory};
 
@@ -128,7 +128,7 @@ impl MemoryService for Memory {
                 builder = builder.semantic();
             }
         }
-        let memories = builder.await.map_err(Status::from)?;
+        let memories = builder.await.map_err(WireError::into_status)?;
 
         let hits = memories
             .list()
@@ -137,7 +137,7 @@ impl MemoryService for Memory {
             .map(|memory| {
                 let score = memory.score.unwrap_or(0.0);
                 SearchHit {
-                    memory: Some(memory_to_proto(memory)),
+                    memory: Some(WireMemory::from(memory).0),
                     score,
                 }
             })
@@ -169,10 +169,10 @@ impl MemoryService for Memory {
             .memoir
             .recall(&memory_pid)
             .await
-            .map_err(Status::from)?;
+            .map_err(WireError::into_status)?;
 
         Ok(Response::new(RecallResponse {
-            memory: Some(memory_to_proto(memory)),
+            memory: Some(WireMemory::from(memory).0),
         }))
     }
 
@@ -215,10 +215,10 @@ impl MemoryService for Memory {
             .remember(content, scope)
             .metadata(metadata)
             .await
-            .map_err(Status::from)?;
+            .map_err(WireError::into_status)?;
 
         Ok(Response::new(RememberResponse {
-            memory: Some(memory_to_proto(written)),
+            memory: Some(WireMemory::from(written).0),
         }))
     }
 
@@ -245,7 +245,7 @@ impl MemoryService for Memory {
             "MemoryService.Forget invoked",
         );
 
-        let deleted_pids = self.ctx.memoir.forget(target).await.map_err(Status::from)?;
+        let deleted_pids = self.ctx.memoir.forget(target).await.map_err(WireError::into_status)?;
 
         Ok(Response::new(ForgetResponse { deleted_pids }))
     }

@@ -18,7 +18,7 @@ color-eyre = { workspace = true }
 common-rs = { path = "../../packages/common-rs" }
 dashmap = "6.1"
 dotenvy = "0.15"
-memoir-core = { package = "polypixel-memoir-core", path = "../../packages/memoir-core", features = ["grpc"] }
+memoir-core = { package = "polypixel-memoir-core", path = "../../packages/memoir-core" }
 memoir-service-migration = { path = "./migration" }
 http = { version = "1.4" }
 jsonwebtoken = { version = "9.3" }
