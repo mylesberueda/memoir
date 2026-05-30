@@ -33,14 +33,13 @@ use memoir_core::vector::{
     MemoryFilter as LibMemoryFilter, NumericRange as LibNumericRange,
 };
 use memoir_sdk::memoir::v1::{
-    FailedJob as ProtoFailedJob, FilterCondition as ProtoFilterCondition, ForgetRequest, JobKind as ProtoJobKind,
+    Decay as ProtoDecay, DecayBucket as ProtoDecayBucket, EditRequest, ExponentialDecay, FailedJob as ProtoFailedJob,
+    FilterCondition as ProtoFilterCondition, ForgetRequest, Hybrid as ProtoHybrid, JobKind as ProtoJobKind,
     KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues,
-    Decay as ProtoDecay, DecayBucket as ProtoDecayBucket, EditRequest, ExponentialDecay, Hybrid as ProtoHybrid,
-    MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit,
-    QueryRequest, QueryResponse, Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReconcileResponse,
-    ReciprocalDecay, Scope as ProtoScope, StepDecay, SupersessionEvent as ProtoSupersessionEvent,
-    SupersessionHistoryRequest, TimelineRequest, TimelineResponse, decay, filter_condition, forget_request,
-    match_value, match_values, ranking,
+    MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit, QueryRequest, QueryResponse,
+    Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReciprocalDecay, ReconcileResponse,
+    Scope as ProtoScope, StepDecay, SupersessionEvent as ProtoSupersessionEvent, SupersessionHistoryRequest,
+    TimelineRequest, TimelineResponse, decay, filter_condition, forget_request, match_value, match_values, ranking,
 };
 use tonic::Status;
 
@@ -357,7 +356,9 @@ fn ranking_to_proto(strategy: &RankingStrategy) -> ProtoRanking {
             return ranking_to_proto(&RankingStrategy::default_hybrid());
         }
     };
-    ProtoRanking { strategy: Some(strategy) }
+    ProtoRanking {
+        strategy: Some(strategy),
+    }
 }
 
 /// Converts a library [`DecayFn`] to the wire `Decay`'s oneof function.
@@ -474,14 +475,10 @@ impl TryFrom<EditRequest> for EditArgs {
         if request.pid.is_empty() {
             return Err(Status::invalid_argument("pid: required"));
         }
-        let metadata = request
-            .metadata
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(|err| {
-                tracing::warn!(error.message = %err, "rejected EditRequest with malformed metadata");
-                Status::invalid_argument("metadata: not representable as JSON")
-            })?;
+        let metadata = request.metadata.map(serde_json::to_value).transpose().map_err(|err| {
+            tracing::warn!(error.message = %err, "rejected EditRequest with malformed metadata");
+            Status::invalid_argument("metadata: not representable as JSON")
+        })?;
         Ok(Self {
             pid: request.pid,
             content: request.content,
@@ -1110,7 +1107,10 @@ mod tests {
     }
 
     fn as_of_ts() -> pbjson_types::Timestamp {
-        pbjson_types::Timestamp { seconds: 1_900_000_000, nanos: 0 }
+        pbjson_types::Timestamp {
+            seconds: 1_900_000_000,
+            nanos: 0,
+        }
     }
 
     #[test]
@@ -1152,7 +1152,10 @@ mod tests {
         let args = RecallAsOfArgs::try_from(RecallAsOfRequest {
             scope: Some(timeline_scope()),
             as_of: Some(as_of_ts()),
-            kinds: Some(ProtoKindSelector { episodic: false, semantic: false }),
+            kinds: Some(ProtoKindSelector {
+                episodic: false,
+                semantic: false,
+            }),
             ..RecallAsOfRequest::default()
         })
         .unwrap();
@@ -1183,10 +1186,7 @@ mod tests {
         let original = RankingStrategy::Hybrid {
             alpha: 0.4,
             decay: DecayFn::Step {
-                thresholds: vec![
-                    (chrono::Duration::hours(1), 1.0),
-                    (chrono::Duration::days(1), 0.5),
-                ],
+                thresholds: vec![(chrono::Duration::hours(1), 1.0), (chrono::Duration::days(1), 0.5)],
             },
         };
         let proto = ranking_to_proto(&original);
@@ -1197,7 +1197,10 @@ mod tests {
     #[test]
     fn should_reject_hybrid_ranking_missing_decay() {
         let proto = ProtoRanking {
-            strategy: Some(ranking::Strategy::Hybrid(ProtoHybrid { alpha: 0.5, decay: None })),
+            strategy: Some(ranking::Strategy::Hybrid(ProtoHybrid {
+                alpha: 0.5,
+                decay: None,
+            })),
         };
         let err = ranking_from_proto(Some(proto)).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);

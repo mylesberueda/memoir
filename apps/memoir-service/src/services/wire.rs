@@ -94,17 +94,21 @@ impl From<WireError> for Status {
             }
             ClientError::Jobs(JobsError::NotFound(_)) => (Code::NotFound, "jobs.not_found", "job not found".into()),
             ClientError::Jobs(JobsError::Database(_)) => (Code::Internal, "jobs.database", "internal error".into()),
-            ClientError::Vector(VectorError::NotFound(_)) => {
-                (Code::NotFound, "vector.not_found", "vector index entry not found".into())
-            }
+            ClientError::Vector(VectorError::NotFound(_)) => (
+                Code::NotFound,
+                "vector.not_found",
+                "vector index entry not found".into(),
+            ),
             ClientError::Vector(VectorError::BadRequest(_)) => (
                 Code::InvalidArgument,
                 "vector.bad_request",
                 "invalid request to vector backend".into(),
             ),
-            ClientError::Vector(VectorError::Connection(_)) => {
-                (Code::Unavailable, "vector.connection", "vector backend unavailable".into())
-            }
+            ClientError::Vector(VectorError::Connection(_)) => (
+                Code::Unavailable,
+                "vector.connection",
+                "vector backend unavailable".into(),
+            ),
             ClientError::Database(_) => (Code::Unavailable, "database", "database unavailable".into()),
             ClientError::Embedding(_) => (Code::Internal, "embedding", "internal error".into()),
             ClientError::Llm(_) => (Code::Internal, "llm", "internal error".into()),

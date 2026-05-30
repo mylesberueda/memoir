@@ -202,4 +202,3 @@ async fn should_reject_unauthenticated_caller() {
         .expect_err("unauthenticated must be rejected");
     assert_eq!(err.code(), Code::Unauthenticated);
 }
-

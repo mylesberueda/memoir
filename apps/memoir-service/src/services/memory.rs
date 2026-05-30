@@ -305,10 +305,7 @@ impl MemoryService for Memory {
     ///
     /// Read-tier auth. Logs the `as_of` value and result count so the
     /// point-in-time read is auditable ("who checked what memoir knew, when").
-    async fn recall_as_of(
-        &self,
-        request: Request<RecallAsOfRequest>,
-    ) -> Result<Response<RecallAsOfResponse>, Status> {
+    async fn recall_as_of(&self, request: Request<RecallAsOfRequest>) -> Result<Response<RecallAsOfResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         let pid = principal_pid(&caller.principal).to_owned();
         let RecallAsOfArgs { scope, params } = request.into_inner().try_into()?;
@@ -358,7 +355,12 @@ impl MemoryService for Memory {
             "MemoryService.Query invoked",
         );
 
-        let mut builder = self.ctx.memoir.query(args.query, args.scope).limit(args.limit).ranking(args.ranking);
+        let mut builder = self
+            .ctx
+            .memoir
+            .query(args.query, args.scope)
+            .limit(args.limit)
+            .ranking(args.ranking);
         if args.kinds.episodic && !args.kinds.semantic {
             builder = builder.episodic();
         }
