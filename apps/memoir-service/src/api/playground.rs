@@ -123,7 +123,11 @@ async fn chat(
         .history
         .into_iter()
         .map(|t| ChatTurn {
-            role: if t.role == "assistant" { ChatRole::Assistant } else { ChatRole::User },
+            role: if t.role == "assistant" {
+                ChatRole::Assistant
+            } else {
+                ChatRole::User
+            },
             content: t.content,
         })
         .collect();
@@ -142,14 +146,10 @@ async fn chat(
 
     // 1. Query context BEFORE writing the user turn — otherwise the query
     //    finds the just-written message in its own results.
-    let context = ctx
-        .memoir
-        .query(&req.message, scope.clone())
-        .await
-        .map_err(|err| {
-            tracing::error!(error.message = %err, "playground query failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, "query failed").into_response()
-        })?;
+    let context = ctx.memoir.query(&req.message, scope.clone()).await.map_err(|err| {
+        tracing::error!(error.message = %err, "playground query failed");
+        (StatusCode::INTERNAL_SERVER_ERROR, "query failed").into_response()
+    })?;
 
     // 2. Write the user turn. Await (not fire-and-forget) so the enqueue
     //    is confirmed before the assistant stream starts.

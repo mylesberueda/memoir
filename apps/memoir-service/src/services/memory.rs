@@ -31,8 +31,8 @@ use memoir_sdk::memoir::v1::memory_service_server::MemoryService;
 use memoir_sdk::memoir::v1::{
     EditRequest, EditResponse, ForgetRequest, ForgetResponse, ListAgentsRequest, ListAgentsResponse, QueryRequest,
     QueryResponse, RecallAsOfRequest, RecallAsOfResponse, RecallRequest, RecallResponse, RememberRequest,
-    RememberResponse, SearchHit, SearchRequest, SearchResponse, SupersessionHistoryRequest, SupersessionHistoryResponse,
-    TimelineRequest, TimelineResponse,
+    RememberResponse, SearchHit, SearchRequest, SearchResponse, SupersessionHistoryRequest,
+    SupersessionHistoryResponse, TimelineRequest, TimelineResponse,
 };
 use tonic::{Request, Response, Status};
 
@@ -461,10 +461,7 @@ impl MemoryService for Memory {
         }))
     }
 
-    async fn list_agents(
-        &self,
-        request: Request<ListAgentsRequest>,
-    ) -> Result<Response<ListAgentsResponse>, Status> {
+    async fn list_agents(&self, request: Request<ListAgentsRequest>) -> Result<Response<ListAgentsResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         let pid = principal_pid(&caller.principal).to_owned();
         let req = request.into_inner();

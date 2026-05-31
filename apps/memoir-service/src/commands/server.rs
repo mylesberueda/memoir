@@ -110,10 +110,9 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     tracing::info!(server.address = %http_addr, "starting HTTP server");
     let http_fut = axum::serve(listener, app).into_future();
 
-    tokio::try_join!(
-        async { grpc_fut.await.wrap_err("gRPC server crashed") },
-        async { http_fut.await.wrap_err("HTTP server crashed") },
-    )?;
+    tokio::try_join!(async { grpc_fut.await.wrap_err("gRPC server crashed") }, async {
+        http_fut.await.wrap_err("HTTP server crashed")
+    },)?;
 
     Ok(())
 }

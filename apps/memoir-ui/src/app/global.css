@@ -23,7 +23,9 @@
  */
 /* biome-ignore lint/suspicious/noUnknownAtRules: needed for daisy */
 @plugin "daisyui/theme" {
+	/* biome-ignore lint/correctness/noUnknownProperty: daisyUI theme options, not CSS */
 	name: "memoir-light";
+	/* biome-ignore lint/correctness/noUnknownProperty: daisyUI theme options, not CSS */
 	default: true;
 	color-scheme: light;
 
@@ -54,8 +56,11 @@
 
 /* biome-ignore lint/suspicious/noUnknownAtRules: needed for daisy */
 @plugin "daisyui/theme" {
+	/* biome-ignore lint/correctness/noUnknownProperty: daisyUI theme options, not CSS */
 	name: "memoir-dark";
+	/* biome-ignore lint/correctness/noUnknownProperty: daisyUI theme options, not CSS */
 	default: false;
+	/* biome-ignore lint/correctness/noUnknownProperty: daisyUI theme options, not CSS */
 	prefersdark: true;
 	color-scheme: dark;
 
@@ -95,8 +100,8 @@
 /* biome-ignore lint/suspicious/noUnknownAtRules: tailwind v4 theme block */
 @theme {
 	--font-sans:
-		var(--font-body), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-		sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+		var(--font-body), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif,
+		"Apple Color Emoji", "Segoe UI Emoji";
 	--font-serif: var(--font-display), ui-serif, Georgia, Cambria, "Times New Roman", serif;
 	--font-mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
