@@ -6,7 +6,7 @@ use std::pin::Pin;
 use crate::embedding::EmbeddingModel;
 use crate::memory::{KindSelector, Memories, Scope};
 use crate::store::MemoryStore;
-use crate::vector::VectorIndex;
+use crate::vector::{MemoryFilter, VectorIndex};
 
 use super::{Client, ClientError};
 
@@ -31,11 +31,21 @@ pub const DEFAULT_LIMIT: usize = 10;
 /// ```no_run
 /// # use memoir_core::client::Client;
 /// # use memoir_core::memory::Scope;
+/// # use memoir_core::vector::{FilterCondition, MatchValue, MemoryFilter};
 /// # async fn example(client: &Client, scope: Scope) -> Result<(), Box<dyn std::error::Error>> {
+/// let exclude_current_conversation = MemoryFilter {
+///     must_not: vec![FilterCondition::Equals {
+///         field: "conversation_id".to_string(),
+///         value: MatchValue::Integer(42),
+///     }],
+///     ..MemoryFilter::default()
+/// };
 /// let memories = client
 ///     .search("what did the user just say?", scope)
 ///     .limit(5)
 ///     .episodic()
+///     .metadata_filter(exclude_current_conversation)
+///     .min_similarity(0.3)
 ///     .await?;
 /// for m in memories.list() {
 ///     println!("{}", m.content);
@@ -51,6 +61,8 @@ pub struct SearchBuilder<'a> {
     limit: usize,
     episodic: bool,
     semantic: bool,
+    metadata_filter: Option<MemoryFilter>,
+    min_similarity: Option<f32>,
 }
 
 impl<'a> SearchBuilder<'a> {
@@ -62,6 +74,8 @@ impl<'a> SearchBuilder<'a> {
             limit: DEFAULT_LIMIT,
             episodic: false,
             semantic: false,
+            metadata_filter: None,
+            min_similarity: None,
         }
     }
 
@@ -86,6 +100,27 @@ impl<'a> SearchBuilder<'a> {
     /// the result. Calling both (or calling neither) retrieves both kinds.
     pub fn semantic(mut self) -> Self {
         self.semantic = true;
+        self
+    }
+
+    /// Applies a caller-supplied metadata filter alongside the scope+kind filter.
+    ///
+    /// AND-joined with the scope conditions: caller-supplied filter cannot
+    /// widen scope. Multiple calls replace (last wins). See [`MemoryFilter`]
+    /// for the shape.
+    pub fn metadata_filter(mut self, filter: MemoryFilter) -> Self {
+        self.metadata_filter = Some(filter);
+        self
+    }
+
+    /// Drops hits whose similarity score is below `threshold`.
+    ///
+    /// `threshold` is in the same range as [`crate::memory::Memory::score`]:
+    /// cosine similarity in `[-1.0, 1.0]`, where higher = closer. The
+    /// vector backend applies the floor before results are returned;
+    /// memoir-core does not post-filter. Multiple calls replace (last wins).
+    pub fn min_similarity(mut self, threshold: f32) -> Self {
+        self.min_similarity = Some(threshold);
         self
     }
 
@@ -117,13 +152,18 @@ async fn execute(builder: SearchBuilder<'_>) -> Result<Memories, ClientError> {
         query,
         scope,
         limit,
+        metadata_filter,
+        min_similarity,
         ..
     } = builder;
 
     let inner = client.inner.clone();
 
     let query_vector = inner.embedder.embed(&query).await?;
-    let hits = inner.index.search(scope, query_vector, limit, kinds).await?;
+    let hits = inner
+        .index
+        .search(scope, query_vector, limit, kinds, metadata_filter, min_similarity)
+        .await?;
 
     let pids: Vec<&str> = hits.iter().map(|(pid, _)| pid.as_str()).collect();
     let mut rows = inner.store.find_by_pids(&pids).await?;

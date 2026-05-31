@@ -159,6 +159,23 @@
 			},
 			"inputs": ["{projectRoot}/proto/**/*.proto"],
 			"outputs": []
+		},
+		"docker:build": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "docker build -f apps/memoir-service/Dockerfile -t {args.repo:-memoir}/memoir-service:{args.tag:-local} .",
+				"cwd": "{workspaceRoot}"
+			},
+			"cache": true,
+			"dependsOn": ["build"]
+		},
+		"docker:push": {
+			"executor": "nx:run-commands",
+			"options": {
+				"command": "docker push {args.repo:-memoir}/memoir-service:{args.tag:-local}",
+				"cwd": "{workspaceRoot}"
+			},
+			"dependsOn": ["docker:build"]
 		}
 	},
 	"tags": ["scope:memoir-service", "type:app", "lang:rust"]

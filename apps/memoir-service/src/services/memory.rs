@@ -36,7 +36,8 @@ use tonic::{Request, Response, Status};
 use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
-    client_error_to_status, forget_target_from_proto, memory_to_proto, metadata_from_proto, scope_from_proto,
+    client_error_to_status, forget_target_from_proto, memory_to_proto, metadata_filter_from_proto, metadata_from_proto,
+    scope_from_proto,
 };
 
 /// `MemoryService` RPC handler.
@@ -70,13 +71,11 @@ fn principal_pid(principal: &Principal) -> &str {
 impl MemoryService for Memory {
     /// Searches indexed memories under a scope by vector similarity.
     ///
-    /// `limit = 0` falls back to the library default (10). The proto's
-    /// `metadata_filter` is accepted on the wire but **not threaded into
-    /// the library** in v0.1 — memoir-core's `SearchBuilder` has no
-    /// metadata-filter knob yet (deferred from ticket 0004). Callers
-    /// passing `metadata_filter` get a successful search that ignores
-    /// the field; a follow-up will plumb it through once the library
-    /// supports it.
+    /// `limit = 0` falls back to the library default (10). The optional
+    /// `metadata_filter` is AND-joined with the scope+kind conditions
+    /// enforced by the library — caller-supplied conditions cannot widen
+    /// scope. The optional `min_similarity` sets a score floor; hits below
+    /// it are dropped by the vector backend before they reach the response.
     async fn search(&self, request: Request<SearchRequest>) -> Result<Response<SearchResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         let pid = principal_pid(&caller.principal).to_owned();
@@ -84,10 +83,12 @@ impl MemoryService for Memory {
             scope,
             query,
             limit,
-            metadata_filter: _,
+            metadata_filter,
+            min_similarity,
         } = request.into_inner();
 
         let scope = scope_from_proto(scope)?;
+        let metadata_filter = metadata_filter_from_proto(metadata_filter)?;
 
         tracing::event!(
             name: "memoir.service.memory.search.invoked",
@@ -98,12 +99,20 @@ impl MemoryService for Memory {
             scope.user_id = %scope.user_id,
             query.len = query.len(),
             limit = limit,
+            metadata_filter.present = metadata_filter.is_some(),
+            min_similarity = ?min_similarity,
             "MemoryService.Search invoked",
         );
 
         let mut builder = self.ctx.memoir.search(query, scope);
         if limit > 0 {
             builder = builder.limit(limit as usize);
+        }
+        if let Some(filter) = metadata_filter {
+            builder = builder.metadata_filter(filter);
+        }
+        if let Some(threshold) = min_similarity {
+            builder = builder.min_similarity(threshold);
         }
         let memories = builder.await.map_err(client_error_to_status)?;
 

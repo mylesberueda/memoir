@@ -1,0 +1,322 @@
+name: Release
+
+# Triggered by a `v*` tag push. Publishes:
+#   - polypixel-memoir-core to crates.io
+#   - polypixel-memoir-sdk  to crates.io
+#   - @polypixel/memoir-sdk to npmjs
+#   - GitHub Release with auto-generated notes
+#
+# Docker image versioned tags are handled by docker-release.yml, which
+# triggers on the same v* push in parallel. The two workflows are independent
+# — failure of one does not block the other; both must succeed for a complete
+# release.
+#
+# Tag pattern:
+#   Clean release:  v0.1.0
+#   Pre-release:    v0.1.0-rc.1, v0.1.0-beta.2, etc.
+#
+# Pre-release semantics:
+#   - cargo: published normally; consumers must opt in via --pre or explicit version
+#   - npm:   dist-tag `next` (clean releases get `latest`)
+#
+# Recovery:
+#   workflow_dispatch with `steps` input (comma-separated: cargo, npm, github-release)
+#   lets the operator re-run only the failed steps after fixing the underlying issue.
+#   A duplicate publish to either registry fails loudly — desired behavior.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to (re-)release (e.g. v0.1.0)'
+        required: true
+        type: string
+      steps:
+        description: 'Comma-separated steps to run: cargo, npm, github-release'
+        required: false
+        type: string
+        default: 'cargo,npm,github-release'
+
+permissions:
+  contents: write     # gh release create
+  packages: write     # (parity with docker-release.yml; not strictly required here)
+
+# Queue concurrent releases instead of dropping one. cancel-in-progress:false
+# means a second release push waits for the first to finish.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  NX_KEY: ${{ secrets.NX_KEY }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Pre-flight: tag pattern, version sync, tag-commit reachability
+  # ---------------------------------------------------------------------------
+  validate:
+    runs-on: arc-runner-set
+    outputs:
+      tag: ${{ steps.classify.outputs.tag }}
+      version: ${{ steps.classify.outputs.version }}
+      kind: ${{ steps.classify.outputs.kind }}
+      npm-dist-tag: ${{ steps.classify.outputs.npm-dist-tag }}
+      steps-to-run: ${{ steps.classify.outputs.steps-to-run }}
+    steps:
+      - name: Resolve tag from event
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+            STEPS="${{ inputs.steps }}"
+          else
+            TAG="${{ github.ref_name }}"
+            STEPS="cargo,npm,github-release"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "steps=$STEPS" >> $GITHUB_OUTPUT
+
+      - name: Checkout at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.resolve.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Classify tag (clean vs pre-release)
+        id: classify
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          STEPS="${{ steps.resolve.outputs.steps }}"
+
+          # Strict semver: v<MAJOR>.<MINOR>.<PATCH>[-suffix]
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'; then
+            echo "::error::Tag '$TAG' does not match v<MAJOR>.<MINOR>.<PATCH>[-suffix]"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          CORE="${VERSION%%-*}"
+          if [ "$CORE" = "$VERSION" ]; then
+            KIND="clean"
+            NPM_DIST_TAG="latest"
+          else
+            KIND="prerelease"
+            NPM_DIST_TAG="next"
+          fi
+
+          echo "tag=$TAG"           >> $GITHUB_OUTPUT
+          echo "version=$VERSION"   >> $GITHUB_OUTPUT
+          echo "kind=$KIND"         >> $GITHUB_OUTPUT
+          echo "npm-dist-tag=$NPM_DIST_TAG" >> $GITHUB_OUTPUT
+          echo "steps-to-run=$STEPS"  >> $GITHUB_OUTPUT
+
+          echo "🏷️  Tag:          $TAG"
+          echo "    Version:      $VERSION"
+          echo "    Kind:         $KIND"
+          echo "    npm dist-tag: $NPM_DIST_TAG"
+          echo "    Steps to run: $STEPS"
+
+      - name: Verify tag commit is reachable from main
+        run: |
+          TAG_SHA=$(git rev-parse "${{ steps.classify.outputs.tag }}^{commit}")
+          git fetch origin main --depth=0 2>/dev/null || git fetch origin main
+          if ! git merge-base --is-ancestor "$TAG_SHA" origin/main; then
+            echo "::error::Tag ${{ steps.classify.outputs.tag }} ($TAG_SHA) is not reachable from origin/main."
+            echo "::error::Releases must be cut from commits merged into main. Re-tag a main commit and try again."
+            exit 1
+          fi
+          echo "✅ Tag commit reachable from main"
+
+      - name: Verify workspace versions match tag
+        run: |
+          EXPECTED="${{ steps.classify.outputs.version }}"
+          FAIL=0
+
+          check_version() {
+            local label="$1"
+            local actual="$2"
+            if [ "$actual" != "$EXPECTED" ]; then
+              echo "::error::$label version is '$actual' but tag expects '$EXPECTED'"
+              FAIL=1
+            else
+              echo "  ✅ $label: $actual"
+            fi
+          }
+
+          # Cargo manifests — extract the first `version = "..."` line after [package]
+          CORE_VER=$(awk '/^\[package\]/{flag=1} flag && /^version = /{gsub(/version = "|"/, ""); print; exit}' packages/memoir-core/Cargo.toml)
+          SDK_VER=$(awk  '/^\[package\]/{flag=1} flag && /^version = /{gsub(/version = "|"/, ""); print; exit}' packages/memoir-sdk-rs/Cargo.toml)
+          NPM_VER=$(jq -r .version packages/memoir-sdk-ts/package.json)
+
+          echo "Expected version: $EXPECTED"
+          check_version "polypixel-memoir-core (Cargo.toml)" "$CORE_VER"
+          check_version "polypixel-memoir-sdk (Cargo.toml)"  "$SDK_VER"
+          check_version "@polypixel/memoir-sdk (package.json)" "$NPM_VER"
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "::error::Version mismatch. Bump manifests + commit + re-tag, or move the tag to the correct commit."
+            exit 1
+          fi
+          echo "✅ All workspace versions match the tag"
+
+  # ---------------------------------------------------------------------------
+  # CI gate — re-run lint to guard against publishing untested code.
+  # docker-test is covered by docker-release.yml's parallel pipeline.
+  # ---------------------------------------------------------------------------
+  ci-gate:
+    needs: [validate]
+    runs-on: arc-runner-set
+    steps:
+      - name: Checkout at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Run lint across the workspace
+        run: pnpm nx run-many --target lint --all --parallel
+
+  # ---------------------------------------------------------------------------
+  # Publish both Rust crates to crates.io.
+  # No inter-crate path deps (verified: memoir-sdk-rs has zero workspace
+  # deps, memoir-core inlined its migration sub-crate in ticket 0002), so
+  # both can publish in parallel via a matrix.
+  # ---------------------------------------------------------------------------
+  cargo-publish:
+    needs: [validate, ci-gate]
+    if: contains(needs.validate.outputs.steps-to-run, 'cargo')
+    runs-on: arc-runner-set
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - polypixel-memoir-core
+          - polypixel-memoir-sdk
+    steps:
+      - name: Checkout at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+          fetch-depth: 0
+
+      - name: cargo publish ${{ matrix.crate }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::error::CARGO_REGISTRY_TOKEN secret is not set"
+            exit 1
+          fi
+          cargo publish -p ${{ matrix.crate }}
+
+  # ---------------------------------------------------------------------------
+  # Publish the TS SDK to npmjs.
+  # ---------------------------------------------------------------------------
+  npm-publish:
+    needs: [validate, ci-gate]
+    if: contains(needs.validate.outputs.steps-to-run, 'npm')
+    runs-on: arc-runner-set
+    steps:
+      - name: Checkout at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Setup Node + pnpm
+        uses: ./.github/actions/setup-node-pnpm
+
+      - name: Configure npm auth
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is not set"
+            exit 1
+          fi
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+
+      - name: pnpm publish @polypixel/memoir-sdk
+        run: |
+          pnpm publish \
+            --filter @polypixel/memoir-sdk \
+            --access public \
+            --tag "${{ needs.validate.outputs.npm-dist-tag }}" \
+            --no-git-checks
+
+  # ---------------------------------------------------------------------------
+  # GitHub Release — created last so it acts as a marker that the registry
+  # publishes succeeded.
+  # ---------------------------------------------------------------------------
+  github-release:
+    needs: [validate, cargo-publish, npm-publish]
+    if: |
+      always() &&
+      contains(needs.validate.outputs.steps-to-run, 'github-release') &&
+      needs.validate.result == 'success' &&
+      (needs.cargo-publish.result == 'success' || needs.cargo-publish.result == 'skipped') &&
+      (needs.npm-publish.result == 'success' || needs.npm-publish.result == 'skipped')
+    runs-on: arc-runner-set
+    steps:
+      - name: Checkout at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.validate.outputs.tag }}"
+          PRERELEASE_FLAG=""
+          if [ "${{ needs.validate.outputs.kind }}" = "prerelease" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --generate-notes \
+            $PRERELEASE_FLAG
+
+  # ---------------------------------------------------------------------------
+  # Summary — single line per artifact, easy to scan in the run UI.
+  # ---------------------------------------------------------------------------
+  summary:
+    needs: [validate, cargo-publish, npm-publish, github-release]
+    if: always()
+    runs-on: arc-runner-set
+    steps:
+      - name: Render summary
+        run: |
+          TAG="${{ needs.validate.outputs.tag }}"
+          VER="${{ needs.validate.outputs.version }}"
+          DIST_TAG="${{ needs.validate.outputs.npm-dist-tag }}"
+
+          status() {
+            case "$1" in
+              success)  echo "✅ ok" ;;
+              failure)  echo "❌ failed" ;;
+              skipped)  echo "⏭️  skipped" ;;
+              cancelled) echo "🛑 cancelled" ;;
+              *)        echo "❔ $1" ;;
+            esac
+          }
+
+          {
+            echo "## Release $TAG"
+            echo
+            echo "| Step | Status | Artifact |"
+            echo "|---|---|---|"
+            echo "| validate | $(status '${{ needs.validate.result }}') | tag $TAG → version $VER |"
+            echo "| cargo-publish | $(status '${{ needs.cargo-publish.result }}') | https://crates.io/crates/polypixel-memoir-core/$VER · https://crates.io/crates/polypixel-memoir-sdk/$VER |"
+            echo "| npm-publish | $(status '${{ needs.npm-publish.result }}') | https://www.npmjs.com/package/@polypixel/memoir-sdk/v/$VER (dist-tag: \`$DIST_TAG\`) |"
+            echo "| github-release | $(status '${{ needs.github-release.result }}') | ${{ github.server_url }}/${{ github.repository }}/releases/tag/$TAG |"
+            echo
+            echo "Docker image versioned tags are published by \`docker-release.yml\` in parallel."
+          } >> "$GITHUB_STEP_SUMMARY"

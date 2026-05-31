@@ -23,7 +23,7 @@ pub enum ClientError {
     Llm(#[from] LlmError),
 
     #[error("migration failed: {0}")]
-    Migration(#[from] memoir_core_migration::MigrationError),
+    Migration(#[from] crate::migration::MigrationError),
 
     #[error("database connection failed: {0}")]
     Database(#[from] sea_orm::DbErr),

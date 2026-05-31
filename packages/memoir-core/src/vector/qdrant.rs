@@ -16,7 +16,7 @@ use qdrant_client::qdrant::{
 };
 use uuid::Uuid;
 
-use super::{VectorError, VectorIndex};
+use super::{MemoryFilter, VectorError, VectorIndex};
 use crate::memory::{KindSelector, MemoryKind, Scope};
 
 const DEFAULT_COLLECTION: &str = "memoir_memories";
@@ -120,12 +120,19 @@ impl VectorIndex for QdrantIndex {
         query_embedding: Vec<f32>,
         limit: usize,
         kinds: KindSelector,
+        extra_filter: Option<MemoryFilter>,
+        min_similarity: Option<f32>,
     ) -> Result<Vec<(String, f32)>, VectorError> {
         if kinds.is_empty() {
             return Ok(Vec::new());
         }
 
-        let mut conditions = vec![
+        // Scope conditions go in `must` first so an `extra_filter.must` cannot
+        // accidentally widen scope: a caller-supplied `must` adds to AND, not
+        // replaces. A caller-supplied `must_not` on `agent_id` (or any scope
+        // field) would only narrow further, not widen — Qdrant evaluates
+        // `must AND NOT must_not`.
+        let mut must = vec![
             Condition::matches("agent_id", scope.agent_id),
             Condition::matches("org_id", scope.org_id),
             Condition::matches("user_id", scope.user_id),
@@ -136,21 +143,35 @@ impl VectorIndex for QdrantIndex {
                 .into_iter()
                 .map(|k| k.as_str().to_string())
                 .collect();
-            conditions.push(Condition::matches("kind", names));
+            must.push(Condition::matches("kind", names));
         }
-        let filter = Filter::must(conditions);
 
-        let response = self
-            .qdrant
-            .query(
-                QueryPointsBuilder::new(&self.collection)
-                    .query(query_embedding)
-                    .limit(limit as u64)
-                    .filter(filter)
-                    .with_payload(true),
-            )
-            .await
-            .map_err(connection)?;
+        let mut must_not = Vec::new();
+        let mut should = Vec::new();
+        if let Some(extra) = extra_filter {
+            let translated: Filter = extra.into();
+            must.extend(translated.must);
+            must_not.extend(translated.must_not);
+            should.extend(translated.should);
+        }
+
+        let filter = Filter {
+            must,
+            must_not,
+            should,
+            min_should: None,
+        };
+
+        let mut request = QueryPointsBuilder::new(&self.collection)
+            .query(query_embedding)
+            .limit(limit as u64)
+            .filter(filter)
+            .with_payload(true);
+        if let Some(threshold) = min_similarity {
+            request = request.score_threshold(threshold);
+        }
+
+        let response = self.qdrant.query(request).await.map_err(connection)?;
 
         let mut hits = Vec::with_capacity(response.result.len());
         for scored in response.result {

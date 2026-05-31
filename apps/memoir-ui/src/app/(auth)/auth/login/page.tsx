@@ -10,11 +10,5 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 	const verified = params.verified === 'true';
 	const error = params.error as string | undefined;
 
-	return (
-		<LoginClient
-			initialMode={mode === 'register' ? 'register' : 'login'}
-			verified={verified}
-			error={error}
-		/>
-	);
+	return <LoginClient initialMode={mode === 'register' ? 'register' : 'login'} verified={verified} error={error} />;
 }

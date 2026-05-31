@@ -20,6 +20,11 @@ This guide will help you configure the necessary secrets, variables, and infrast
 - [ ] Choose and configure runner strategy (self-hosted or GitHub-hosted)
 - [ ] Set up caching strategy (MinIO or GitHub Actions Cache)
 
+### Required for Releases
+
+- [ ] Add `CARGO_REGISTRY_TOKEN` secret (publishes Rust crates to crates.io)
+- [ ] Add `NPM_TOKEN` secret (publishes TS SDK to npmjs)
+
 ### Optional Setup
 
 - [ ] Add `PROJECTS_TOKEN` secret (for GitHub Projects automation)
@@ -52,6 +57,94 @@ Value: <your-nx-cloud-token>
 ```
 
 **Used in**: `ci.yml`, `build.yml`, `test.yml`, `lint.yml`
+
+### 2. CARGO_REGISTRY_TOKEN (Required for releases)
+
+**Purpose**: Authenticates `cargo publish` to crates.io for the release workflow (`release.yml`).
+
+**How to get it** — token scoping is lifecycle-dependent:
+
+**First release (bootstrap token):**
+
+1. Sign in to [crates.io](https://crates.io/) with your GitHub account.
+2. Go to [Account Settings → API Tokens](https://crates.io/settings/tokens).
+3. Click **New Token**:
+   - Token name: `memoir-bootstrap`.
+   - Scopes: **`publish-new` AND `publish-update`**. `publish-new` is required because the first release of each crate creates it on the registry — `publish-update`-only tokens cannot create new crate names.
+   - Crates: leave unrestricted. Per-crate scoping only applies after the crate exists; it cannot scope a `publish-new` operation to names that don't exist yet.
+4. Copy the token (only shown once).
+5. After the first successful release publishes both crates, **revoke this bootstrap token** and create a steady-state one (next subsection).
+
+**Steady-state releases (after first publish lands):**
+
+1. Same flow, new token:
+   - Token name: `memoir-release-ci`.
+   - Scopes: **`publish-update`** only. Bootstrap is done; the token never needs to create new crate names again.
+   - Crates: restrict to `polypixel-memoir-core` and `polypixel-memoir-sdk` (least privilege — token cannot publish anything else).
+2. Replace the bootstrap token in GitHub Secrets with this one.
+
+**How to add it (either token type)**:
+
+```bash
+# Via GitHub CLI
+gh secret set CARGO_REGISTRY_TOKEN
+
+# Via GitHub UI
+Repository → Settings → Secrets and variables → Actions → New repository secret
+Name: CARGO_REGISTRY_TOKEN
+Value: <your-crates.io-token>
+```
+
+**Rotation**: Rotate after each contributor with token access leaves, or annually. Revoke via the same crates.io tokens page. Adding a third publishable crate later means temporarily swapping back to a `publish-new`-scoped token for that first publish, then back to the per-crate steady-state token.
+
+**Used in**: `release.yml` (only on `v*` tag pushes).
+
+### 3. NPM_TOKEN (Required for releases)
+
+**Purpose**: Authenticates `pnpm publish` to npmjs.com for `@polypixel/memoir-sdk` (used in `release.yml`).
+
+**Prerequisite**: The `@polypixel` org must exist on npmjs.com (free) and your account must be a member/owner with publish rights to it. Claim the scope before generating any token.
+
+**How to get it** — token scoping is lifecycle-dependent:
+
+**First release (bootstrap token):**
+
+1. Sign in to [npmjs.com](https://www.npmjs.com/).
+2. Go to **Access Tokens** → **Generate New Token** → **Granular Access Token**.
+3. Configure:
+   - Token name: `memoir-bootstrap`.
+   - Expiration: 30 days (you'll replace it after first publish anyway).
+   - Permissions: **Read and write** on packages.
+   - Packages and scopes: **Selected packages and scopes → `@polypixel` (whole scope)**. The per-package picker can't select `@polypixel/memoir-sdk` until it exists on the registry. Scope-level grant lets the token create the package on first publish.
+4. Copy the token (only shown once).
+5. After the first successful release publishes the package, **revoke this bootstrap token** and create a steady-state one (next subsection).
+
+**Steady-state releases (after first publish lands):**
+
+1. Same flow, new token:
+   - Token name: `memoir-release-ci`.
+   - Expiration: 1 year (or your security policy's max).
+   - Permissions: **Read and write** on packages.
+   - Packages and scopes: **Selected packages → `@polypixel/memoir-sdk`** (now selectable; least privilege).
+2. Replace the bootstrap token in GitHub Secrets with this one.
+
+**Alternative — Classic Automation token** (simpler but broader): npmjs also offers Classic "Automation" tokens that bypass 2FA challenges. They have no package-level scoping (your whole account's publish power) but are easier to set up. Acceptable for a one-account org; not recommended once contributors share the workflow.
+
+**How to add it (either token type)**:
+
+```bash
+# Via GitHub CLI
+gh secret set NPM_TOKEN
+
+# Via GitHub UI
+Repository → Settings → Secrets and variables → Actions → New repository secret
+Name: NPM_TOKEN
+Value: <your-npmjs-token>
+```
+
+**Rotation**: Rotate annually or when the granular token expires (npmjs sends email reminders ~30 days out). Revoke via the same npmjs Access Tokens page. Adding a second `@polypixel/...` package later: bootstrap-token cycle again unless the steady-state token is scope-level rather than package-level.
+
+**Used in**: `release.yml` (only on `v*` tag pushes).
 
 ## Optional GitHub Secrets
 

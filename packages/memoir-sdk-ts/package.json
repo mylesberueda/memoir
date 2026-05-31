@@ -1,7 +1,25 @@
 {
 	"name": "@polypixel/memoir-sdk",
 	"version": "0.1.0",
-	"private": true,
+	"description": "Generated TypeScript SDK for Memoir's memoir-service (Connect-RPC client).",
+	"license": "MIT OR Apache-2.0",
+	"author": "Myles Berueda <myles@polypixel.io>",
+	"homepage": "https://github.com/mylesberueda/memoir",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/mylesberueda/memoir.git",
+		"directory": "packages/memoir-sdk-ts"
+	},
+	"bugs": {
+		"url": "https://github.com/mylesberueda/memoir/issues"
+	},
+	"keywords": [
+		"memoir",
+		"grpc",
+		"connect-rpc",
+		"client",
+		"sdk"
+	],
 	"type": "module",
 	"exports": {
 		"./*": {
@@ -15,6 +33,18 @@
 		"*": {
 			"*": ["./dist/*.d.ts"]
 		}
+	},
+	"files": [
+		"dist",
+		"LICENSE-MIT",
+		"LICENSE-APACHE",
+		"README.md"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"prepublishOnly": "pnpm exec nx run memoir-sdk-ts:build"
 	},
 	"dependencies": {
 		"@bufbuild/protobuf": "^2.10.1",

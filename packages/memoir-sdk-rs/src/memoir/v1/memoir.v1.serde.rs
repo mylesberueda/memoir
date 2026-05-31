@@ -1567,6 +1567,146 @@ impl<'de> serde::Deserialize<'de> for FailedJob {
         deserializer.deserialize_struct("memoir.v1.FailedJob", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for FilterCondition {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.field.is_empty() {
+            len += 1;
+        }
+        if self.condition.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.FilterCondition", len)?;
+        if !self.field.is_empty() {
+            struct_ser.serialize_field("field", &self.field)?;
+        }
+        if let Some(v) = self.condition.as_ref() {
+            match v {
+                filter_condition::Condition::Equals(v) => {
+                    struct_ser.serialize_field("equals", v)?;
+                }
+                filter_condition::Condition::InValues(v) => {
+                    struct_ser.serialize_field("inValues", v)?;
+                }
+                filter_condition::Condition::Range(v) => {
+                    struct_ser.serialize_field("range", v)?;
+                }
+            }
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for FilterCondition {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "field",
+            "equals",
+            "in_values",
+            "inValues",
+            "range",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Field,
+            Equals,
+            InValues,
+            Range,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "field" => Ok(GeneratedField::Field),
+                            "equals" => Ok(GeneratedField::Equals),
+                            "inValues" | "in_values" => Ok(GeneratedField::InValues),
+                            "range" => Ok(GeneratedField::Range),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = FilterCondition;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.FilterCondition")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<FilterCondition, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut field__ = None;
+                let mut condition__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Field => {
+                            if field__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("field"));
+                            }
+                            field__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Equals => {
+                            if condition__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("equals"));
+                            }
+                            condition__ = map_.next_value::<::std::option::Option<_>>()?.map(filter_condition::Condition::Equals)
+;
+                        }
+                        GeneratedField::InValues => {
+                            if condition__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("inValues"));
+                            }
+                            condition__ = map_.next_value::<::std::option::Option<_>>()?.map(filter_condition::Condition::InValues)
+;
+                        }
+                        GeneratedField::Range => {
+                            if condition__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("range"));
+                            }
+                            condition__ = map_.next_value::<::std::option::Option<_>>()?.map(filter_condition::Condition::Range)
+;
+                        }
+                    }
+                }
+                Ok(FilterCondition {
+                    field: field__.unwrap_or_default(),
+                    condition: condition__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.FilterCondition", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for ForgetRequest {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -2149,6 +2289,100 @@ impl<'de> serde::Deserialize<'de> for GetUserResponse {
         deserializer.deserialize_struct("memoir.v1.GetUserResponse", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for IntegerList {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.values.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.IntegerList", len)?;
+        if !self.values.is_empty() {
+            struct_ser.serialize_field("values", &self.values.iter().map(ToString::to_string).collect::<Vec<_>>())?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for IntegerList {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "values",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Values,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "values" => Ok(GeneratedField::Values),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = IntegerList;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.IntegerList")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<IntegerList, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut values__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Values => {
+                            if values__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("values"));
+                            }
+                            values__ = 
+                                Some(map_.next_value::<Vec<::pbjson::private::NumberDeserialize<_>>>()?
+                                    .into_iter().map(|x| x.0).collect())
+                            ;
+                        }
+                    }
+                }
+                Ok(IntegerList {
+                    values: values__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.IntegerList", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for JobKind {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -2221,6 +2455,97 @@ impl<'de> serde::Deserialize<'de> for JobKind {
             }
         }
         deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
+impl serde::Serialize for KeywordList {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.values.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.KeywordList", len)?;
+        if !self.values.is_empty() {
+            struct_ser.serialize_field("values", &self.values)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for KeywordList {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "values",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Values,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "values" => Ok(GeneratedField::Values),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = KeywordList;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.KeywordList")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<KeywordList, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut values__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Values => {
+                            if values__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("values"));
+                            }
+                            values__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(KeywordList {
+                    values: values__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.KeywordList", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for ListApiKeysRequest {
@@ -3099,6 +3424,236 @@ impl<'de> serde::Deserialize<'de> for LoginResponse {
         deserializer.deserialize_struct("memoir.v1.LoginResponse", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for MatchValue {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.value.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.MatchValue", len)?;
+        if let Some(v) = self.value.as_ref() {
+            match v {
+                match_value::Value::Keyword(v) => {
+                    struct_ser.serialize_field("keyword", v)?;
+                }
+                match_value::Value::Integer(v) => {
+                    #[allow(clippy::needless_borrow)]
+                    #[allow(clippy::needless_borrows_for_generic_args)]
+                    struct_ser.serialize_field("integer", ToString::to_string(&v).as_str())?;
+                }
+                match_value::Value::Boolean(v) => {
+                    struct_ser.serialize_field("boolean", v)?;
+                }
+            }
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for MatchValue {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "keyword",
+            "integer",
+            "boolean",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Keyword,
+            Integer,
+            Boolean,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "keyword" => Ok(GeneratedField::Keyword),
+                            "integer" => Ok(GeneratedField::Integer),
+                            "boolean" => Ok(GeneratedField::Boolean),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = MatchValue;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.MatchValue")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MatchValue, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut value__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Keyword => {
+                            if value__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("keyword"));
+                            }
+                            value__ = map_.next_value::<::std::option::Option<_>>()?.map(match_value::Value::Keyword);
+                        }
+                        GeneratedField::Integer => {
+                            if value__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("integer"));
+                            }
+                            value__ = map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| match_value::Value::Integer(x.0));
+                        }
+                        GeneratedField::Boolean => {
+                            if value__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("boolean"));
+                            }
+                            value__ = map_.next_value::<::std::option::Option<_>>()?.map(match_value::Value::Boolean);
+                        }
+                    }
+                }
+                Ok(MatchValue {
+                    value: value__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.MatchValue", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for MatchValues {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.values.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.MatchValues", len)?;
+        if let Some(v) = self.values.as_ref() {
+            match v {
+                match_values::Values::Keywords(v) => {
+                    struct_ser.serialize_field("keywords", v)?;
+                }
+                match_values::Values::Integers(v) => {
+                    struct_ser.serialize_field("integers", v)?;
+                }
+            }
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for MatchValues {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "keywords",
+            "integers",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Keywords,
+            Integers,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "keywords" => Ok(GeneratedField::Keywords),
+                            "integers" => Ok(GeneratedField::Integers),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = MatchValues;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.MatchValues")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MatchValues, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut values__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Keywords => {
+                            if values__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("keywords"));
+                            }
+                            values__ = map_.next_value::<::std::option::Option<_>>()?.map(match_values::Values::Keywords)
+;
+                        }
+                        GeneratedField::Integers => {
+                            if values__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("integers"));
+                            }
+                            values__ = map_.next_value::<::std::option::Option<_>>()?.map(match_values::Values::Integers)
+;
+                        }
+                    }
+                }
+                Ok(MatchValues {
+                    values: values__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.MatchValues", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for Memory {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -3296,6 +3851,132 @@ impl<'de> serde::Deserialize<'de> for Memory {
         deserializer.deserialize_struct("memoir.v1.Memory", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for MemoryFilter {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.must.is_empty() {
+            len += 1;
+        }
+        if !self.must_not.is_empty() {
+            len += 1;
+        }
+        if !self.should.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.MemoryFilter", len)?;
+        if !self.must.is_empty() {
+            struct_ser.serialize_field("must", &self.must)?;
+        }
+        if !self.must_not.is_empty() {
+            struct_ser.serialize_field("mustNot", &self.must_not)?;
+        }
+        if !self.should.is_empty() {
+            struct_ser.serialize_field("should", &self.should)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for MemoryFilter {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "must",
+            "must_not",
+            "mustNot",
+            "should",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Must,
+            MustNot,
+            Should,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "must" => Ok(GeneratedField::Must),
+                            "mustNot" | "must_not" => Ok(GeneratedField::MustNot),
+                            "should" => Ok(GeneratedField::Should),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = MemoryFilter;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.MemoryFilter")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MemoryFilter, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut must__ = None;
+                let mut must_not__ = None;
+                let mut should__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Must => {
+                            if must__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("must"));
+                            }
+                            must__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::MustNot => {
+                            if must_not__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("mustNot"));
+                            }
+                            must_not__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Should => {
+                            if should__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("should"));
+                            }
+                            should__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(MemoryFilter {
+                    must: must__.unwrap_or_default(),
+                    must_not: must_not__.unwrap_or_default(),
+                    should: should__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.MemoryFilter", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for MemoryStatus {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -3371,6 +4052,156 @@ impl<'de> serde::Deserialize<'de> for MemoryStatus {
             }
         }
         deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
+impl serde::Serialize for NumericRange {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.lt.is_some() {
+            len += 1;
+        }
+        if self.lte.is_some() {
+            len += 1;
+        }
+        if self.gt.is_some() {
+            len += 1;
+        }
+        if self.gte.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.NumericRange", len)?;
+        if let Some(v) = self.lt.as_ref() {
+            struct_ser.serialize_field("lt", v)?;
+        }
+        if let Some(v) = self.lte.as_ref() {
+            struct_ser.serialize_field("lte", v)?;
+        }
+        if let Some(v) = self.gt.as_ref() {
+            struct_ser.serialize_field("gt", v)?;
+        }
+        if let Some(v) = self.gte.as_ref() {
+            struct_ser.serialize_field("gte", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for NumericRange {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "lt",
+            "lte",
+            "gt",
+            "gte",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Lt,
+            Lte,
+            Gt,
+            Gte,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "lt" => Ok(GeneratedField::Lt),
+                            "lte" => Ok(GeneratedField::Lte),
+                            "gt" => Ok(GeneratedField::Gt),
+                            "gte" => Ok(GeneratedField::Gte),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = NumericRange;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.NumericRange")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<NumericRange, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut lt__ = None;
+                let mut lte__ = None;
+                let mut gt__ = None;
+                let mut gte__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Lt => {
+                            if lt__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("lt"));
+                            }
+                            lt__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::Lte => {
+                            if lte__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("lte"));
+                            }
+                            lte__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::Gt => {
+                            if gt__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("gt"));
+                            }
+                            gt__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::Gte => {
+                            if gte__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("gte"));
+                            }
+                            gte__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(NumericRange {
+                    lt: lt__,
+                    lte: lte__,
+                    gt: gt__,
+                    gte: gte__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.NumericRange", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for PendingJobsCountRequest {
@@ -5381,6 +6212,9 @@ impl serde::Serialize for SearchRequest {
         if self.metadata_filter.is_some() {
             len += 1;
         }
+        if self.min_similarity.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.SearchRequest", len)?;
         if let Some(v) = self.scope.as_ref() {
             struct_ser.serialize_field("scope", v)?;
@@ -5393,6 +6227,9 @@ impl serde::Serialize for SearchRequest {
         }
         if let Some(v) = self.metadata_filter.as_ref() {
             struct_ser.serialize_field("metadataFilter", v)?;
+        }
+        if let Some(v) = self.min_similarity.as_ref() {
+            struct_ser.serialize_field("minSimilarity", v)?;
         }
         struct_ser.end()
     }
@@ -5409,6 +6246,8 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
             "limit",
             "metadata_filter",
             "metadataFilter",
+            "min_similarity",
+            "minSimilarity",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -5417,6 +6256,7 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
             Query,
             Limit,
             MetadataFilter,
+            MinSimilarity,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -5442,6 +6282,7 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                             "query" => Ok(GeneratedField::Query),
                             "limit" => Ok(GeneratedField::Limit),
                             "metadataFilter" | "metadata_filter" => Ok(GeneratedField::MetadataFilter),
+                            "minSimilarity" | "min_similarity" => Ok(GeneratedField::MinSimilarity),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -5465,6 +6306,7 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                 let mut query__ = None;
                 let mut limit__ = None;
                 let mut metadata_filter__ = None;
+                let mut min_similarity__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Scope => {
@@ -5493,6 +6335,14 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                             }
                             metadata_filter__ = map_.next_value()?;
                         }
+                        GeneratedField::MinSimilarity => {
+                            if min_similarity__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("minSimilarity"));
+                            }
+                            min_similarity__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
                     }
                 }
                 Ok(SearchRequest {
@@ -5500,6 +6350,7 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                     query: query__.unwrap_or_default(),
                     limit: limit__.unwrap_or_default(),
                     metadata_filter: metadata_filter__,
+                    min_similarity: min_similarity__,
                 })
             }
         }

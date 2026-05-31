@@ -12,4 +12,8 @@ pub mod google {
 /// `gen:protos` target in `apps/memoir-service/project.json`). Consumed by
 /// memoir-service's gRPC reflection registration so `grpcurl localhost:5153
 /// list` enumerates the live services.
+///
+/// Gated behind the `reflection` feature: embedding the descriptor adds ~45 KB
+/// to the consumer's binary, and only reflection-serving processes need it.
+#[cfg(feature = "reflection")]
 pub const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!("memoir/v1/file_descriptor_set.bin");

@@ -25,10 +25,15 @@ use memoir_core::client::{ClientError, ReconcileSummary};
 use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind, JobsError};
 use memoir_core::memory::{ForgetTarget, Memory as LibMemory, Scope as LibScope};
 use memoir_core::store::StoreError;
-use memoir_core::vector::VectorError;
+use memoir_core::vector::{
+    FilterCondition as LibFilterCondition, MatchValue as LibMatchValue, MatchValues as LibMatchValues,
+    MemoryFilter as LibMemoryFilter, NumericRange as LibNumericRange, VectorError,
+};
 use memoir_sdk::memoir::v1::{
-    FailedJob as ProtoFailedJob, ForgetRequest, JobKind as ProtoJobKind, Memory as ProtoMemory, MemoryStatus,
-    ReconcileResponse, Scope as ProtoScope, forget_request,
+    FailedJob as ProtoFailedJob, FilterCondition as ProtoFilterCondition, ForgetRequest, JobKind as ProtoJobKind,
+    MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues, Memory as ProtoMemory,
+    MemoryFilter as ProtoMemoryFilter, MemoryStatus, NumericRange as ProtoNumericRange, ReconcileResponse,
+    Scope as ProtoScope, filter_condition, forget_request, match_value, match_values,
 };
 use tonic::Status;
 
@@ -332,6 +337,89 @@ fn usize_to_i64_saturating(value: usize, field: &'static str) -> i64 {
     }
 }
 
+// ─── SearchBuilder filter conversions ──────────────────────────────────────
+
+/// Converts a wire `MemoryFilter` into the library shape.
+///
+/// `None` (proto3 unset) maps to `None` on the library side — the search
+/// path treats that as "no caller-supplied filter." A `Some` with all
+/// sections empty round-trips as an inert filter; memoir-core handles both
+/// the same way.
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when any nested `FilterCondition`
+/// has an unset condition oneof, an empty `field`, a `MatchValue` whose
+/// `value` oneof is unset, or a `MatchValues` whose `values` oneof is unset.
+pub(crate) fn metadata_filter_from_proto(filter: Option<ProtoMemoryFilter>) -> Result<Option<LibMemoryFilter>, Status> {
+    let Some(filter) = filter else {
+        return Ok(None);
+    };
+    let must = translate_condition_list(filter.must)?;
+    let must_not = translate_condition_list(filter.must_not)?;
+    let should = translate_condition_list(filter.should)?;
+    Ok(Some(LibMemoryFilter { must, must_not, should }))
+}
+
+fn translate_condition_list(conditions: Vec<ProtoFilterCondition>) -> Result<Vec<LibFilterCondition>, Status> {
+    conditions.into_iter().map(filter_condition_from_proto).collect()
+}
+
+fn filter_condition_from_proto(cond: ProtoFilterCondition) -> Result<LibFilterCondition, Status> {
+    if cond.field.is_empty() {
+        return Err(Status::invalid_argument(
+            "metadata_filter: condition.field must be non-empty",
+        ));
+    }
+    let inner = cond
+        .condition
+        .ok_or_else(|| Status::invalid_argument("metadata_filter: condition.condition oneof must be set"))?;
+    Ok(match inner {
+        filter_condition::Condition::Equals(value) => LibFilterCondition::Equals {
+            field: cond.field,
+            value: match_value_from_proto(value)?,
+        },
+        filter_condition::Condition::InValues(values) => LibFilterCondition::In {
+            field: cond.field,
+            values: match_values_from_proto(values)?,
+        },
+        filter_condition::Condition::Range(range) => LibFilterCondition::Range {
+            field: cond.field,
+            range: numeric_range_from_proto(range),
+        },
+    })
+}
+
+fn match_value_from_proto(value: ProtoMatchValue) -> Result<LibMatchValue, Status> {
+    let inner = value
+        .value
+        .ok_or_else(|| Status::invalid_argument("metadata_filter: MatchValue.value oneof must be set"))?;
+    Ok(match inner {
+        match_value::Value::Keyword(s) => LibMatchValue::Keyword(s),
+        match_value::Value::Integer(i) => LibMatchValue::Integer(i),
+        match_value::Value::Boolean(b) => LibMatchValue::Bool(b),
+    })
+}
+
+fn match_values_from_proto(values: ProtoMatchValues) -> Result<LibMatchValues, Status> {
+    let inner = values
+        .values
+        .ok_or_else(|| Status::invalid_argument("metadata_filter: MatchValues.values oneof must be set"))?;
+    Ok(match inner {
+        match_values::Values::Keywords(list) => LibMatchValues::Keywords(list.values),
+        match_values::Values::Integers(list) => LibMatchValues::Integers(list.values),
+    })
+}
+
+fn numeric_range_from_proto(range: ProtoNumericRange) -> LibNumericRange {
+    LibNumericRange {
+        lt: range.lt,
+        lte: range.lte,
+        gt: range.gt,
+        gte: range.gte,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -567,5 +655,46 @@ mod tests {
     fn should_reject_u64_count_overflowing_i64() {
         let err = u64_count_to_proto(u64::MAX, "pending").unwrap_err();
         assert_eq!(err.code(), tonic::Code::Internal);
+    }
+
+    #[test]
+    fn should_reject_filter_condition_with_empty_field() {
+        let proto = ProtoMemoryFilter {
+            must: vec![ProtoFilterCondition {
+                field: String::new(),
+                condition: Some(filter_condition::Condition::Equals(ProtoMatchValue {
+                    value: Some(match_value::Value::Keyword("x".into())),
+                })),
+            }],
+            ..ProtoMemoryFilter::default()
+        };
+        let err = metadata_filter_from_proto(Some(proto)).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_reject_filter_condition_with_unset_oneof() {
+        let proto = ProtoMemoryFilter {
+            must: vec![ProtoFilterCondition {
+                field: "x".into(),
+                condition: None,
+            }],
+            ..ProtoMemoryFilter::default()
+        };
+        let err = metadata_filter_from_proto(Some(proto)).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_reject_match_value_with_unset_oneof() {
+        let proto = ProtoMemoryFilter {
+            must: vec![ProtoFilterCondition {
+                field: "x".into(),
+                condition: Some(filter_condition::Condition::Equals(ProtoMatchValue { value: None })),
+            }],
+            ..ProtoMemoryFilter::default()
+        };
+        let err = metadata_filter_from_proto(Some(proto)).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
     }
 }

@@ -92,12 +92,78 @@ message SearchRequest {
   // pagination in v0.1.
   int32 limit = 3;
 
-  // Optional metadata filter — JSON-encoded Qdrant payload filter.
-  // Exact shape is implementation-defined and may evolve. NOTE: as of
-  // memoir-core v0.1 the library does not consume this field; handler
-  // implementations may return Unimplemented or drop it until the library
-  // gains a metadata-filter builder option.
-  optional google.protobuf.Struct metadata_filter = 4;
+  // Optional caller-supplied metadata filter, AND-joined with the scope
+  // and kind conditions enforced by the library. Caller-supplied conditions
+  // cannot widen scope. See `MemoryFilter` for shape.
+  optional MemoryFilter metadata_filter = 4;
+
+  // Optional similarity floor in [-1.0, 1.0]. Hits with score below this
+  // value are dropped by the vector backend before they reach the response.
+  // Unset = no floor.
+  optional float min_similarity = 5;
+}
+
+// Caller-supplied filter applied at search time. Mirrors Qdrant's payload
+// filter structure one-to-one but is a memoir-owned type so consumers do not
+// take a transitive Qdrant dependency. Sections combine as:
+//   - `must` — AND
+//   - `must_not` — AND-NOT
+//   - `should` — OR (at least one)
+// An empty filter (all sections empty) is inert.
+message MemoryFilter {
+  repeated FilterCondition must = 1;
+  repeated FilterCondition must_not = 2;
+  repeated FilterCondition should = 3;
+}
+
+// One field-targeted condition inside a [`MemoryFilter`].
+message FilterCondition {
+  // Payload field name to apply the condition against.
+  string field = 1;
+
+  oneof condition {
+    // Field equals a single value.
+    MatchValue equals = 2;
+    // Field equals any value in the list — `IN (...)` semantics.
+    MatchValues in_values = 3;
+    // Field is a number within the range.
+    NumericRange range = 4;
+  }
+}
+
+// Concrete value for equality matching. Mirrors memoir-core's `MatchValue`.
+message MatchValue {
+  oneof value {
+    string keyword = 1;
+    int64 integer = 2;
+    bool boolean = 3;
+  }
+}
+
+// List of values for `IN (...)` matching. Mirrors memoir-core's `MatchValues`.
+message MatchValues {
+  oneof values {
+    KeywordList keywords = 1;
+    IntegerList integers = 2;
+  }
+}
+
+message KeywordList {
+  repeated string values = 1;
+}
+
+message IntegerList {
+  repeated int64 values = 1;
+}
+
+// Half-open or closed numeric range. All bounds optional; an entirely-unbounded
+// range matches every numeric value (and is a no-op — prefer omitting the
+// condition).
+message NumericRange {
+  optional double lt = 1;
+  optional double lte = 2;
+  optional double gt = 3;
+  optional double gte = 4;
 }
 
 message SearchResponse {

@@ -3623,14 +3623,18 @@ name = "polypixel-memoir-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bon",
  "chrono",
+ "dotenvy",
  "fastembed",
  "nanoid",
- "polypixel-memoir-core-migration",
+ "once_cell",
  "qdrant-client",
+ "regex",
  "rig-core",
  "sea-orm",
+ "sea-orm-migration",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -3639,18 +3643,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
-]
-
-[[package]]
-name = "polypixel-memoir-core-migration"
-version = "0.1.0"
-dependencies = [
- "dotenvy",
- "once_cell",
- "regex",
- "sea-orm-migration",
- "thiserror 2.0.18",
- "tokio",
 ]
 
 [[package]]

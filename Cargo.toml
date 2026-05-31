@@ -5,8 +5,13 @@ members = [
   "apps/memoir-service/migration",
   "packages/common-rs",
   "packages/memoir-core",
-  "packages/memoir-core/migration",
 ]
+
+[workspace.package]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mylesberueda/memoir"
+homepage = "https://github.com/mylesberueda/memoir"
+rust-version = "1.85"
 
 [workspace.dependencies]
 color-eyre = { version = "0.6" }

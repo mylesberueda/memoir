@@ -50,29 +50,29 @@
 		"migrate:up": {
 			"executor": "nx:run-commands",
 			"options": {
-				"cwd": "{projectRoot}/migration",
+				"cwd": "{projectRoot}",
 				"command": "cargo run --bin memoir_core_migrate -- up",
 				"envFile": "{projectRoot}/.env"
 			},
-			"inputs": ["{projectRoot}/migration/src/**/*.rs"]
+			"inputs": ["{projectRoot}/src/migration/**/*.rs"]
 		},
 		"migrate:down": {
 			"executor": "nx:run-commands",
 			"options": {
-				"cwd": "{projectRoot}/migration",
+				"cwd": "{projectRoot}",
 				"command": "cargo run --bin memoir_core_migrate -- down",
 				"envFile": "{projectRoot}/.env"
 			},
-			"inputs": ["{projectRoot}/migration/src/**/*.rs"]
+			"inputs": ["{projectRoot}/src/migration/**/*.rs"]
 		},
 		"migrate:fresh": {
 			"executor": "nx:run-commands",
 			"options": {
-				"cwd": "{projectRoot}/migration",
+				"cwd": "{projectRoot}",
 				"command": "cargo run --bin memoir_core_migrate -- fresh",
 				"envFile": "{projectRoot}/.env"
 			},
-			"inputs": ["{projectRoot}/migration/src/**/*.rs"]
+			"inputs": ["{projectRoot}/src/migration/**/*.rs"]
 		},
 		"gen:entities": {
 			"executor": "nx:run-commands",
@@ -81,7 +81,7 @@
 				"command": "sea generate entity --database-schema memoir --with-serde both --enum-extra-derives 'strum::Display,strum::EnumString' --output-dir ./src/models/_entity",
 				"envFile": "{projectRoot}/.env"
 			},
-			"inputs": ["{projectRoot}/migration/src/**/*.rs"],
+			"inputs": ["{projectRoot}/src/migration/**/*.rs"],
 			"outputs": ["{projectRoot}/src/models/**/*.rs"]
 		}
 	},
