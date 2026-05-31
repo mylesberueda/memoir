@@ -1,7 +1,7 @@
 //! Factory for `rig::providers::ollama::Client`.
 
-use rig::client::Nothing;
-use rig::providers::ollama;
+use rig_core::client::Nothing;
+use rig_core::providers::ollama;
 
 use super::LlmError;
 

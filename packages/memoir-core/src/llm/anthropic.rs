@@ -1,6 +1,6 @@
 //! Factory for `rig::providers::anthropic::Client`.
 
-use rig::providers::anthropic;
+use rig_core::providers::anthropic;
 
 use super::LlmError;
 
