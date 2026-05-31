@@ -2,7 +2,6 @@
 
 import { login } from '@actions/auth';
 import { Button, FormInput } from '@components';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { type FieldError, useForm } from 'react-hook-form';
 
@@ -14,14 +13,12 @@ interface LoginFormData {
 }
 
 interface LoginClientProps {
-	authRequest?: string;
 	initialMode: 'login' | 'register';
 	verified: boolean;
 	error?: string;
 }
 
-export default function LoginClient({ authRequest, initialMode, verified, error: initialError }: LoginClientProps) {
-	const router = useRouter();
+export default function LoginClient({ initialMode, verified, error: initialError }: LoginClientProps) {
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(initialError || null);
 	const [successMessage, setSuccessMessage] = useState<string | null>(
@@ -70,14 +67,7 @@ export default function LoginClient({ authRequest, initialMode, verified, error:
 					setError(result.error || 'Registration failed');
 				}
 			} else {
-				if (!authRequest) {
-					setError('Authentication session expired. Please try again.');
-					// Navigate to login to restart OIDC flow
-					router.push('/auth/login');
-					return;
-				}
-
-				const result = await login(data.email, data.password, authRequest);
+				const result = await login(data.email, data.password);
 
 				if (result.success) {
 					window.location.href = '/';

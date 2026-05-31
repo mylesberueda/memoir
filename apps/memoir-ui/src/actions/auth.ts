@@ -19,12 +19,8 @@ interface LoginResult {
  * returns a JWT access/refresh pair. We persist the tokens in a server-side
  * Redis session keyed by an HttpOnly cookie, then signal success so the
  * client can navigate to the post-login destination.
- *
- * The `_authRequest` parameter is preserved for signature compatibility
- * with the previous Zitadel OIDC flow but is unused — AuthService has no
- * concept of an authorization-request handoff.
  */
-export async function login(email: string, password: string, _authRequest?: string): Promise<LoginResult> {
+export async function login(email: string, password: string): Promise<LoginResult> {
 	const provider = getAuthProvider();
 
 	const result = await provider.login(email, password);

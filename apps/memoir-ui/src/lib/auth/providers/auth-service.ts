@@ -14,10 +14,10 @@ import type { AuthContext, AuthUser, LoginResult, TokenResponse } from '../types
  * exchanges for a fresh access JWT without re-prompting the user.
  *
  * The `AuthProvider` interface was originally shaped around an OIDC
- * provider (Zitadel). Methods that have no analog in AuthService —
- * startOidcFlow, exchangeCodeForTokens, changePassword — throw
- * "not supported" so any caller hitting them fails loudly rather than
- * silently misbehaving.
+ * provider with a redirect handoff. Methods that have no analog in
+ * AuthService — startOidcFlow, exchangeCodeForTokens, changePassword —
+ * throw "not supported" so any caller hitting them fails loudly rather
+ * than silently misbehaving.
  */
 export class AuthServiceAuthProvider extends AuthProvider {
 	override async login(email: string, password: string, _context?: AuthContext): Promise<ActionResult<LoginResult>> {
