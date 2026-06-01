@@ -33,7 +33,8 @@ use memoir_core::vector::{
     MemoryFilter as LibMemoryFilter, NumericRange as LibNumericRange,
 };
 use memoir_sdk::memoir::v1::{
-    Decay as ProtoDecay, DecayBucket as ProtoDecayBucket, EditRequest, ExponentialDecay, FailedJob as ProtoFailedJob,
+    BlendWeights as ProtoBlendWeights, Blended as ProtoBlended, Decay as ProtoDecay, DecayBucket as ProtoDecayBucket,
+    EditRequest, ExponentialDecay, FailedJob as ProtoFailedJob,
     FilterCondition as ProtoFilterCondition, ForgetRequest, Hybrid as ProtoHybrid, JobKind as ProtoJobKind,
     KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues,
     MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit, QueryRequest, QueryResponse,
@@ -303,39 +304,64 @@ fn ranking_from_proto(proto: Option<ProtoRanking>) -> Result<RankingStrategy, St
     };
     match ranking {
         ranking::Strategy::Hybrid(h) => {
-            let decay = h
-                .decay
-                .and_then(|d| d.function)
-                .ok_or_else(|| Status::invalid_argument("ranking.hybrid.decay: required"))?;
-            let decay = match decay {
-                decay::Function::Exponential(e) => DecayFn::Exponential {
-                    half_life: duration_to_chrono(
-                        e.half_life
-                            .ok_or_else(|| Status::invalid_argument("decay.exponential.half_life: required"))?,
-                    )?,
-                },
-                decay::Function::Reciprocal(r) => DecayFn::Reciprocal {
-                    scale: duration_to_chrono(
-                        r.scale
-                            .ok_or_else(|| Status::invalid_argument("decay.reciprocal.scale: required"))?,
-                    )?,
-                },
-                decay::Function::Step(s) => {
-                    let mut thresholds = Vec::with_capacity(s.buckets.len());
-                    for bucket in s.buckets {
-                        let boundary = duration_to_chrono(
-                            bucket
-                                .boundary
-                                .ok_or_else(|| Status::invalid_argument("decay.step.bucket.boundary: required"))?,
-                        )?;
-                        thresholds.push((boundary, bucket.value));
-                    }
-                    DecayFn::Step { thresholds }
-                }
-            };
+            let decay = decay_from_proto(h.decay, "ranking.hybrid.decay")?;
             Ok(RankingStrategy::Hybrid { alpha: h.alpha, decay })
         }
+        ranking::Strategy::Blended(b) => {
+            let decay = decay_from_proto(b.decay, "ranking.blended.decay")?;
+            let w = b
+                .weights
+                .ok_or_else(|| Status::invalid_argument("ranking.blended.weights: required"))?;
+            let weights = memoir_core::client::BlendWeights {
+                cosine: w.cosine,
+                confidence: w.confidence,
+                recency: w.recency,
+                category_bonus: w.category_bonus,
+                preferred_categories: w.preferred_categories,
+            };
+            Ok(RankingStrategy::Blended { weights, decay })
+        }
     }
+}
+
+/// Parses a wire `Decay` (required) into a library [`DecayFn`].
+///
+/// `field` names the parent for error messages (e.g. `ranking.hybrid.decay`).
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when the decay or its function is
+/// unset, a duration field is missing, or a duration is out of range.
+fn decay_from_proto(decay: Option<ProtoDecay>, field: &str) -> Result<DecayFn, Status> {
+    let function = decay
+        .and_then(|d| d.function)
+        .ok_or_else(|| Status::invalid_argument(format!("{field}: required")))?;
+    Ok(match function {
+        decay::Function::Exponential(e) => DecayFn::Exponential {
+            half_life: duration_to_chrono(
+                e.half_life
+                    .ok_or_else(|| Status::invalid_argument("decay.exponential.half_life: required"))?,
+            )?,
+        },
+        decay::Function::Reciprocal(r) => DecayFn::Reciprocal {
+            scale: duration_to_chrono(
+                r.scale
+                    .ok_or_else(|| Status::invalid_argument("decay.reciprocal.scale: required"))?,
+            )?,
+        },
+        decay::Function::Step(s) => {
+            let mut thresholds = Vec::with_capacity(s.buckets.len());
+            for bucket in s.buckets {
+                let boundary = duration_to_chrono(
+                    bucket
+                        .boundary
+                        .ok_or_else(|| Status::invalid_argument("decay.step.bucket.boundary: required"))?,
+                )?;
+                thresholds.push((boundary, bucket.value));
+            }
+            DecayFn::Step { thresholds }
+        }
+    })
 }
 
 /// Converts a library [`RankingStrategy`] back to the wire `Ranking`.
@@ -343,6 +369,18 @@ fn ranking_to_proto(strategy: &RankingStrategy) -> ProtoRanking {
     let strategy = match strategy {
         RankingStrategy::Hybrid { alpha, decay } => ranking::Strategy::Hybrid(ProtoHybrid {
             alpha: *alpha,
+            decay: Some(ProtoDecay {
+                function: Some(decay_fn_to_proto(decay)),
+            }),
+        }),
+        RankingStrategy::Blended { weights, decay } => ranking::Strategy::Blended(ProtoBlended {
+            weights: Some(ProtoBlendWeights {
+                cosine: weights.cosine,
+                confidence: weights.confidence,
+                recency: weights.recency,
+                category_bonus: weights.category_bonus,
+                preferred_categories: weights.preferred_categories.clone(),
+            }),
             decay: Some(ProtoDecay {
                 function: Some(decay_fn_to_proto(decay)),
             }),
@@ -1194,6 +1232,41 @@ mod tests {
         let proto = ranking_to_proto(&original);
         let back = ranking_from_proto(Some(proto)).unwrap();
         assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_round_trip_blended_ranking_with_preferred_categories() {
+        let original = RankingStrategy::Blended {
+            weights: memoir_core::client::BlendWeights {
+                cosine: 0.4,
+                confidence: 0.3,
+                recency: 0.3,
+                category_bonus: 0.05,
+                preferred_categories: vec!["preference".to_string(), "identity".to_string()],
+            },
+            decay: DecayFn::Exponential {
+                half_life: chrono::Duration::days(7),
+            },
+        };
+        let proto = ranking_to_proto(&original);
+        let back = ranking_from_proto(Some(proto)).unwrap();
+        assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_reject_blended_ranking_missing_weights() {
+        let proto = ProtoRanking {
+            strategy: Some(ranking::Strategy::Blended(ProtoBlended {
+                weights: None,
+                decay: Some(ProtoDecay {
+                    function: Some(decay::Function::Exponential(ExponentialDecay {
+                        half_life: Some(duration_to_proto(chrono::Duration::days(7))),
+                    })),
+                }),
+            })),
+        };
+        let err = ranking_from_proto(Some(proto)).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
     }
 
     #[test]

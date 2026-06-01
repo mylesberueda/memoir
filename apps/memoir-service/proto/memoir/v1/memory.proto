@@ -358,6 +358,7 @@ message RecallAsOfResponse {
 message Ranking {
   oneof strategy {
     Hybrid hybrid = 1;
+    Blended blended = 2;
   }
 }
 
@@ -368,6 +369,30 @@ message Hybrid {
   float alpha = 1;
   // Recency-decay function applied to the memory's age.
   Decay decay = 2;
+}
+
+// Linear blend of cosine, confidence, recency, and a category bonus.
+// Mirrors `RankingStrategy::Blended`. score =
+//   w_cos*cosine + w_conf*(confidence/100) + w_rec*decay(age)
+//   + category_bonus (when the memory's category is preferred).
+message Blended {
+  BlendWeights weights = 1;
+  // Recency-decay function applied to the memory's age.
+  Decay decay = 2;
+}
+
+// Signal weights for `Blended`. Mirrors memoir-core's `BlendWeights`.
+message BlendWeights {
+  // Weight on cosine similarity.
+  float cosine = 1;
+  // Weight on confidence (0-100 normalized to [0, 1]).
+  float confidence = 2;
+  // Weight on the recency-decay term.
+  float recency = 3;
+  // Additive bonus when a memory's category is in preferred_categories.
+  float category_bonus = 4;
+  // Categories that earn the bonus. Empty disables it.
+  repeated string preferred_categories = 5;
 }
 
 // Recency-decay function. Mirrors memoir-core's `DecayFn`. Message-with-oneof

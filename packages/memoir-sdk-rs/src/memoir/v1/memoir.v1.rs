@@ -791,7 +791,7 @@ pub struct RecallAsOfResponse {
 /// posture. An unset oneof means "use the library default" (hybrid).
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Ranking {
-    #[prost(oneof="ranking::Strategy", tags="1")]
+    #[prost(oneof="ranking::Strategy", tags="1, 2")]
     pub strategy: ::core::option::Option<ranking::Strategy>,
 }
 /// Nested message and enum types in `Ranking`.
@@ -800,6 +800,8 @@ pub mod ranking {
     pub enum Strategy {
         #[prost(message, tag="1")]
         Hybrid(super::Hybrid),
+        #[prost(message, tag="2")]
+        Blended(super::Blended),
     }
 }
 /// Blend of cosine similarity and recency. Mirrors `RankingStrategy::Hybrid`.
@@ -812,6 +814,37 @@ pub struct Hybrid {
     /// Recency-decay function applied to the memory's age.
     #[prost(message, optional, tag="2")]
     pub decay: ::core::option::Option<Decay>,
+}
+/// Linear blend of cosine, confidence, recency, and a category bonus.
+/// Mirrors `RankingStrategy::Blended`. score =
+///    w_cos*cosine + w_conf*(confidence/100) + w_rec*decay(age)
+///    + category_bonus (when the memory's category is preferred).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Blended {
+    #[prost(message, optional, tag="1")]
+    pub weights: ::core::option::Option<BlendWeights>,
+    /// Recency-decay function applied to the memory's age.
+    #[prost(message, optional, tag="2")]
+    pub decay: ::core::option::Option<Decay>,
+}
+/// Signal weights for `Blended`. Mirrors memoir-core's `BlendWeights`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BlendWeights {
+    /// Weight on cosine similarity.
+    #[prost(float, tag="1")]
+    pub cosine: f32,
+    /// Weight on confidence (0-100 normalized to \[0, 1\]).
+    #[prost(float, tag="2")]
+    pub confidence: f32,
+    /// Weight on the recency-decay term.
+    #[prost(float, tag="3")]
+    pub recency: f32,
+    /// Additive bonus when a memory's category is in preferred_categories.
+    #[prost(float, tag="4")]
+    pub category_bonus: f32,
+    /// Categories that earn the bonus. Empty disables it.
+    #[prost(string, repeated, tag="5")]
+    pub preferred_categories: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Recency-decay function. Mirrors memoir-core's `DecayFn`. Message-with-oneof
 /// for the same additive-forward-compat reason as `Ranking`.

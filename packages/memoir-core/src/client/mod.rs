@@ -18,8 +18,8 @@ pub use admin::RetryBuilder;
 pub use edit::EditBuilder;
 pub use error::ClientError;
 pub use query::{
-    DEFAULT_HYBRID_ALPHA, DEFAULT_HYBRID_HALF_LIFE_DAYS, DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, QueryBuilder,
-    RankingStrategy,
+    BlendWeights, DEFAULT_HYBRID_ALPHA, DEFAULT_HYBRID_HALF_LIFE_DAYS, DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext,
+    QueryBuilder, RankingStrategy,
 };
 pub use recall_as_of::RecallAsOfBuilder;
 pub use reconcile::{ReconcileBuilder, ReconcileSummary};
