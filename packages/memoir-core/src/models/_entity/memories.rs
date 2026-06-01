@@ -31,6 +31,11 @@ pub struct Model {
     #[sea_orm(column_type = "Text", nullable)]
     pub superseded_by: Option<String>,
     pub event_at: Option<DateTimeWithTimeZone>,
+    pub confidence: i16,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub category: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub retirement_reason: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

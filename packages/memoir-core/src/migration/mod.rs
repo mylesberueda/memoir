@@ -14,6 +14,7 @@ mod m20000000_000002_create_memory_jobs;
 mod m20000000_000003_add_superseded_by;
 mod m20000000_000004_add_event_at;
 mod m20000000_000005_create_supersession_events;
+mod m20000000_000006_add_confidence_category_retirement;
 
 /// Default Postgres schema for memoir-core's tables.
 pub const DEFAULT_SCHEMA: &str = "memoir";
@@ -42,6 +43,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20000000_000003_add_superseded_by::Migration),
             Box::new(m20000000_000004_add_event_at::Migration),
             Box::new(m20000000_000005_create_supersession_events::Migration),
+            Box::new(m20000000_000006_add_confidence_category_retirement::Migration),
         ]
     }
 }
