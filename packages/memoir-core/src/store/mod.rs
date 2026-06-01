@@ -273,6 +273,25 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// [`StoreError::Database`] for database failures.
     fn set_category(&self, pid: &str, category: &str) -> impl Future<Output = Result<(), StoreError>> + Send;
 
+    /// Retires a memory with the given reason (epic 0011 Track B).
+    ///
+    /// Sets `retirement_reason`, hiding the row from all active-row reads.
+    /// The row is NOT deleted — it stays recall-reachable by pid for audit
+    /// and is the reprocess "don't re-derive this" guard + accuracy-metric
+    /// record. The caller is responsible for evicting the row's vector (the
+    /// store has no vector index); see [`crate::client::Client::reject`] /
+    /// `mark_stale`, which orchestrate both.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
+    /// [`StoreError::Database`] for database failures.
+    fn retire(
+        &self,
+        pid: &str,
+        reason: crate::memory::RetirementReason,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+
     /// Returns up to `limit` memories whose index lifecycle is `failed`.
     ///
     /// Used by the reconciliation sweep to retry embed + upsert. Returned in
@@ -491,6 +510,7 @@ mod tests {
                 status: IndexStatus::Pending,
                 confidence,
                 category: None,
+                retirement: None,
             };
             self.memories.lock().unwrap().push(memory.clone());
             Ok(memory)
@@ -619,6 +639,16 @@ mod tests {
                 .find(|m| m.pid == pid)
                 .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
             memory.category = Some(category.to_string());
+            Ok(())
+        }
+
+        async fn retire(&self, pid: &str, reason: crate::memory::RetirementReason) -> Result<(), StoreError> {
+            let mut memories = self.memories.lock().unwrap();
+            let memory = memories
+                .iter_mut()
+                .find(|m| m.pid == pid)
+                .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
+            memory.retirement = Some(reason);
             Ok(())
         }
 

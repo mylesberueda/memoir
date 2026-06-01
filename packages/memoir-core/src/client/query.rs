@@ -683,6 +683,7 @@ mod tests {
             status: crate::store::IndexStatus::Indexed,
             confidence: crate::memory::Confidence::new(confidence),
             category: category.map(str::to_string),
+            retirement: None,
         }
     }
 

@@ -31,6 +31,7 @@ const MEMORY_SELECT_COLUMNS: &str = "
     m.event_at,
     m.confidence,
     m.category,
+    m.retirement_reason,
     CASE
         WHEN m.superseded_by IS NULL THEN NULL
         ELSE (
@@ -86,7 +87,7 @@ impl MemoryStore for PostgresStore {
             RETURNING
                 pid, agent_id, org_id, user_id, content, metadata, kind,
                 qdrant_status, source_pid, superseded_by, created_at, updated_at, event_at,
-                confidence, category,
+                confidence, category, retirement_reason,
                 NULL::TIMESTAMPTZ AS supersession_at
             "#,
             [
@@ -145,7 +146,8 @@ impl MemoryStore for PostgresStore {
         let owned_pids: Vec<String> = pids.iter().map(|p| (*p).to_string()).collect();
         let select_sql = format!(
             "SELECT {MEMORY_SELECT_COLUMNS} FROM memories m \
-             WHERE m.pid = ANY($1) AND m.qdrant_status = 'indexed' AND m.superseded_by IS NULL"
+             WHERE m.pid = ANY($1) AND m.qdrant_status = 'indexed' \
+               AND m.superseded_by IS NULL AND m.retirement_reason IS NULL"
         );
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
@@ -214,6 +216,10 @@ impl MemoryStore for PostgresStore {
         if !params.include_superseded {
             where_clauses.push("m.superseded_by IS NULL".into());
         }
+        // Retired rows (rejected/stale) are scrubbed from all reads,
+        // unconditionally — unlike supersession, retirement has no
+        // "include" escape hatch (a rejected extraction was never true).
+        where_clauses.push("m.retirement_reason IS NULL".into());
 
         let order = match params.direction {
             TimelineDirection::Descending => "DESC",
@@ -254,6 +260,10 @@ impl MemoryStore for PostgresStore {
             "m.user_id = $3".into(),
             "m.created_at <= $4".into(),
             "latest_event.winner_pid IS NULL".into(),
+            // Retirement is current-state (no decided_at history), so it is
+            // applied uniformly even to this point-in-time read: a
+            // rejected/stale row is scrubbed from every view (epic 0011).
+            "m.retirement_reason IS NULL".into(),
         ];
         let mut values: Vec<SeaOrmValue> = vec![
             SeaOrmValue::String(Some(scope.agent_id)),
@@ -470,6 +480,22 @@ impl MemoryStore for PostgresStore {
         Ok(())
     }
 
+    async fn retire(&self, pid: &str, reason: crate::memory::RetirementReason) -> Result<(), StoreError> {
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "UPDATE memories SET retirement_reason = $1 WHERE pid = $2",
+            [
+                SeaOrmValue::String(Some(reason.to_string())),
+                SeaOrmValue::String(Some(pid.to_string())),
+            ],
+        );
+        let result = self.db.execute_raw(stmt).await?;
+        if result.rows_affected() == 0 {
+            return Err(StoreError::NotFound(pid.to_string()));
+        }
+        Ok(())
+    }
+
     async fn supersede(&self, pid: &str, by_pid: &str) -> Result<(), StoreError> {
         // `INSERT ... SELECT ... WHERE EXISTS` keeps the contract identical
         // to the old UPDATE-based path: if the loser pid does not exist,
@@ -632,6 +658,7 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
         let event_at: Option<DateTime<FixedOffset>> = row.try_get("", "event_at")?;
         let confidence_raw: i16 = row.try_get("", "confidence")?;
         let category: Option<String> = row.try_get("", "category")?;
+        let retirement_str: Option<String> = row.try_get("", "retirement_reason")?;
         let supersession_at: Option<DateTime<FixedOffset>> = row.try_get("", "supersession_at")?;
 
         let kind: MemoryKind = kind_str
@@ -641,6 +668,13 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
         let status: IndexStatus = status_str
             .parse()
             .map_err(|_| StoreError::CacheInvariant(format!("unknown qdrant status: {status_str}")))?;
+
+        let retirement = retirement_str
+            .map(|s| {
+                s.parse::<crate::memory::RetirementReason>()
+                    .map_err(|_| StoreError::CacheInvariant(format!("unknown retirement reason: {s}")))
+            })
+            .transpose()?;
 
         // The `memories.confidence` CHECK constrains the column to 0-100, so an
         // `i16` from the DB always fits `i8`. `Confidence::new` clamps as
@@ -681,6 +715,7 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
             status,
             confidence,
             category,
+            retirement,
         })
     }
 }

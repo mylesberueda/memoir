@@ -47,6 +47,29 @@ pub enum MemoryKind {
     Semantic,
 }
 
+/// Why a memory was retired by the correction model (epic 0011 Track B).
+///
+/// A retired memory is hidden from every read and its vector is evicted, so
+/// it can no longer surface or pollute reprocessing — but the row is kept (it
+/// is the reprocess "don't re-derive this" guard and the accuracy-metric
+/// record). The reason distinguishes an extraction error from a non-error:
+/// only [`Self::Rejected`] counts against extraction accuracy.
+///
+/// Distinct from supersession (the `superseded_by` column + events table),
+/// which models "a newer fact won" — a normal lifecycle event, not a
+/// correction. "Active" means neither superseded nor retired.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "lowercase")]
+pub enum RetirementReason {
+    /// The extraction was wrong; the user corrected it via feedback. This is
+    /// an extraction error — the numerator of the accuracy metric.
+    Rejected,
+
+    /// The episodic source was edited or deleted, so this derived semantic no
+    /// longer reflects it. The model did not err; the source changed.
+    Stale,
+}
+
 /// A memory's confidence as a 0-100 percentage.
 ///
 /// A newtype over `i8` whose only constructor clamps into `[0, 100]`, so an
@@ -255,6 +278,15 @@ pub struct Memory {
     /// classified," not "no category applies." The value set (taxonomy) is
     /// owned by the categorize worker, so this stays an open `String` here.
     pub category: Option<String>,
+
+    /// Why this memory was retired, or `None` when active (epic 0011).
+    ///
+    /// Set by the correction model ([`crate::client::Client::reject`] /
+    /// `mark_stale`). A `Some(_)` row is hidden from all reads and its vector
+    /// is evicted; the row is kept for the reprocess guard and metrics.
+    /// Distinct from [`Self::supersession`]. "Active" requires both this and
+    /// `supersession` to be `None`.
+    pub retirement: Option<RetirementReason>,
 }
 
 /// Latest supersession state for a [`Memory`] — winner pid and decision time.
@@ -378,6 +410,7 @@ mod tests {
             status: crate::store::IndexStatus::Pending,
             confidence: Confidence::default(),
             category: None,
+            retirement: None,
         }
     }
 
@@ -391,6 +424,21 @@ mod tests {
     fn should_display_memory_kind_matching_as_ref() {
         assert_eq!(MemoryKind::Episodic.to_string(), "episodic");
         assert_eq!(MemoryKind::Semantic.to_string(), "semantic");
+    }
+
+    #[test]
+    fn should_render_retirement_reason_as_lowercase_string() {
+        assert_eq!(RetirementReason::Rejected.as_ref(), "rejected");
+        assert_eq!(RetirementReason::Stale.as_ref(), "stale");
+    }
+
+    #[test]
+    fn should_round_trip_retirement_reason_through_str() {
+        use std::str::FromStr as _;
+        assert_eq!(RetirementReason::from_str("rejected").unwrap(), RetirementReason::Rejected);
+        assert_eq!(RetirementReason::from_str("stale").unwrap(), RetirementReason::Stale);
+        assert!(RetirementReason::from_str("superseded").is_err());
+        assert!(RetirementReason::from_str("nonsense").is_err());
     }
 
     #[test]

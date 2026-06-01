@@ -509,6 +509,72 @@ impl Client {
         Ok(deleted)
     }
 
+    /// Rejects a memory: a wrong extraction the user corrected (epic 0011).
+    ///
+    /// Marks the row `retirement_reason = 'rejected'` and evicts its vector,
+    /// so it disappears from every read and can no longer pollute search or
+    /// reprocessing. The row is kept (not deleted) — it is the reprocess
+    /// "don't re-derive this" guard and counts toward the extraction-accuracy
+    /// metric. Rejection is the extraction-error case; for a source that
+    /// merely changed, use [`Self::mark_stale`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::NotFound`] when no memory matches `pid`,
+    /// or [`crate::store::StoreError::Database`] for database failures. A
+    /// vector-eviction failure is logged at WARN (reconciliation cleans the
+    /// orphan) and does not fail the call once the row is marked.
+    pub async fn reject(&self, pid: &str) -> Result<(), ClientError> {
+        self.retire(pid, crate::memory::RetirementReason::Rejected).await
+    }
+
+    /// Marks a memory stale: its episodic source changed (epic 0011).
+    ///
+    /// Marks the row `retirement_reason = 'stale'` and evicts its vector. Like
+    /// [`Self::reject`] the row is hidden everywhere and kept, but stale is
+    /// NOT an extraction error (the model was right; the source moved), so it
+    /// does not count against the accuracy metric.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::reject`].
+    pub async fn mark_stale(&self, pid: &str) -> Result<(), ClientError> {
+        self.retire(pid, crate::memory::RetirementReason::Stale).await
+    }
+
+    /// Retires `pid` with `reason`: marks the column, then evicts the vector.
+    ///
+    /// Shared by [`Self::reject`] and [`Self::mark_stale`]. Mirrors
+    /// [`Self::forget`]'s store-then-index ordering and its
+    /// WARN-on-evict-failure resilience: the Postgres mark is the source of
+    /// truth, and a transient Qdrant failure leaves a searchable orphan that
+    /// reconciliation removes — it does not roll back the retirement.
+    async fn retire(&self, pid: &str, reason: crate::memory::RetirementReason) -> Result<(), ClientError> {
+        self.inner.store.retire(pid, reason).await?;
+
+        if let Err(err) = self.inner.index.delete_by_pids(&[pid]).await {
+            tracing::event!(
+                name: "memoir.retire.index_delete_failed",
+                tracing::Level::WARN,
+                pid = %pid,
+                reason = %reason,
+                error.message = %err,
+                "vector evict failed for {{pid}} ({{reason}}): {{error.message}} — reconciliation will clean up the orphan",
+            );
+        } else {
+            tracing::event!(
+                name: "memoir.retire.success",
+                tracing::Level::INFO,
+                pid = %pid,
+                reason = %reason,
+                "retired {{pid}} as {{reason}}",
+            );
+        }
+
+        Ok(())
+    }
+
     /// Runs reconciliation: retries `failed` rows and cleans Qdrant orphans.
     ///
     /// Returns a per-call builder. Awaiting it runs the configured passes
