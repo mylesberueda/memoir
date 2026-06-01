@@ -62,6 +62,11 @@
     }
   ],
   "targetDefaults": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ]
+    },
     "e2e-ci--**/*": {
       "dependsOn": [
         "^build"
