@@ -159,22 +159,28 @@ impl ClientInner {
                 continue;
             }
 
-            let metadata = build_semantic_metadata(provider_kind, &provider_model, fact.confidence);
+            let metadata = build_semantic_metadata(provider_kind, &provider_model);
 
             let event_at = fact
                 .event_at
                 .and_then(|candidate| validator.validate(source.created_at, candidate));
 
+            // Confidence is now a first-class column, sourced from the LLM's
+            // per-fact score (scaled f32[0,1] → i8[0,100], clamped). It is no
+            // longer stuffed into the metadata blob.
+            let confidence = crate::memory::Confidence::from_unit_scale(fact.confidence);
+
             let written = self
                 .store
-                .remember(
-                    source.scope.clone(),
-                    fact.content,
+                .remember(crate::store::NewMemory {
+                    scope: source.scope.clone(),
+                    content: fact.content,
                     metadata,
-                    MemoryKind::Semantic,
-                    Some(source_pid.clone()),
+                    kind: MemoryKind::Semantic,
+                    source_pid: Some(source_pid.clone()),
                     event_at,
-                )
+                    confidence,
+                })
                 .await
                 .map_err(|err| ExtractError::Persist(err.to_string()))?;
 
@@ -223,12 +229,11 @@ impl ClientInner {
 /// Includes the provider identifier, model identifier, fact confidence, and
 /// a marker that this row was machine-generated. Operators inspecting a
 /// semantic row can see which LLM produced it without joining other tables.
-fn build_semantic_metadata(provider: LlmKind, model: &str, confidence: f32) -> serde_json::Value {
+fn build_semantic_metadata(provider: LlmKind, model: &str) -> serde_json::Value {
     serde_json::json!({
         "origin": "extraction",
         "provider": provider.as_ref(),
         "model": model,
-        "confidence": confidence,
     })
 }
 
@@ -238,13 +243,18 @@ mod tests {
 
     #[test]
     fn should_build_semantic_metadata_with_expected_shape() {
-        let meta = build_semantic_metadata(LlmKind::Ollama, "llama3.2", 0.87);
+        let meta = build_semantic_metadata(LlmKind::Ollama, "llama3.2");
         assert_eq!(meta["origin"], "extraction");
         assert_eq!(meta["provider"], "ollama");
         assert_eq!(meta["model"], "llama3.2");
-        // f32 → f64 → serde_json::Value::Number; compare via approx.
-        let confidence = meta["confidence"].as_f64().unwrap();
-        assert!((confidence - 0.87).abs() < 1e-5);
+    }
+
+    #[test]
+    fn should_not_record_confidence_in_metadata() {
+        // Confidence moved to a first-class column (ticket 0006); the metadata
+        // blob must no longer carry it, so the two cannot drift.
+        let meta = build_semantic_metadata(LlmKind::Ollama, "llama3.2");
+        assert!(meta.get("confidence").is_none());
     }
 
     #[test]

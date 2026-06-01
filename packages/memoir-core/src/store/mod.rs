@@ -35,6 +35,38 @@ pub enum IndexStatus {
     Failed,
 }
 
+/// The attributes of a new memory row for [`MemoryStore::remember`].
+///
+/// Groups the row's write-time attributes into one value so the insert path
+/// has a single self-documenting parameter rather than a long positional list
+/// (M-INIT-CASCADED). Every field is stated explicitly by the caller — there
+/// are no silent defaults at this layer; the episodic and extract write paths
+/// each supply their own `kind`, `confidence`, etc.
+#[derive(Debug, Clone)]
+pub struct NewMemory {
+    /// Tenant + agent + user partition.
+    pub scope: Scope,
+
+    /// Raw text of the memory.
+    pub content: String,
+
+    /// Arbitrary JSON attached at write time; round-trips unchanged.
+    pub metadata: serde_json::Value,
+
+    /// Episodic (raw utterance) or semantic (extracted fact).
+    pub kind: MemoryKind,
+
+    /// Originating episodic pid for semantic rows; `None` for episodic.
+    pub source_pid: Option<String>,
+
+    /// Event-time of the remembered thing; `None` when unknown.
+    pub event_at: Option<DateTime<FixedOffset>>,
+
+    /// How sure memoir is of this memory: `MAX` for episodic, the scaled
+    /// extraction score for semantic.
+    pub confidence: crate::memory::Confidence,
+}
+
 /// Field-level patch for [`MemoryStore::edit`].
 ///
 /// Each field is `Option`-tracked so callers update only what they pass.
@@ -140,25 +172,17 @@ pub trait MemoryStore: Send + Sync + 'static {
     ///
     /// The returned [`Memory`] carries the server-generated `pid`,
     /// `created_at`, `updated_at` (equal to `created_at` on insert), and a
-    /// `score` of `None`. `source_pid` is `None` for episodic rows and
-    /// `Some(pid)` for semantic rows extracted from an episodic memory (the
-    /// extract worker stage passes this through). `event_at` carries the
-    /// caller-supplied event time and is `None` for memories with no known
-    /// event-time.
+    /// `score` of `None`. See [`NewMemory`] for the write-time attributes;
+    /// `source_pid` is `None` for episodic rows and `Some(pid)` for semantic
+    /// rows, and `confidence` is [`crate::memory::Confidence::MAX`] for
+    /// episodic rows (the user said it) or the scaled extraction score for
+    /// semantic rows.
     ///
     /// # Errors
     ///
     /// Returns [`StoreError::InvalidScope`] if any scope field is empty,
     /// [`StoreError::Database`] for database failures.
-    fn remember(
-        &self,
-        scope: Scope,
-        content: String,
-        metadata: serde_json::Value,
-        kind: MemoryKind,
-        source_pid: Option<String>,
-        event_at: Option<DateTime<FixedOffset>>,
-    ) -> impl Future<Output = Result<Memory, StoreError>> + Send;
+    fn remember(&self, new: NewMemory) -> impl Future<Output = Result<Memory, StoreError>> + Send;
 
     /// Looks up a single memory by pid, returning all lifecycle states.
     ///
@@ -441,15 +465,16 @@ mod tests {
     }
 
     impl MemoryStore for StubStore {
-        async fn remember(
-            &self,
-            scope: Scope,
-            content: String,
-            metadata: serde_json::Value,
-            kind: MemoryKind,
-            source_pid: Option<String>,
-            event_at: Option<DateTime<FixedOffset>>,
-        ) -> Result<Memory, StoreError> {
+        async fn remember(&self, new: NewMemory) -> Result<Memory, StoreError> {
+            let NewMemory {
+                scope,
+                content,
+                metadata,
+                kind,
+                source_pid,
+                event_at,
+                confidence,
+            } = new;
             let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
             let memory = Memory {
                 pid: format!("test-{}", self.memories.lock().unwrap().len()),
@@ -464,7 +489,7 @@ mod tests {
                 event_at,
                 score: None,
                 status: IndexStatus::Pending,
-                confidence: crate::memory::Confidence::default(),
+                confidence,
                 category: None,
             };
             self.memories.lock().unwrap().push(memory.clone());
@@ -724,14 +749,15 @@ mod tests {
         };
 
         let memory = store
-            .remember(
-                scope.clone(),
-                "content".to_string(),
-                serde_json::json!({}),
-                MemoryKind::Episodic,
-                None,
-                None,
-            )
+            .remember(NewMemory {
+                scope: scope.clone(),
+                content: "content".to_string(),
+                metadata: serde_json::json!({}),
+                kind: MemoryKind::Episodic,
+                source_pid: None,
+                event_at: None,
+                confidence: crate::memory::Confidence::MAX,
+            })
             .await
             .unwrap();
         assert_eq!(memory.content, "content");
@@ -751,18 +777,19 @@ mod tests {
         let store = StubStore::default();
         let remember = async |agent: &str, org: &str, user: &str| {
             store
-                .remember(
-                    Scope {
+                .remember(NewMemory {
+                    scope: Scope {
                         agent_id: agent.to_string(),
                         org_id: org.to_string(),
                         user_id: user.to_string(),
                     },
-                    "c".to_string(),
-                    serde_json::json!({}),
-                    MemoryKind::Episodic,
-                    None,
-                    None,
-                )
+                    content: "c".to_string(),
+                    metadata: serde_json::json!({}),
+                    kind: MemoryKind::Episodic,
+                    source_pid: None,
+                    event_at: None,
+                    confidence: crate::memory::Confidence::MAX,
+                })
                 .await
                 .unwrap();
         };
@@ -799,14 +826,15 @@ mod tests {
             user_id: "u".to_string(),
         };
         store
-            .remember(
+            .remember(NewMemory {
                 scope,
-                content.to_string(),
-                serde_json::json!({}),
-                MemoryKind::Semantic,
-                None,
-                None,
-            )
+                content: content.to_string(),
+                metadata: serde_json::json!({}),
+                kind: MemoryKind::Semantic,
+                source_pid: None,
+                event_at: None,
+                confidence: crate::memory::Confidence::MAX,
+            })
             .await
             .unwrap()
     }

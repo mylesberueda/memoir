@@ -64,15 +64,16 @@ impl PostgresStore {
 }
 
 impl MemoryStore for PostgresStore {
-    async fn remember(
-        &self,
-        scope: Scope,
-        content: String,
-        metadata: serde_json::Value,
-        kind: MemoryKind,
-        source_pid: Option<String>,
-        event_at: Option<DateTime<FixedOffset>>,
-    ) -> Result<Memory, StoreError> {
+    async fn remember(&self, new: crate::store::NewMemory) -> Result<Memory, StoreError> {
+        let crate::store::NewMemory {
+            scope,
+            content,
+            metadata,
+            kind,
+            source_pid,
+            event_at,
+            confidence,
+        } = new;
         scope.validate()?;
 
         let pid = nanoid::nanoid!(PID_LENGTH);
@@ -80,8 +81,8 @@ impl MemoryStore for PostgresStore {
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             r#"
-            INSERT INTO memories (pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, event_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO memories (pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, event_at, confidence)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING
                 pid, agent_id, org_id, user_id, content, metadata, kind,
                 qdrant_status, source_pid, superseded_by, created_at, updated_at, event_at,
@@ -98,6 +99,8 @@ impl MemoryStore for PostgresStore {
                 SeaOrmValue::String(Some(kind.to_string())),
                 SeaOrmValue::String(source_pid),
                 SeaOrmValue::ChronoDateTimeWithTimeZone(event_at),
+                // The column is SMALLINT; Confidence's invariant guarantees 0-100.
+                SeaOrmValue::SmallInt(Some(i16::from(confidence.get()))),
             ],
         );
 
