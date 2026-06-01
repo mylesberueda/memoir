@@ -29,6 +29,8 @@ const MEMORY_SELECT_COLUMNS: &str = "
     m.created_at,
     m.updated_at,
     m.event_at,
+    m.confidence,
+    m.category,
     CASE
         WHEN m.superseded_by IS NULL THEN NULL
         ELSE (
@@ -83,6 +85,7 @@ impl MemoryStore for PostgresStore {
             RETURNING
                 pid, agent_id, org_id, user_id, content, metadata, kind,
                 qdrant_status, source_pid, superseded_by, created_at, updated_at, event_at,
+                confidence, category,
                 NULL::TIMESTAMPTZ AS supersession_at
             "#,
             [
@@ -608,6 +611,8 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
         let created_at: DateTime<FixedOffset> = row.try_get("", "created_at")?;
         let updated_at: DateTime<FixedOffset> = row.try_get("", "updated_at")?;
         let event_at: Option<DateTime<FixedOffset>> = row.try_get("", "event_at")?;
+        let confidence_raw: i16 = row.try_get("", "confidence")?;
+        let category: Option<String> = row.try_get("", "category")?;
         let supersession_at: Option<DateTime<FixedOffset>> = row.try_get("", "supersession_at")?;
 
         let kind: MemoryKind = kind_str
@@ -617,6 +622,11 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
         let status: IndexStatus = status_str
             .parse()
             .map_err(|_| StoreError::CacheInvariant(format!("unknown qdrant status: {status_str}")))?;
+
+        // The `memories.confidence` CHECK constrains the column to 0-100, so an
+        // `i16` from the DB always fits `i8`. `Confidence::new` clamps as
+        // defense-in-depth against a corrupted row rather than erroring.
+        let confidence = crate::memory::Confidence::new(confidence_raw.clamp(0, 100) as i8);
 
         let supersession = match (superseded_by, supersession_at) {
             (Some(winner_pid), Some(at)) => Some(crate::memory::SupersessionInfo { winner_pid, at }),
@@ -650,6 +660,8 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
             event_at,
             score: None,
             status,
+            confidence,
+            category,
         })
     }
 }

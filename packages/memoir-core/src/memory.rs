@@ -47,6 +47,80 @@ pub enum MemoryKind {
     Semantic,
 }
 
+/// A memory's confidence as a 0-100 percentage.
+///
+/// A newtype over `i8` whose only constructor clamps into `[0, 100]`, so an
+/// out-of-range value is unrepresentable. This is the single home for the
+/// scale-and-clamp logic: the extraction LLM emits an `f32` (occasionally
+/// `> 1.0`), which [`Confidence::from_unit_scale`] scales by 100 and clamps.
+///
+/// # Examples
+///
+/// ```
+/// use memoir_core::memory::Confidence;
+///
+/// assert_eq!(Confidence::new(73).get(), 73);
+/// assert_eq!(Confidence::new(150).get(), 100); // clamped
+/// assert_eq!(Confidence::from_unit_scale(0.42).get(), 42);
+/// assert_eq!(Confidence::from_unit_scale(1.7).get(), 100); // clamped
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Confidence(i8);
+
+impl Confidence {
+    /// Largest valid confidence: fully certain.
+    pub const MAX: Confidence = Confidence(100);
+
+    /// Smallest valid confidence: no certainty.
+    pub const MIN: Confidence = Confidence(0);
+
+    /// Creates a confidence from a percentage, clamping into `[0, 100]`.
+    ///
+    /// Clamping is the defined behavior, not an error: callers (and the
+    /// extraction LLM) occasionally produce out-of-range values, and the
+    /// intent is always "as confident as possible / not at all," never a
+    /// failure. Hence this is infallible.
+    #[must_use]
+    pub fn new(percent: i8) -> Self {
+        Self(percent.clamp(0, 100))
+    }
+
+    /// Creates a confidence from a unit-scale score, scaling ×100 and clamping.
+    ///
+    /// The extraction LLM emits a per-fact score in `[0.0, 1.0]` (but may
+    /// exceed `1.0`). This scales to a percentage and clamps into `[0, 100]`.
+    /// `NaN` maps to [`Confidence::MIN`].
+    #[must_use]
+    pub fn from_unit_scale(score: f32) -> Self {
+        if score.is_nan() {
+            return Self::MIN;
+        }
+        // Round before clamping so e.g. 0.005 -> 1, not 0.
+        let percent = (score * 100.0).round();
+        Self(percent.clamp(0.0, 100.0) as i8)
+    }
+
+    /// Returns the percentage value in `[0, 100]`.
+    #[must_use]
+    pub fn get(self) -> i8 {
+        self.0
+    }
+}
+
+impl Default for Confidence {
+    /// Defaults to fully certain (`100`), matching the `memories.confidence`
+    /// column default — episodic writes are certain by construction.
+    fn default() -> Self {
+        Self::MAX
+    }
+}
+
+impl std::fmt::Display for Confidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// Selects which memory kinds a read includes.
 ///
 /// Each field gates inclusion of one kind. Default ([`Self::default`]) has
@@ -166,6 +240,21 @@ pub struct Memory {
     /// Mirrors the `memories.qdrant_status` column. Consumers use this as the
     /// canonical "is this memory fully processed yet" signal.
     pub status: crate::store::IndexStatus,
+
+    /// How sure memoir is that this memory is true, as a 0-100 percentage.
+    ///
+    /// Episodic memories are `100` by construction — the user said it.
+    /// Semantic memories carry the extraction LLM's scaled per-fact score
+    /// (populated by the extract worker). See [`Confidence`].
+    pub confidence: Confidence,
+
+    /// Categorization label, or `None` until the categorize worker runs.
+    ///
+    /// Populated asynchronously by the NLI categorize stage. A `None`
+    /// category is unfiltered, not rejected — absence means "not yet
+    /// classified," not "no category applies." The value set (taxonomy) is
+    /// owned by the categorize worker, so this stays an open `String` here.
+    pub category: Option<String>,
 }
 
 /// Latest supersession state for a [`Memory`] — winner pid and decision time.
@@ -287,6 +376,8 @@ mod tests {
             event_at: None,
             score: None,
             status: crate::store::IndexStatus::Pending,
+            confidence: Confidence::default(),
+            category: None,
         }
     }
 
@@ -308,6 +399,45 @@ mod tests {
         assert_eq!(MemoryKind::from_str("episodic").unwrap(), MemoryKind::Episodic);
         assert_eq!(MemoryKind::from_str("semantic").unwrap(), MemoryKind::Semantic);
         assert!(MemoryKind::from_str("nonsense").is_err());
+    }
+
+    #[test]
+    fn should_keep_in_range_confidence_unchanged() {
+        assert_eq!(Confidence::new(0).get(), 0);
+        assert_eq!(Confidence::new(73).get(), 73);
+        assert_eq!(Confidence::new(100).get(), 100);
+    }
+
+    #[test]
+    fn should_clamp_out_of_range_confidence() {
+        assert_eq!(Confidence::new(127).get(), 100);
+        assert_eq!(Confidence::new(-1).get(), 0);
+        assert_eq!(Confidence::new(-128).get(), 0);
+    }
+
+    #[test]
+    fn should_scale_unit_confidence_to_percentage() {
+        assert_eq!(Confidence::from_unit_scale(0.0).get(), 0);
+        assert_eq!(Confidence::from_unit_scale(0.42).get(), 42);
+        assert_eq!(Confidence::from_unit_scale(1.0).get(), 100);
+    }
+
+    #[test]
+    fn should_clamp_unit_confidence_above_one() {
+        // The extraction LLM occasionally emits scores > 1.0.
+        assert_eq!(Confidence::from_unit_scale(1.7).get(), 100);
+        assert_eq!(Confidence::from_unit_scale(-0.5).get(), 0);
+    }
+
+    #[test]
+    fn should_map_nan_confidence_to_min() {
+        assert_eq!(Confidence::from_unit_scale(f32::NAN), Confidence::MIN);
+    }
+
+    #[test]
+    fn should_default_confidence_to_max() {
+        assert_eq!(Confidence::default(), Confidence::MAX);
+        assert_eq!(Confidence::default().get(), 100);
     }
 
     #[test]

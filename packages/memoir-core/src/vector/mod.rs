@@ -195,6 +195,8 @@ mod tests {
             event_at: None,
             score: None,
             status: crate::store::IndexStatus::Pending,
+            confidence: crate::memory::Confidence::default(),
+            category: None,
         };
 
         index.ensure_collection(4).await.unwrap();

@@ -452,6 +452,8 @@ mod tests {
                 event_at,
                 score: None,
                 status: IndexStatus::Pending,
+                confidence: crate::memory::Confidence::default(),
+                category: None,
             };
             self.memories.lock().unwrap().push(memory.clone());
             Ok(memory)
@@ -933,8 +935,15 @@ mod tests {
         let trail = store.supersession_history(&loser.pid).await.unwrap();
 
         assert_eq!(trail.len(), 2);
-        assert_eq!(trail[0].winner_pid.as_deref(), Some(winner.pid.as_str()), "supersede first");
-        assert!(trail[1].winner_pid.is_none(), "unsupersede represented as winner_pid=None");
+        assert_eq!(
+            trail[0].winner_pid.as_deref(),
+            Some(winner.pid.as_str()),
+            "supersede first"
+        );
+        assert!(
+            trail[1].winner_pid.is_none(),
+            "unsupersede represented as winner_pid=None"
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
