@@ -237,6 +237,18 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// [`StoreError::Database`] for database failures.
     fn set_index_status(&self, pid: &str, status: IndexStatus) -> impl Future<Output = Result<(), StoreError>> + Send;
 
+    /// Sets a memory's category label (epic 0011 ticket 0005).
+    ///
+    /// Called by the categorize worker after NLI classification. Overwrites
+    /// any prior category. The value set is the caller's responsibility; the
+    /// column is unconstrained `TEXT` (the taxonomy lives in the worker).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
+    /// [`StoreError::Database`] for database failures.
+    fn set_category(&self, pid: &str, category: &str) -> impl Future<Output = Result<(), StoreError>> + Send;
+
     /// Returns up to `limit` memories whose index lifecycle is `failed`.
     ///
     /// Used by the reconciliation sweep to retry embed + upsert. Returned in
@@ -572,6 +584,16 @@ mod tests {
         }
 
         async fn set_index_status(&self, _pid: &str, _status: IndexStatus) -> Result<(), StoreError> {
+            Ok(())
+        }
+
+        async fn set_category(&self, pid: &str, category: &str) -> Result<(), StoreError> {
+            let mut memories = self.memories.lock().unwrap();
+            let memory = memories
+                .iter_mut()
+                .find(|m| m.pid == pid)
+                .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
+            memory.category = Some(category.to_string());
             Ok(())
         }
 

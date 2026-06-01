@@ -32,4 +32,8 @@ pub enum ClientError {
         "metadata uses reserved key '{key}'; reserved keys are owned by memoir-core's payload schema and cannot be set via metadata"
     )]
     ReservedMetadataKey { key: String },
+
+    /// NLI classifier initialization failed (epic 0011).
+    #[error("nli classifier failed: {0}")]
+    Nli(String),
 }

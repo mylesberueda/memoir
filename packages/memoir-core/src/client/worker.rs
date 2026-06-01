@@ -159,9 +159,7 @@ impl<'a> WorkerBuilder<'a> {
 
         let span = info_span!("memoir.worker");
         let token_for_task = token.clone();
-        let join = tokio::spawn(
-            async move { run_worker(inner, config, token_for_task).await }.instrument(span),
-        );
+        let join = tokio::spawn(async move { run_worker(inner, config, token_for_task).await }.instrument(span));
 
         Ok(WorkerHandle {
             inner: Arc::new(WorkerHandleInner {
@@ -391,14 +389,12 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
     );
 
     let result: Result<(), String> = match job.kind {
-        JobKind::Extract => inner
-            .run_extract(job.clone())
-            .await
-            .map_err(|err| err.to_string()),
+        JobKind::Extract => inner.run_extract(job.clone()).await.map_err(|err| err.to_string()),
         JobKind::Embed => inner
             .run_embed_job(&job.source_pid)
             .await
             .map_err(|err| err.to_string()),
+        JobKind::Categorize => inner.run_categorize(job.clone()).await.map_err(|err| err.to_string()),
     };
 
     match result {

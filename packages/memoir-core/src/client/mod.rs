@@ -1,6 +1,7 @@
 //! High-level facade composing the embedder, store, and vector index.
 
 mod admin;
+mod categorize;
 mod edit;
 mod embed;
 mod error;
@@ -50,6 +51,13 @@ pub(crate) struct ClientInner {
     pub(crate) index: QdrantIndex,
     pub(crate) jobs: PostgresJobsStore,
     pub(crate) llms: LlmRegistry,
+    /// Optional NLI classifier for the categorize stage (epic 0011).
+    ///
+    /// `None` when no classifier is configured — categorization is then a
+    /// no-op and the extract stage skips enqueuing categorize jobs. Behind
+    /// `Arc` because the classifier is `Send + Sync` and shared into the
+    /// `spawn_blocking` inference task.
+    pub(crate) nli: Option<Arc<crate::nli::NliClassifier>>,
     pub(crate) schema: String,
     pub(crate) system_prompt: Option<String>,
 }
@@ -126,6 +134,7 @@ impl Client {
         #[builder(into)] collection: Option<String>,
         extraction_llm: Option<LlmConfig>,
         contradiction_llm: Option<LlmConfig>,
+        #[builder(default)] categorize: bool,
     ) -> Result<Client, ClientError> {
         let schema = schema.unwrap_or_else(|| crate::migration::DEFAULT_SCHEMA.to_string());
 
@@ -158,6 +167,22 @@ impl Client {
             llms.install(LlmRole::Contradiction, config)?;
         }
 
+        // Build the NLI classifier only when categorization is opted in — it
+        // downloads an ~87MB model on first construction, so consumers who
+        // don't want categorization shouldn't pay for it. `new()` is
+        // sync-blocking (HF download), so it runs on the blocking pool to
+        // avoid stalling the async runtime. Model configurability is ticket
+        // 0009; this is the on/off opt-in.
+        let nli = if categorize {
+            let classifier = tokio::task::spawn_blocking(crate::nli::NliClassifier::new)
+                .await
+                .map_err(|join_err| ClientError::Nli(format!("classifier init task panicked: {join_err}")))?
+                .map_err(|nli_err| ClientError::Nli(nli_err.to_string()))?;
+            Some(Arc::new(classifier))
+        } else {
+            None
+        };
+
         Ok(Client {
             inner: Arc::new(ClientInner {
                 embedder: Arc::new(embedder),
@@ -165,6 +190,7 @@ impl Client {
                 index,
                 jobs,
                 llms,
+                nli,
                 schema,
                 system_prompt,
             }),

@@ -530,6 +530,7 @@ impl From<LibJobKind> for WireJobKind {
         Self(match kind {
             LibJobKind::Embed => ProtoJobKind::Embed,
             LibJobKind::Extract => ProtoJobKind::Extract,
+            LibJobKind::Categorize => ProtoJobKind::Categorize,
         })
     }
 }
@@ -558,6 +559,7 @@ pub(crate) fn job_kind_filter_from_proto(value: Option<i32>) -> Result<Option<Li
         ProtoJobKind::Unspecified => Ok(None),
         ProtoJobKind::Embed => Ok(Some(LibJobKind::Embed)),
         ProtoJobKind::Extract => Ok(Some(LibJobKind::Extract)),
+        ProtoJobKind::Categorize => Ok(Some(LibJobKind::Categorize)),
     }
 }
 

@@ -451,6 +451,22 @@ impl MemoryStore for PostgresStore {
         self.recall(pid).await
     }
 
+    async fn set_category(&self, pid: &str, category: &str) -> Result<(), StoreError> {
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "UPDATE memories SET category = $1 WHERE pid = $2",
+            [
+                SeaOrmValue::String(Some(category.to_string())),
+                SeaOrmValue::String(Some(pid.to_string())),
+            ],
+        );
+        let result = self.db.execute_raw(stmt).await?;
+        if result.rows_affected() == 0 {
+            return Err(StoreError::NotFound(pid.to_string()));
+        }
+        Ok(())
+    }
+
     async fn supersede(&self, pid: &str, by_pid: &str) -> Result<(), StoreError> {
         // `INSERT ... SELECT ... WHERE EXISTS` keeps the contract identical
         // to the old UPDATE-based path: if the loser pid does not exist,

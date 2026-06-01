@@ -77,8 +77,9 @@ service AdminService {
 // follow-up library migration first, then a proto bump.
 enum JobKind {
   JOB_KIND_UNSPECIFIED = 0;
-  JOB_KIND_EMBED = 1;     // Embed a memory's content + upsert its vector.
-  JOB_KIND_EXTRACT = 2;   // Run LLM extraction against an episodic memory.
+  JOB_KIND_EMBED = 1; // Embed a memory's content + upsert its vector.
+  JOB_KIND_EXTRACT = 2; // Run LLM extraction against an episodic memory.
+  JOB_KIND_CATEGORIZE = 3; // Run NLI categorization against a semantic memory.
 }
 
 // FailedJob mirrors `memoir_core::jobs::FailedJob` exactly. Deliberately
@@ -87,7 +88,7 @@ enum JobKind {
 // comment.
 message FailedJob {
   int64 id = 1;
-  string source_pid = 2;            // The memory pid this job processes.
+  string source_pid = 2; // The memory pid this job processes.
   JobKind kind = 3;
   int32 attempts = 4;
   optional string failure_reason = 5;
@@ -177,7 +178,7 @@ message ReconcileRequest {
 message ReconcileResponse {
   // Mirrors `memoir_core::client::ReconcileSummary`. Counts reflect work
   // performed, not work attempted — see the library docs.
-  int64 failed_retried = 1;    // Rows the retry pass attempted to re-embed.
-  int64 failed_recovered = 2;  // Rows the retry pass moved into `indexed`.
-  int64 orphans_deleted = 3;   // Orphan vectors deleted from the index.
+  int64 failed_retried = 1; // Rows the retry pass attempted to re-embed.
+  int64 failed_recovered = 2; // Rows the retry pass moved into `indexed`.
+  int64 orphans_deleted = 3; // Orphan vectors deleted from the index.
 }

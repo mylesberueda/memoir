@@ -9,17 +9,7 @@ use serde::{Deserialize, Serialize};
 /// (see migration `m20000000_000002_create_memory_jobs`); extending it
 /// requires a follow-up migration.
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    strum::Display,
-    strum::EnumString,
-    strum::AsRefStr,
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, strum::Display, strum::EnumString, strum::AsRefStr,
 )]
 #[strum(serialize_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
@@ -30,6 +20,12 @@ pub enum JobKind {
 
     /// Run LLM extraction against an episodic memory.
     Extract,
+
+    /// Run NLI categorization against a semantic memory (epic 0011).
+    ///
+    /// Enqueued per semantic row from the extract handler when a classifier
+    /// is configured. Writes the `category` column; never touches confidence.
+    Categorize,
 }
 
 /// Lifecycle state of a `memory_jobs` row.
@@ -94,24 +90,34 @@ mod tests {
     fn should_render_job_kind_as_lowercase_string() {
         assert_eq!(JobKind::Embed.as_ref(), "embed");
         assert_eq!(JobKind::Extract.as_ref(), "extract");
+        assert_eq!(JobKind::Categorize.as_ref(), "categorize");
     }
 
     #[test]
     fn should_display_job_kind_matching_as_ref() {
         assert_eq!(JobKind::Embed.to_string(), "embed");
         assert_eq!(JobKind::Extract.to_string(), "extract");
+        assert_eq!(JobKind::Categorize.to_string(), "categorize");
     }
 
     #[test]
     fn should_serialize_job_kind_as_lowercase_string() {
         assert_eq!(serde_json::to_string(&JobKind::Embed).unwrap(), "\"embed\"");
         assert_eq!(serde_json::to_string(&JobKind::Extract).unwrap(), "\"extract\"");
+        assert_eq!(serde_json::to_string(&JobKind::Categorize).unwrap(), "\"categorize\"");
     }
 
     #[test]
     fn should_deserialize_job_kind_from_lowercase_string() {
         assert_eq!(serde_json::from_str::<JobKind>("\"embed\"").unwrap(), JobKind::Embed);
-        assert_eq!(serde_json::from_str::<JobKind>("\"extract\"").unwrap(), JobKind::Extract);
+        assert_eq!(
+            serde_json::from_str::<JobKind>("\"extract\"").unwrap(),
+            JobKind::Extract
+        );
+        assert_eq!(
+            serde_json::from_str::<JobKind>("\"categorize\"").unwrap(),
+            JobKind::Categorize
+        );
         assert!(serde_json::from_str::<JobKind>("\"nonsense\"").is_err());
     }
 

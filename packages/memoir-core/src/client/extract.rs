@@ -59,9 +59,7 @@ impl ClientInner {
     /// `failed`.
     pub(super) async fn run_extract(self: &Arc<Self>, job: Job) -> Result<(), ExtractError> {
         let span = info_span!("memoir.extraction", source_pid = %job.source_pid);
-        async move { self.run_extract_inner(job).await }
-            .instrument(span)
-            .await
+        async move { self.run_extract_inner(job).await }.instrument(span).await
     }
 
     async fn run_extract_inner(self: &Arc<Self>, job: Job) -> Result<(), ExtractError> {
@@ -189,6 +187,22 @@ impl ClientInner {
                 .await
                 .map_err(|err: JobsError| ExtractError::Persist(err.to_string()))?;
 
+            // Enqueue categorize only when a classifier is configured —
+            // otherwise the job would sit unclaimable (mirrors how remember
+            // only enqueues Extract when an extraction LLM is present). The
+            // semantic row provably exists at this line, so this is a data
+            // dependency satisfied by construction, not a scheduling one.
+            if self.nli.is_some() {
+                self.jobs
+                    .enqueue(
+                        crate::jobs::JobKind::Categorize,
+                        written.pid.clone(),
+                        serde_json::json!({ "origin": "extraction" }),
+                    )
+                    .await
+                    .map_err(|err: JobsError| ExtractError::Persist(err.to_string()))?;
+            }
+
             persisted_pids.push(written.pid);
         }
 
@@ -209,11 +223,7 @@ impl ClientInner {
 /// Includes the provider identifier, model identifier, fact confidence, and
 /// a marker that this row was machine-generated. Operators inspecting a
 /// semantic row can see which LLM produced it without joining other tables.
-fn build_semantic_metadata(
-    provider: LlmKind,
-    model: &str,
-    confidence: f32,
-) -> serde_json::Value {
+fn build_semantic_metadata(provider: LlmKind, model: &str, confidence: f32) -> serde_json::Value {
     serde_json::json!({
         "origin": "extraction",
         "provider": provider.as_ref(),

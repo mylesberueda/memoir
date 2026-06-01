@@ -124,6 +124,7 @@ impl From<WireError> for Status {
             ClientError::Embedding(_) => (Code::Internal, "embedding", "internal error".into()),
             ClientError::Llm(_) => (Code::Internal, "llm", "internal error".into()),
             ClientError::Migration(_) => (Code::Internal, "migration", "internal error".into()),
+            ClientError::Nli(_) => (Code::Internal, "nli", "internal error".into()),
             ClientError::ReservedMetadataKey { key } => (
                 Code::InvalidArgument,
                 "client.reserved_metadata_key",
