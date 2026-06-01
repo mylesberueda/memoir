@@ -569,6 +569,7 @@ impl From<LibJobKind> for WireJobKind {
             LibJobKind::Embed => ProtoJobKind::Embed,
             LibJobKind::Extract => ProtoJobKind::Extract,
             LibJobKind::Categorize => ProtoJobKind::Categorize,
+            LibJobKind::Reprocess => ProtoJobKind::Reprocess,
         })
     }
 }
@@ -598,6 +599,7 @@ pub(crate) fn job_kind_filter_from_proto(value: Option<i32>) -> Result<Option<Li
         ProtoJobKind::Embed => Ok(Some(LibJobKind::Embed)),
         ProtoJobKind::Extract => Ok(Some(LibJobKind::Extract)),
         ProtoJobKind::Categorize => Ok(Some(LibJobKind::Categorize)),
+        ProtoJobKind::Reprocess => Ok(Some(LibJobKind::Reprocess)),
     }
 }
 

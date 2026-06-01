@@ -143,6 +143,8 @@ pub enum JobKind {
     Extract = 2,
     /// Run NLI categorization against a semantic memory.
     Categorize = 3,
+    /// Re-derive semantic rows from a corrected episodic source.
+    Reprocess = 4,
 }
 impl JobKind {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -155,6 +157,7 @@ impl JobKind {
             Self::Embed => "JOB_KIND_EMBED",
             Self::Extract => "JOB_KIND_EXTRACT",
             Self::Categorize => "JOB_KIND_CATEGORIZE",
+            Self::Reprocess => "JOB_KIND_REPROCESS",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -164,6 +167,7 @@ impl JobKind {
             "JOB_KIND_EMBED" => Some(Self::Embed),
             "JOB_KIND_EXTRACT" => Some(Self::Extract),
             "JOB_KIND_CATEGORIZE" => Some(Self::Categorize),
+            "JOB_KIND_REPROCESS" => Some(Self::Reprocess),
             _ => None,
         }
     }

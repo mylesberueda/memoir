@@ -168,6 +168,30 @@ impl MemoryStore for PostgresStore {
         Ok(memories)
     }
 
+    async fn active_semantics_for_source(&self, source_pid: &str) -> Result<Vec<Memory>, StoreError> {
+        if source_pid.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let select_sql = format!(
+            "SELECT {MEMORY_SELECT_COLUMNS} FROM memories m \
+             WHERE m.source_pid = $1 AND m.kind = 'semantic' \
+               AND m.superseded_by IS NULL AND m.retirement_reason IS NULL"
+        );
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            select_sql,
+            [SeaOrmValue::String(Some(source_pid.to_string()))],
+        );
+
+        let rows = self.db.query_all_raw(stmt).await?;
+        let mut memories = Vec::with_capacity(rows.len());
+        for row in &rows {
+            memories.push(Memory::try_from(row)?);
+        }
+        Ok(memories)
+    }
+
     async fn timeline(&self, scope: Scope, params: TimelineParams) -> Result<Vec<Memory>, StoreError> {
         scope.validate()?;
 

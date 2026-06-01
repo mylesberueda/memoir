@@ -10,6 +10,7 @@ mod query;
 mod recall_as_of;
 mod reconcile;
 mod remember;
+mod reprocess;
 mod search;
 mod timeline;
 mod worker;
@@ -551,28 +552,7 @@ impl Client {
     /// truth, and a transient Qdrant failure leaves a searchable orphan that
     /// reconciliation removes — it does not roll back the retirement.
     async fn retire(&self, pid: &str, reason: crate::memory::RetirementReason) -> Result<(), ClientError> {
-        self.inner.store.retire(pid, reason).await?;
-
-        if let Err(err) = self.inner.index.delete_by_pids(&[pid]).await {
-            tracing::event!(
-                name: "memoir.retire.index_delete_failed",
-                tracing::Level::WARN,
-                pid = %pid,
-                reason = %reason,
-                error.message = %err,
-                "vector evict failed for {{pid}} ({{reason}}): {{error.message}} — reconciliation will clean up the orphan",
-            );
-        } else {
-            tracing::event!(
-                name: "memoir.retire.success",
-                tracing::Level::INFO,
-                pid = %pid,
-                reason = %reason,
-                "retired {{pid}} as {{reason}}",
-            );
-        }
-
-        Ok(())
+        self.inner.retire_and_evict(pid, reason).await
     }
 
     /// Runs reconciliation: retries `failed` rows and cleans Qdrant orphans.

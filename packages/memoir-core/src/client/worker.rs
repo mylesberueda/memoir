@@ -395,6 +395,7 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
             .await
             .map_err(|err| err.to_string()),
         JobKind::Categorize => inner.run_categorize(job.clone()).await.map_err(|err| err.to_string()),
+        JobKind::Reprocess => inner.run_reprocess(job.clone()).await.map_err(|err| err.to_string()),
     };
 
     match result {

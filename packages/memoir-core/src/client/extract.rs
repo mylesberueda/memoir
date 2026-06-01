@@ -88,6 +88,35 @@ impl ClientInner {
             Err(err) => return Err(ExtractError::SourceLookup(err)),
         };
 
+        // First-pass extraction carries no correction.
+        self.re_extract_source(&source, None).await
+    }
+
+    /// Re-runs extraction over an already-loaded source, optionally corrected.
+    ///
+    /// The post-recall half of the extraction pipeline, shared by first-pass
+    /// extraction ([`Self::run_extract_inner`], `correction = None`) and the
+    /// reprocess engine ([`Self::run_reprocess`], `correction = Some(text)`).
+    /// Picks the extraction LLM, runs it over the source content (with the
+    /// correction woven into the prompt when present), parses the reply, and
+    /// persists one semantic row per fact plus its follow-on embed and
+    /// categorize jobs.
+    ///
+    /// A missing extraction LLM is a no-op success, mirroring the dispatch-time
+    /// skip. The caller owns retiring any prior derived rows before calling.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExtractError::LlmCall`] / [`ExtractError::Parse`] on LLM
+    /// failures and [`ExtractError::Persist`] when a row or follow-on job
+    /// cannot be written.
+    pub(super) async fn re_extract_source(
+        self: &Arc<Self>,
+        source: &crate::memory::Memory,
+        correction: Option<&str>,
+    ) -> Result<(), ExtractError> {
+        let source_pid = source.pid.clone();
+
         // Step 2: pick the configured extraction LLM. If none is wired up,
         // skip rather than fail — the worker has already filtered at dispatch
         // time, but defending in depth catches misconfiguration.
@@ -103,7 +132,7 @@ impl ClientInner {
 
         // Step 3: LLM call.
         let content_len = source.content.len();
-        let extraction_content = build_extraction_content(source.created_at, &source.content);
+        let extraction_content = build_extraction_content(source.created_at, &source.content, correction);
         let raw = match provider.extract(DEFAULT_EXTRACTION_PROMPT, &extraction_content).await {
             Ok(raw) => raw,
             Err(err) => {

@@ -26,6 +26,14 @@ pub enum JobKind {
     /// Enqueued per semantic row from the extract handler when a classifier
     /// is configured. Writes the `category` column; never touches confidence.
     Categorize,
+
+    /// Re-derive semantic rows from a corrected episodic source (epic 0011).
+    ///
+    /// The correction engine: retires the source's derived semantic rows and
+    /// re-runs extraction over the (corrected) source. Driven by feedback
+    /// (reason `rejected`) and episodic edits (reason `stale`); the reason and
+    /// any correction text ride the job payload.
+    Reprocess,
 }
 
 /// Lifecycle state of a `memory_jobs` row.
@@ -91,6 +99,7 @@ mod tests {
         assert_eq!(JobKind::Embed.as_ref(), "embed");
         assert_eq!(JobKind::Extract.as_ref(), "extract");
         assert_eq!(JobKind::Categorize.as_ref(), "categorize");
+        assert_eq!(JobKind::Reprocess.as_ref(), "reprocess");
     }
 
     #[test]
@@ -98,6 +107,7 @@ mod tests {
         assert_eq!(JobKind::Embed.to_string(), "embed");
         assert_eq!(JobKind::Extract.to_string(), "extract");
         assert_eq!(JobKind::Categorize.to_string(), "categorize");
+        assert_eq!(JobKind::Reprocess.to_string(), "reprocess");
     }
 
     #[test]
@@ -105,6 +115,7 @@ mod tests {
         assert_eq!(serde_json::to_string(&JobKind::Embed).unwrap(), "\"embed\"");
         assert_eq!(serde_json::to_string(&JobKind::Extract).unwrap(), "\"extract\"");
         assert_eq!(serde_json::to_string(&JobKind::Categorize).unwrap(), "\"categorize\"");
+        assert_eq!(serde_json::to_string(&JobKind::Reprocess).unwrap(), "\"reprocess\"");
     }
 
     #[test]
@@ -117,6 +128,10 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<JobKind>("\"categorize\"").unwrap(),
             JobKind::Categorize
+        );
+        assert_eq!(
+            serde_json::from_str::<JobKind>("\"reprocess\"").unwrap(),
+            JobKind::Reprocess
         );
         assert!(serde_json::from_str::<JobKind>("\"nonsense\"").is_err());
     }

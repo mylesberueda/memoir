@@ -239,6 +239,23 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Returns [`StoreError::Database`] for database failures.
     fn find_by_pids(&self, pids: &[&str]) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
 
+    /// Returns the active semantic rows derived from `source_pid` (epic 0011 Track B).
+    ///
+    /// "Active" means not yet superseded and not yet retired: the rows the
+    /// reprocess engine must retire before re-deriving fresh ones. Episodic
+    /// sources own zero or more semantic rows via `source_pid`; this is that
+    /// set, filtered to the live ones. An unknown or episodic-only source
+    /// yields an empty vector, not an error. Index lifecycle is ignored —
+    /// a still-`pending` derived row is just as much in need of retirement.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Database`] for database failures.
+    fn active_semantics_for_source(
+        &self,
+        source_pid: &str,
+    ) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
+
     /// Deletes one memory or every memory in a scope, returning deleted pids.
     ///
     /// The returned pids let callers issue follow-up deletes against the
@@ -531,6 +548,17 @@ mod tests {
             Ok(pids
                 .iter()
                 .filter_map(|pid| memories.iter().find(|m| m.pid == *pid).cloned())
+                .collect())
+        }
+
+        async fn active_semantics_for_source(&self, source_pid: &str) -> Result<Vec<Memory>, StoreError> {
+            let memories = self.memories.lock().unwrap();
+            Ok(memories
+                .iter()
+                .filter(|m| m.kind == MemoryKind::Semantic)
+                .filter(|m| m.source_pid.as_deref() == Some(source_pid))
+                .filter(|m| m.supersession.is_none() && m.retirement.is_none())
+                .cloned()
                 .collect())
         }
 

@@ -80,6 +80,7 @@ enum JobKind {
   JOB_KIND_EMBED = 1; // Embed a memory's content + upsert its vector.
   JOB_KIND_EXTRACT = 2; // Run LLM extraction against an episodic memory.
   JOB_KIND_CATEGORIZE = 3; // Run NLI categorization against a semantic memory.
+  JOB_KIND_REPROCESS = 4; // Re-derive semantic rows from a corrected episodic source.
 }
 
 // FailedJob mirrors `memoir_core::jobs::FailedJob` exactly. Deliberately
