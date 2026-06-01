@@ -39,6 +39,20 @@ const CREATED_AT_PAYLOAD_KEY: &str = "created_at";
 /// last week" (memories without event-time can't satisfy the constraint).
 const EVENT_AT_PAYLOAD_KEY: &str = "event_at";
 
+/// Payload key for the memory's confidence, encoded as an i64 percentage 0-100.
+///
+/// Always present (every row has a confidence). Filterable via
+/// [`super::FilterCondition::Range`] — e.g. "only rows >= 80" for the
+/// selection layer (epic 0011).
+const CONFIDENCE_PAYLOAD_KEY: &str = "confidence";
+
+/// Payload key for the memory's category label.
+///
+/// Omitted entirely (not written as null) when the row has no category yet —
+/// an equality filter against this key implicitly excludes uncategorized
+/// rows, matching the `event_at` "missing key fails to match" semantics.
+const CATEGORY_PAYLOAD_KEY: &str = "category";
+
 /// Payload keys owned by memoir-core; consumer metadata cannot use these.
 ///
 /// The memory's `metadata` JSON is flattened to top-level payload keys so
@@ -55,6 +69,8 @@ pub(crate) const RESERVED_PAYLOAD_KEYS: &[&str] = &[
     "kind",
     CREATED_AT_PAYLOAD_KEY,
     EVENT_AT_PAYLOAD_KEY,
+    CONFIDENCE_PAYLOAD_KEY,
+    CATEGORY_PAYLOAD_KEY,
 ];
 
 /// Default [`VectorIndex`] backed by Qdrant.
@@ -145,6 +161,17 @@ impl VectorIndex for QdrantIndex {
                 EVENT_AT_PAYLOAD_KEY.to_string(),
                 Value::from(event_at.timestamp_millis()),
             );
+        }
+        // Confidence is always present (every row has one). Stored as i64 so
+        // it filters via the same numeric Range path as the timestamps.
+        payload.insert(
+            CONFIDENCE_PAYLOAD_KEY.to_string(),
+            Value::from(i64::from(memory.confidence.get())),
+        );
+        if let Some(category) = &memory.category {
+            // Omit when absent (same rationale as event_at): an equality
+            // filter on category should exclude not-yet-categorized rows.
+            payload.insert(CATEGORY_PAYLOAD_KEY.to_string(), Value::from(category.clone()));
         }
 
         // Flatten metadata's top-level object into the payload alongside

@@ -86,6 +86,8 @@ pub struct SearchBuilder<'a> {
     min_similarity: Option<f32>,
     created_at_range: NumericRange,
     event_at_range: NumericRange,
+    confidence_range: NumericRange,
+    category: Option<String>,
 }
 
 impl<'a> SearchBuilder<'a> {
@@ -101,6 +103,8 @@ impl<'a> SearchBuilder<'a> {
             min_similarity: None,
             created_at_range: NumericRange::default(),
             event_at_range: NumericRange::default(),
+            confidence_range: NumericRange::default(),
+            category: None,
         }
     }
 
@@ -192,6 +196,30 @@ impl<'a> SearchBuilder<'a> {
         self
     }
 
+    /// Restricts retrieval to memories whose confidence is at or above `min`.
+    ///
+    /// A hard floor on the `confidence` payload key (0-100 percentage):
+    /// rows below `min` are excluded by the vector backend. This is a hard
+    /// filter, distinct from the soft confidence *weighting* the selection
+    /// layer applies (epic 0011 ticket 0008). Multiple calls replace (last
+    /// wins). Out-of-range values are clamped via [`crate::memory::Confidence`].
+    pub fn min_confidence(mut self, min: i8) -> Self {
+        self.confidence_range.gte = Some(f64::from(crate::memory::Confidence::new(min).get()));
+        self
+    }
+
+    /// Restricts retrieval to memories with exactly this category.
+    ///
+    /// A hard equality match on the `category` payload key. Rows with a
+    /// different category — or none yet assigned — are excluded (Qdrant
+    /// treats the missing key as a non-match). This is a hard filter; the
+    /// soft "prefer this category" ranking signal is the selection layer's
+    /// concern (epic 0011 ticket 0008). Multiple calls replace (last wins).
+    pub fn category(mut self, category: impl Into<String>) -> Self {
+        self.category = Some(category.into());
+        self
+    }
+
     fn kind_selector(&self) -> KindSelector {
         kind_selector(self.episodic, self.semantic)
     }
@@ -215,8 +243,15 @@ fn combine_filter(
     metadata_filter: Option<MemoryFilter>,
     created_at: NumericRange,
     event_at: NumericRange,
+    confidence: NumericRange,
+    category: Option<String>,
 ) -> Option<MemoryFilter> {
-    if metadata_filter.is_none() && created_at.is_unbounded() && event_at.is_unbounded() {
+    if metadata_filter.is_none()
+        && created_at.is_unbounded()
+        && event_at.is_unbounded()
+        && confidence.is_unbounded()
+        && category.is_none()
+    {
         return None;
     }
     let mut combined = metadata_filter.unwrap_or_default();
@@ -230,6 +265,18 @@ fn combine_filter(
         combined.must.push(FilterCondition::Range {
             field: "event_at".to_string(),
             range: event_at,
+        });
+    }
+    if !confidence.is_unbounded() {
+        combined.must.push(FilterCondition::Range {
+            field: "confidence".to_string(),
+            range: confidence,
+        });
+    }
+    if let Some(category) = category {
+        combined.must.push(FilterCondition::Equals {
+            field: "category".to_string(),
+            value: crate::vector::MatchValue::Keyword(category),
         });
     }
     Some(combined)
@@ -255,10 +302,18 @@ async fn execute(builder: SearchBuilder<'_>) -> Result<Memories, ClientError> {
         min_similarity,
         created_at_range,
         event_at_range,
+        confidence_range,
+        category,
         ..
     } = builder;
 
-    let combined_filter = combine_filter(metadata_filter, created_at_range, event_at_range);
+    let combined_filter = combine_filter(
+        metadata_filter,
+        created_at_range,
+        event_at_range,
+        confidence_range,
+        category,
+    );
 
     let inner = client.inner.clone();
 

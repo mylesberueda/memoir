@@ -154,6 +154,50 @@ async fn should_flatten_metadata_top_level_keys_into_payload() -> anyhow::Result
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_write_confidence_to_payload_as_integer() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+    let qdrant = client.raw_qdrant()?;
+
+    // Episodic writes pin confidence to 100 (the user said it). Confidence is
+    // always present in the payload so the selection layer (ticket 0008) can
+    // range-filter on it.
+    let written = client.remember("confidence payload test", scope.clone()).await?;
+    common::wait_until_indexed(&client, &written.pid, &scope, "confidence payload", Duration::from_secs(15)).await?;
+
+    let payload = point_payload_for_pid(&qdrant, &client.collection, &written.pid).await?;
+    let confidence = payload.get("confidence").expect("confidence key present");
+    assert_eq!(
+        confidence.as_integer(),
+        Some(100),
+        "episodic confidence must be 100 in the payload"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_omit_category_from_payload_when_none() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+    let qdrant = client.raw_qdrant()?;
+
+    // An episodic write is never categorized, so the category key must be
+    // absent (not null) — an equality filter on category should exclude
+    // uncategorized rows, matching the event_at omission semantics.
+    let written = client.remember("no category yet", scope.clone()).await?;
+    common::wait_until_indexed(&client, &written.pid, &scope, "no category", Duration::from_secs(15)).await?;
+
+    let payload = point_payload_for_pid(&qdrant, &client.collection, &written.pid).await?;
+    assert!(
+        !payload.contains_key("category"),
+        "payload must omit category when Memory.category is None; got {payload:?}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_reject_metadata_using_reserved_payload_key() -> anyhow::Result<()> {
     let client = common::fresh_client().await?;
     let scope = common::fresh_scope();
