@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context as _, Result};
 use hyper_util::rt::TokioIo;
 use memoir_core::client::Client as MemoirClient;
+use memoir_sdk::memoir::v1::admin_service_client::AdminServiceClient;
 use memoir_sdk::memoir::v1::admin_service_server::AdminServiceServer;
 use memoir_sdk::memoir::v1::auth_service_client::AuthServiceClient;
 use memoir_sdk::memoir::v1::auth_service_server::AuthServiceServer;
@@ -53,8 +54,9 @@ pub struct TestHarness {
     pub admin_pid: String,
     pub memory: MemoryServiceClient<Channel>,
     pub auth: AuthServiceClient<Channel>,
+    pub admin: AdminServiceClient<Channel>,
     /// Shared in-process channel. Use to build additional service clients
-    /// (e.g. `AdminServiceClient::new(harness.channel.clone())`).
+    /// when a test needs one beyond the `memory`, `auth`, and `admin` fields.
     pub channel: Channel,
     pub memoir: Arc<MemoirClient>,
     pub service_schema: String,
@@ -148,6 +150,7 @@ impl TestHarness {
         let channel = build_in_process_channel(incoming_tx).await?;
         let mut auth_client = AuthServiceClient::new(channel.clone());
         let memory_client = MemoryServiceClient::new(channel.clone());
+        let admin_client = AdminServiceClient::new(channel.clone());
 
         let login = auth_client
             .login(Request::new(LoginRequest {
@@ -163,6 +166,7 @@ impl TestHarness {
             admin_pid,
             memory: memory_client,
             auth: auth_client,
+            admin: admin_client,
             channel,
             memoir,
             service_schema,

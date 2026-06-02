@@ -8,7 +8,21 @@ use serde::{Deserialize, Serialize};
 /// The set is closed by the CHECK constraint on the `memory_jobs.kind` column
 /// (see migration `m20000000_000002_create_memory_jobs`); extending it
 /// requires a follow-up migration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    strum::Display,
+    strum::EnumString,
+    strum::AsRefStr,
+)]
+#[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
 pub enum JobKind {
     /// Embed a memory's content and upsert its vector. Used for both
     /// freshly-written episodic rows and freshly-extracted semantic rows.
@@ -18,29 +32,13 @@ pub enum JobKind {
     Extract,
 }
 
-impl JobKind {
-    /// Returns the canonical lowercase string used in storage.
-    #[must_use]
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Embed => "embed",
-            Self::Extract => "extract",
-        }
-    }
-}
-
-impl std::fmt::Display for JobKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 /// Lifecycle state of a `memory_jobs` row.
 ///
 /// Mirrors the CHECK constraint on the `memory_jobs.state` column. The
 /// `done` state is not represented — completion deletes the row rather than
 /// transitioning it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "lowercase")]
 pub enum JobState {
     /// Created, awaiting claim.
     Pending,
@@ -52,24 +50,6 @@ pub enum JobState {
     /// Terminal-but-replayable failure. The admin surface (ticket 0008) lets
     /// operators retry or discard.
     Failed,
-}
-
-impl JobState {
-    /// Returns the canonical lowercase string used in storage.
-    #[must_use]
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Pending => "pending",
-            Self::Claimed => "claimed",
-            Self::Failed => "failed",
-        }
-    }
-}
-
-impl std::fmt::Display for JobState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
 }
 
 /// A row of the `memory_jobs` table, hydrated for handler consumption.
@@ -106,49 +86,44 @@ pub struct FailedJob {
     pub updated_at: DateTime<FixedOffset>,
 }
 
-// Inherit serde behavior for the enums embedded in FailedJob.
-impl Serialize for JobKind {
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_str(self.as_str())
-    }
-}
-
-impl<'de> Deserialize<'de> for JobKind {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let s = String::deserialize(d)?;
-        match s.as_str() {
-            "embed" => Ok(Self::Embed),
-            "extract" => Ok(Self::Extract),
-            other => Err(serde::de::Error::custom(format!("unknown job kind: {other}"))),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn should_render_job_kind_as_lowercase_string() {
-        assert_eq!(JobKind::Embed.as_str(), "embed");
-        assert_eq!(JobKind::Extract.as_str(), "extract");
+        assert_eq!(JobKind::Embed.as_ref(), "embed");
+        assert_eq!(JobKind::Extract.as_ref(), "extract");
     }
 
     #[test]
-    fn should_display_job_kind_matching_as_str() {
+    fn should_display_job_kind_matching_as_ref() {
         assert_eq!(JobKind::Embed.to_string(), "embed");
         assert_eq!(JobKind::Extract.to_string(), "extract");
     }
 
     #[test]
-    fn should_render_job_state_as_lowercase_string() {
-        assert_eq!(JobState::Pending.as_str(), "pending");
-        assert_eq!(JobState::Claimed.as_str(), "claimed");
-        assert_eq!(JobState::Failed.as_str(), "failed");
+    fn should_serialize_job_kind_as_lowercase_string() {
+        assert_eq!(serde_json::to_string(&JobKind::Embed).unwrap(), "\"embed\"");
+        assert_eq!(serde_json::to_string(&JobKind::Extract).unwrap(), "\"extract\"");
     }
 
     #[test]
-    fn should_display_job_state_matching_as_str() {
+    fn should_deserialize_job_kind_from_lowercase_string() {
+        assert_eq!(serde_json::from_str::<JobKind>("\"embed\"").unwrap(), JobKind::Embed);
+        assert_eq!(serde_json::from_str::<JobKind>("\"extract\"").unwrap(), JobKind::Extract);
+        assert!(serde_json::from_str::<JobKind>("\"nonsense\"").is_err());
+    }
+
+    #[test]
+    fn should_render_job_state_as_lowercase_string() {
+        assert_eq!(JobState::Pending.as_ref(), "pending");
+        assert_eq!(JobState::Claimed.as_ref(), "claimed");
+        assert_eq!(JobState::Failed.as_ref(), "failed");
+    }
+
+    #[test]
+    fn should_display_job_state_matching_as_ref() {
         assert_eq!(JobState::Pending.to_string(), "pending");
     }
 }

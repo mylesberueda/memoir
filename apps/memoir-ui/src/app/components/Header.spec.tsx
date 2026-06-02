@@ -32,6 +32,12 @@ vi.mock('@actions/auth', () => ({
 	logout: vi.fn(),
 }));
 
+// Mock pathname so breadcrumbs derive from a known route
+const mockUsePathname = vi.fn(() => '/memory/timeline');
+vi.mock('next/navigation', () => ({
+	usePathname: () => mockUsePathname(),
+}));
+
 // Create mock layout context for method call testing
 let mockLayoutContext: ReturnType<typeof createMockLayoutContext>;
 let layoutSpies: LayoutProviderSpies;
@@ -82,11 +88,12 @@ describe('Header Component', () => {
 		expect(screen.getByText('Founder')).toBeInTheDocument();
 	});
 
-	it('displays breadcrumb navigation', () => {
+	it('should_render_breadcrumbs_derived_from_pathname', () => {
+		mockUsePathname.mockReturnValue('/memory/timeline');
 		renderWithLayoutProvider(<Header />);
 
-		expect(screen.getByText('memoir')).toBeInTheDocument();
-		expect(screen.getByText('dashboard')).toBeInTheDocument();
+		expect(screen.getByText('memory')).toBeInTheDocument();
+		expect(screen.getByText('timeline')).toBeInTheDocument();
 	});
 
 	it('renders notification bell button', () => {
@@ -238,55 +245,17 @@ describe('Header Component', () => {
 		expect(logoutItem).toBeInTheDocument();
 	});
 
-	it('renders breadcrumb without link when href is not provided', () => {
-		// Create a mock HeaderComponent with breadcrumb that has no href
-		const TestComponent = () => {
-			// Mock the Header component internals but override breadcrumbs
-			const breadcrumbs = [
-				{ label: 'memoir', href: '#' },
-				{ label: 'current-page' }, // No href to test line 52
-			];
-
-			return (
-				<nav className="flex h-full items-center justify-between border-base-300 bg-base-200 px-3 sm:px-6 border-b">
-					<div className="hidden max-w-[300px] items-center space-x-1 truncate font-medium text-sm sm:flex">
-						{breadcrumbs.map((item, index) => (
-							<div key={item.label} className="flex items-center">
-								{index > 0 && <span className="mx-1">&gt;</span>}
-								{item.href ? (
-									<a href={item.href} className="text-base-content transition-colors">
-										{item.label}
-									</a>
-								) : (
-									<span className="text-base-content">{item.label}</span>
-								)}
-							</div>
-						))}
-					</div>
-				</nav>
-			);
-		};
-
-		render(<TestComponent />);
-
-		expect(screen.getByText('current-page')).toBeInTheDocument();
-		// Verify it's a span, not a link
-		const currentPageElement = screen.getByText('current-page');
-		expect(currentPageElement.tagName).toBe('SPAN');
-		expect(currentPageElement).toHaveClass('text-base-content');
-	});
-
-	it('renders breadcrumb with link when href is provided', () => {
+	it('should_link_ancestor_crumbs_and_render_current_crumb_as_plain_text', () => {
+		mockUsePathname.mockReturnValue('/memory/timeline');
 		renderWithLayoutProvider(<Header />);
 
-		// Default Header has breadcrumbs with hrefs
-		const startupLink = screen.getByText('memoir').closest('a');
-		const dashboardLink = screen.getByText('dashboard').closest('a');
+		// Ancestor segment links to its cumulative path (Link adds a trailing slash).
+		const ancestor = screen.getByText('memory').closest('a');
+		expect(ancestor?.getAttribute('href')).toMatch(/^\/memory\/?$/);
 
-		expect(startupLink).toBeInTheDocument();
-		expect(dashboardLink).toBeInTheDocument();
-		expect(startupLink).toHaveAttribute('href', '#');
-		expect(dashboardLink).toHaveAttribute('href', '#');
+		// The current (last) segment is not a link.
+		const current = screen.getByText('timeline');
+		expect(current.closest('a')).toBeNull();
 	});
 
 	it('dropdown item renders with Next.js Link when href is provided', () => {
@@ -343,11 +312,12 @@ describe('Header Component', () => {
 		});
 
 		it('still renders breadcrumbs and other elements', () => {
+			mockUsePathname.mockReturnValue('/memory/timeline');
 			renderWithLayoutProvider(<Header />);
 
 			// Still should show breadcrumbs
-			expect(screen.getByText('memoir')).toBeInTheDocument();
-			expect(screen.getByText('dashboard')).toBeInTheDocument();
+			expect(screen.getByText('memory')).toBeInTheDocument();
+			expect(screen.getByText('timeline')).toBeInTheDocument();
 
 			// Still should show other UI elements
 			expect(screen.getByTestId('theme-picker')).toBeInTheDocument();

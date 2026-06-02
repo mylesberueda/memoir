@@ -4,8 +4,6 @@ import { getAuthProvider } from '@/lib/auth';
 import type { User } from '@/lib/proto-shims';
 import { deleteAllUserSessions, getSession } from '@/lib/session';
 
-export type { User };
-
 export async function getMe(): Promise<User | null> {
 	return null;
 }

@@ -4,15 +4,15 @@
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Timestamp } from "@bufbuild/protobuf/wkt";
-import { file_google_protobuf_struct, file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
+import type { Duration, Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_duration, file_google_protobuf_struct, file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { JsonObject, Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file memoir/v1/memory.proto.
  */
 export const file_memoir_v1_memory: GenFile = /*@__PURE__*/
-  fileDesc("ChZtZW1vaXIvdjEvbWVtb3J5LnByb3RvEgltZW1vaXIudjEiOgoFU2NvcGUSEAoIYWdlbnRfaWQYASABKAkSDgoGb3JnX2lkGAIgASgJEg8KB3VzZXJfaWQYAyABKAkikwIKBk1lbW9yeRILCgNwaWQYASABKAkSHwoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgDIAEoCRIpCghtZXRhZGF0YRgEIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoMcHJvY2Vzc2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgAiAEBEicKBnN0YXR1cxgHIAEoDjIXLm1lbW9pci52MS5NZW1vcnlTdGF0dXNCDwoNX3Byb2Nlc3NlZF9hdCI9CglTZWFyY2hIaXQSIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeRINCgVzY29yZRgCIAEoAiLJAQoNU2VhcmNoUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRINCgVxdWVyeRgCIAEoCRINCgVsaW1pdBgDIAEoBRI1Cg9tZXRhZGF0YV9maWx0ZXIYBCABKAsyFy5tZW1vaXIudjEuTWVtb3J5RmlsdGVySACIAQESGwoObWluX3NpbWlsYXJpdHkYBSABKAJIAYgBAUISChBfbWV0YWRhdGFfZmlsdGVyQhEKD19taW5fc2ltaWxhcml0eSKSAQoMTWVtb3J5RmlsdGVyEigKBG11c3QYASADKAsyGi5tZW1vaXIudjEuRmlsdGVyQ29uZGl0aW9uEiwKCG11c3Rfbm90GAIgAygLMhoubWVtb2lyLnYxLkZpbHRlckNvbmRpdGlvbhIqCgZzaG91bGQYAyADKAsyGi5tZW1vaXIudjEuRmlsdGVyQ29uZGl0aW9uIq0BCg9GaWx0ZXJDb25kaXRpb24SDQoFZmllbGQYASABKAkSJwoGZXF1YWxzGAIgASgLMhUubWVtb2lyLnYxLk1hdGNoVmFsdWVIABIrCglpbl92YWx1ZXMYAyABKAsyFi5tZW1vaXIudjEuTWF0Y2hWYWx1ZXNIABIoCgVyYW5nZRgEIAEoCzIXLm1lbW9pci52MS5OdW1lcmljUmFuZ2VIAEILCgljb25kaXRpb24iTgoKTWF0Y2hWYWx1ZRIRCgdrZXl3b3JkGAEgASgJSAASEQoHaW50ZWdlchgCIAEoA0gAEhEKB2Jvb2xlYW4YAyABKAhIAEIHCgV2YWx1ZSJvCgtNYXRjaFZhbHVlcxIqCghrZXl3b3JkcxgBIAEoCzIWLm1lbW9pci52MS5LZXl3b3JkTGlzdEgAEioKCGludGVnZXJzGAIgASgLMhYubWVtb2lyLnYxLkludGVnZXJMaXN0SABCCAoGdmFsdWVzIh0KC0tleXdvcmRMaXN0Eg4KBnZhbHVlcxgBIAMoCSIdCgtJbnRlZ2VyTGlzdBIOCgZ2YWx1ZXMYASADKAMicgoMTnVtZXJpY1JhbmdlEg8KAmx0GAEgASgBSACIAQESEAoDbHRlGAIgASgBSAGIAQESDwoCZ3QYAyABKAFIAogBARIQCgNndGUYBCABKAFIA4gBAUIFCgNfbHRCBgoEX2x0ZUIFCgNfZ3RCBgoEX2d0ZSI0Cg5TZWFyY2hSZXNwb25zZRIiCgRoaXRzGAEgAygLMhQubWVtb2lyLnYxLlNlYXJjaEhpdCIcCg1SZWNhbGxSZXF1ZXN0EgsKA3BpZBgBIAEoCSIzCg5SZWNhbGxSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5IoABCg9SZW1lbWJlclJlcXVlc3QSHwoFc2NvcGUYASABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgCIAEoCRIuCghtZXRhZGF0YRgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3RIAIgBAUILCglfbWV0YWRhdGEiNQoQUmVtZW1iZXJSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5ImAKDUZvcmdldFJlcXVlc3QSDQoDcGlkGAEgASgJSAASIQoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGVIABITCgtoYXJkX2RlbGV0ZRgDIAEoCEIICgZ0YXJnZXQiJgoORm9yZ2V0UmVzcG9uc2USFAoMZGVsZXRlZF9waWRzGAEgAygJKn8KDE1lbW9yeVN0YXR1cxIdChlNRU1PUllfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGQoVTUVNT1JZX1NUQVRVU19QRU5ESU5HEAESGwoXTUVNT1JZX1NUQVRVU19QUk9DRVNTRUQQAhIYChRNRU1PUllfU1RBVFVTX0ZBSUxFRBADMpECCg1NZW1vcnlTZXJ2aWNlEj0KBlNlYXJjaBIYLm1lbW9pci52MS5TZWFyY2hSZXF1ZXN0GhkubWVtb2lyLnYxLlNlYXJjaFJlc3BvbnNlEj0KBlJlY2FsbBIYLm1lbW9pci52MS5SZWNhbGxSZXF1ZXN0GhkubWVtb2lyLnYxLlJlY2FsbFJlc3BvbnNlEkMKCFJlbWVtYmVyEhoubWVtb2lyLnYxLlJlbWVtYmVyUmVxdWVzdBobLm1lbW9pci52MS5SZW1lbWJlclJlc3BvbnNlEj0KBkZvcmdldBIYLm1lbW9pci52MS5Gb3JnZXRSZXF1ZXN0GhkubWVtb2lyLnYxLkZvcmdldFJlc3BvbnNlYgZwcm90bzM", [file_google_protobuf_struct, file_google_protobuf_timestamp]);
+  fileDesc("ChZtZW1vaXIvdjEvbWVtb3J5LnByb3RvEgltZW1vaXIudjEiOgoFU2NvcGUSEAoIYWdlbnRfaWQYASABKAkSDgoGb3JnX2lkGAIgASgJEg8KB3VzZXJfaWQYAyABKAki7QMKBk1lbW9yeRILCgNwaWQYASABKAkSHwoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgDIAEoCRIpCghtZXRhZGF0YRgEIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoMcHJvY2Vzc2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgAiAEBEicKBnN0YXR1cxgHIAEoDjIXLm1lbW9pci52MS5NZW1vcnlTdGF0dXMSLgoKdXBkYXRlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMQoIZXZlbnRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAGIAQESMgoMc3VwZXJzZXNzaW9uGAogASgLMhcubWVtb2lyLnYxLlN1cGVyc2Vzc2lvbkgCiAEBEiMKBGtpbmQYCyABKA4yFS5tZW1vaXIudjEuTWVtb3J5S2luZEIPCg1fcHJvY2Vzc2VkX2F0QgsKCV9ldmVudF9hdEIPCg1fc3VwZXJzZXNzaW9uIkoKDFN1cGVyc2Vzc2lvbhISCgp3aW5uZXJfcGlkGAEgASgJEiYKAmF0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIyCgxLaW5kU2VsZWN0b3ISEAoIZXBpc29kaWMYASABKAgSEAoIc2VtYW50aWMYAiABKAgiPQoJU2VhcmNoSGl0EiEKBm1lbW9yeRgBIAEoCzIRLm1lbW9pci52MS5NZW1vcnkSDQoFc2NvcmUYAiABKAIigAIKDVNlYXJjaFJlcXVlc3QSHwoFc2NvcGUYASABKAsyEC5tZW1vaXIudjEuU2NvcGUSDQoFcXVlcnkYAiABKAkSDQoFbGltaXQYAyABKAUSNQoPbWV0YWRhdGFfZmlsdGVyGAQgASgLMhcubWVtb2lyLnYxLk1lbW9yeUZpbHRlckgAiAEBEhsKDm1pbl9zaW1pbGFyaXR5GAUgASgCSAGIAQESKwoFa2luZHMYBiABKAsyFy5tZW1vaXIudjEuS2luZFNlbGVjdG9ySAKIAQFCEgoQX21ldGFkYXRhX2ZpbHRlckIRCg9fbWluX3NpbWlsYXJpdHlCCAoGX2tpbmRzIpIBCgxNZW1vcnlGaWx0ZXISKAoEbXVzdBgBIAMoCzIaLm1lbW9pci52MS5GaWx0ZXJDb25kaXRpb24SLAoIbXVzdF9ub3QYAiADKAsyGi5tZW1vaXIudjEuRmlsdGVyQ29uZGl0aW9uEioKBnNob3VsZBgDIAMoCzIaLm1lbW9pci52MS5GaWx0ZXJDb25kaXRpb24irQEKD0ZpbHRlckNvbmRpdGlvbhINCgVmaWVsZBgBIAEoCRInCgZlcXVhbHMYAiABKAsyFS5tZW1vaXIudjEuTWF0Y2hWYWx1ZUgAEisKCWluX3ZhbHVlcxgDIAEoCzIWLm1lbW9pci52MS5NYXRjaFZhbHVlc0gAEigKBXJhbmdlGAQgASgLMhcubWVtb2lyLnYxLk51bWVyaWNSYW5nZUgAQgsKCWNvbmRpdGlvbiJOCgpNYXRjaFZhbHVlEhEKB2tleXdvcmQYASABKAlIABIRCgdpbnRlZ2VyGAIgASgDSAASEQoHYm9vbGVhbhgDIAEoCEgAQgcKBXZhbHVlIm8KC01hdGNoVmFsdWVzEioKCGtleXdvcmRzGAEgASgLMhYubWVtb2lyLnYxLktleXdvcmRMaXN0SAASKgoIaW50ZWdlcnMYAiABKAsyFi5tZW1vaXIudjEuSW50ZWdlckxpc3RIAEIICgZ2YWx1ZXMiHQoLS2V5d29yZExpc3QSDgoGdmFsdWVzGAEgAygJIh0KC0ludGVnZXJMaXN0Eg4KBnZhbHVlcxgBIAMoAyJyCgxOdW1lcmljUmFuZ2USDwoCbHQYASABKAFIAIgBARIQCgNsdGUYAiABKAFIAYgBARIPCgJndBgDIAEoAUgCiAEBEhAKA2d0ZRgEIAEoAUgDiAEBQgUKA19sdEIGCgRfbHRlQgUKA19ndEIGCgRfZ3RlIjQKDlNlYXJjaFJlc3BvbnNlEiIKBGhpdHMYASADKAsyFC5tZW1vaXIudjEuU2VhcmNoSGl0IhwKDVJlY2FsbFJlcXVlc3QSCwoDcGlkGAEgASgJIjMKDlJlY2FsbFJlc3BvbnNlEiEKBm1lbW9yeRgBIAEoCzIRLm1lbW9pci52MS5NZW1vcnkigAEKD1JlbWVtYmVyUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRIPCgdjb250ZW50GAIgASgJEi4KCG1ldGFkYXRhGAMgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdEgAiAEBQgsKCV9tZXRhZGF0YSI1ChBSZW1lbWJlclJlc3BvbnNlEiEKBm1lbW9yeRgBIAEoCzIRLm1lbW9pci52MS5NZW1vcnkiYAoNRm9yZ2V0UmVxdWVzdBINCgNwaWQYASABKAlIABIhCgVzY29wZRgCIAEoCzIQLm1lbW9pci52MS5TY29wZUgAEhMKC2hhcmRfZGVsZXRlGAMgASgIQggKBnRhcmdldCImCg5Gb3JnZXRSZXNwb25zZRIUCgxkZWxldGVkX3BpZHMYASADKAki1wMKD1RpbWVsaW5lUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRIrCgVraW5kcxgCIAEoCzIXLm1lbW9pci52MS5LaW5kU2VsZWN0b3JIAIgBARI2Cg1jcmVhdGVkX2FmdGVyGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgBiAEBEjcKDmNyZWF0ZWRfYmVmb3JlGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgCiAEBEjcKDmV2ZW50X2F0X2FmdGVyGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgDiAEBEjgKD2V2ZW50X2F0X2JlZm9yZRgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIBIgBARIaChJleGNsdWRlX3N1cGVyc2VkZWQYByABKAgSDQoFbGltaXQYCCABKAUSEQoJYXNjZW5kaW5nGAkgASgIQggKBl9raW5kc0IQCg5fY3JlYXRlZF9hZnRlckIRCg9fY3JlYXRlZF9iZWZvcmVCEQoPX2V2ZW50X2F0X2FmdGVyQhIKEF9ldmVudF9hdF9iZWZvcmUiNwoQVGltZWxpbmVSZXNwb25zZRIjCghtZW1vcmllcxgBIAMoCzIRLm1lbW9pci52MS5NZW1vcnkipQEKEVJlY2FsbEFzT2ZSZXF1ZXN0Eh8KBXNjb3BlGAEgASgLMhAubWVtb2lyLnYxLlNjb3BlEikKBWFzX29mGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIrCgVraW5kcxgDIAEoCzIXLm1lbW9pci52MS5LaW5kU2VsZWN0b3JIAIgBARINCgVsaW1pdBgEIAEoBUIICgZfa2luZHMiOQoSUmVjYWxsQXNPZlJlc3BvbnNlEiMKCG1lbW9yaWVzGAEgAygLMhEubWVtb2lyLnYxLk1lbW9yeSI6CgdSYW5raW5nEiMKBmh5YnJpZBgBIAEoCzIRLm1lbW9pci52MS5IeWJyaWRIAEIKCghzdHJhdGVneSI4CgZIeWJyaWQSDQoFYWxwaGEYASABKAISHwoFZGVjYXkYAiABKAsyEC5tZW1vaXIudjEuRGVjYXkinwEKBURlY2F5EjIKC2V4cG9uZW50aWFsGAEgASgLMhsubWVtb2lyLnYxLkV4cG9uZW50aWFsRGVjYXlIABIwCgpyZWNpcHJvY2FsGAIgASgLMhoubWVtb2lyLnYxLlJlY2lwcm9jYWxEZWNheUgAEiQKBHN0ZXAYAyABKAsyFC5tZW1vaXIudjEuU3RlcERlY2F5SABCCgoIZnVuY3Rpb24iQAoQRXhwb25lbnRpYWxEZWNheRIsCgloYWxmX2xpZmUYASABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24iOwoPUmVjaXByb2NhbERlY2F5EigKBXNjYWxlGAEgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uIjQKCVN0ZXBEZWNheRInCgdidWNrZXRzGAEgAygLMhYubWVtb2lyLnYxLkRlY2F5QnVja2V0IkkKC0RlY2F5QnVja2V0EisKCGJvdW5kYXJ5GAEgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uEg0KBXZhbHVlGAIgASgCIjwKCFF1ZXJ5SGl0EiEKBm1lbW9yeRgBIAEoCzIRLm1lbW9pci52MS5NZW1vcnkSDQoFc2NvcmUYAiABKAIi5QQKDFF1ZXJ5UmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRINCgVxdWVyeRgCIAEoCRINCgVsaW1pdBgDIAEoBRIrCgVraW5kcxgEIAEoCzIXLm1lbW9pci52MS5LaW5kU2VsZWN0b3JIAIgBARI1Cg9tZXRhZGF0YV9maWx0ZXIYBSABKAsyFy5tZW1vaXIudjEuTWVtb3J5RmlsdGVySAGIAQESGwoObWluX3NpbWlsYXJpdHkYBiABKAJIAogBARI2Cg1jcmVhdGVkX2FmdGVyGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgDiAEBEjcKDmNyZWF0ZWRfYmVmb3JlGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgEiAEBEjcKDmV2ZW50X2F0X2FmdGVyGAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgFiAEBEjgKD2V2ZW50X2F0X2JlZm9yZRgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIBogBARIoCgdyYW5raW5nGAsgASgLMhIubWVtb2lyLnYxLlJhbmtpbmdIB4gBAUIICgZfa2luZHNCEgoQX21ldGFkYXRhX2ZpbHRlckIRCg9fbWluX3NpbWlsYXJpdHlCEAoOX2NyZWF0ZWRfYWZ0ZXJCEQoPX2NyZWF0ZWRfYmVmb3JlQhEKD19ldmVudF9hdF9hZnRlckISChBfZXZlbnRfYXRfYmVmb3JlQgoKCF9yYW5raW5nIlwKDVF1ZXJ5UmVzcG9uc2USIQoEaGl0cxgBIAMoCzITLm1lbW9pci52MS5RdWVyeUhpdBIoCgxyYW5raW5nX3VzZWQYAiABKAsyEi5tZW1vaXIudjEuUmFua2luZyK5AQoLRWRpdFJlcXVlc3QSCwoDcGlkGAEgASgJEhQKB2NvbnRlbnQYAiABKAlIAIgBARIuCghtZXRhZGF0YRgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3RIAYgBARIxCghldmVudF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIAogBAUIKCghfY29udGVudEILCglfbWV0YWRhdGFCCwoJX2V2ZW50X2F0IjEKDEVkaXRSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5IikKGlN1cGVyc2Vzc2lvbkhpc3RvcnlSZXF1ZXN0EgsKA3BpZBgBIAEoCSJLChtTdXBlcnNlc3Npb25IaXN0b3J5UmVzcG9uc2USLAoGZXZlbnRzGAEgAygLMhwubWVtb2lyLnYxLlN1cGVyc2Vzc2lvbkV2ZW50IjQKEUxpc3RBZ2VudHNSZXF1ZXN0Eg4KBm9yZ19pZBgBIAEoCRIPCgd1c2VyX2lkGAIgASgJIicKEkxpc3RBZ2VudHNSZXNwb25zZRIRCglhZ2VudF9pZHMYASADKAkiawoRU3VwZXJzZXNzaW9uRXZlbnQSFwoKd2lubmVyX3BpZBgBIAEoCUgAiAEBEi4KCmRlY2lkZWRfYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQg0KC193aW5uZXJfcGlkKn8KDE1lbW9yeVN0YXR1cxIdChlNRU1PUllfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGQoVTUVNT1JZX1NUQVRVU19QRU5ESU5HEAESGwoXTUVNT1JZX1NUQVRVU19QUk9DRVNTRUQQAhIYChRNRU1PUllfU1RBVFVTX0ZBSUxFRBADKl0KCk1lbW9yeUtpbmQSGwoXTUVNT1JZX0tJTkRfVU5TUEVDSUZJRUQQABIYChRNRU1PUllfS0lORF9FUElTT0RJQxABEhgKFE1FTU9SWV9LSU5EX1NFTUFOVElDEAIyxwUKDU1lbW9yeVNlcnZpY2USPQoGU2VhcmNoEhgubWVtb2lyLnYxLlNlYXJjaFJlcXVlc3QaGS5tZW1vaXIudjEuU2VhcmNoUmVzcG9uc2USPQoGUmVjYWxsEhgubWVtb2lyLnYxLlJlY2FsbFJlcXVlc3QaGS5tZW1vaXIudjEuUmVjYWxsUmVzcG9uc2USQwoIUmVtZW1iZXISGi5tZW1vaXIudjEuUmVtZW1iZXJSZXF1ZXN0GhsubWVtb2lyLnYxLlJlbWVtYmVyUmVzcG9uc2USPQoGRm9yZ2V0EhgubWVtb2lyLnYxLkZvcmdldFJlcXVlc3QaGS5tZW1vaXIudjEuRm9yZ2V0UmVzcG9uc2USQwoIVGltZWxpbmUSGi5tZW1vaXIudjEuVGltZWxpbmVSZXF1ZXN0GhsubWVtb2lyLnYxLlRpbWVsaW5lUmVzcG9uc2USSQoKUmVjYWxsQXNPZhIcLm1lbW9pci52MS5SZWNhbGxBc09mUmVxdWVzdBodLm1lbW9pci52MS5SZWNhbGxBc09mUmVzcG9uc2USOgoFUXVlcnkSFy5tZW1vaXIudjEuUXVlcnlSZXF1ZXN0GhgubWVtb2lyLnYxLlF1ZXJ5UmVzcG9uc2USNwoERWRpdBIWLm1lbW9pci52MS5FZGl0UmVxdWVzdBoXLm1lbW9pci52MS5FZGl0UmVzcG9uc2USZAoTU3VwZXJzZXNzaW9uSGlzdG9yeRIlLm1lbW9pci52MS5TdXBlcnNlc3Npb25IaXN0b3J5UmVxdWVzdBomLm1lbW9pci52MS5TdXBlcnNlc3Npb25IaXN0b3J5UmVzcG9uc2USSQoKTGlzdEFnZW50cxIcLm1lbW9pci52MS5MaXN0QWdlbnRzUmVxdWVzdBodLm1lbW9pci52MS5MaXN0QWdlbnRzUmVzcG9uc2ViBnByb3RvMw", [file_google_protobuf_duration, file_google_protobuf_struct, file_google_protobuf_timestamp]);
 
 /**
  * Scope uniquely identifies a memory partition. Memories written under one
@@ -94,6 +94,40 @@ export type Memory = Message<"memoir.v1.Memory"> & {
    * @generated from field: memoir.v1.MemoryStatus status = 7;
    */
   status: MemoryStatus;
+
+  /**
+   * Wall-clock time of the row's last in-place edit. Equals `created_at`
+   * for memories never edited. Maps from memoir-core's `Memory.updated_at`.
+   *
+   * @generated from field: google.protobuf.Timestamp updated_at = 8;
+   */
+  updatedAt?: Timestamp;
+
+  /**
+   * Event-time of the thing being remembered, distinct from `created_at`
+   * (when memoir was told). Unset when no event-time is known (preferences,
+   * identity facts). Maps from memoir-core's `Memory.event_at`.
+   *
+   * @generated from field: optional google.protobuf.Timestamp event_at = 9;
+   */
+  eventAt?: Timestamp;
+
+  /**
+   * Soft-deletion marker; unset when the memory is active. Maps from
+   * memoir-core's `Memory.supersession` (`SupersessionInfo`).
+   *
+   * @generated from field: optional memoir.v1.Supersession supersession = 10;
+   */
+  supersession?: Supersession;
+
+  /**
+   * Episodic (raw utterance written via Remember) or semantic (a fact the
+   * extraction worker derived from an episodic source). Maps from
+   * memoir-core's `Memory.kind`.
+   *
+   * @generated from field: memoir.v1.MemoryKind kind = 11;
+   */
+  kind: MemoryKind;
 };
 
 /**
@@ -102,6 +136,58 @@ export type Memory = Message<"memoir.v1.Memory"> & {
  */
 export const MemorySchema: GenMessage<Memory> = /*@__PURE__*/
   messageDesc(file_memoir_v1_memory, 1);
+
+/**
+ * Latest supersession state for a Memory — winner pid and decision time.
+ * Mirrors memoir-core's `SupersessionInfo`. Present only on superseded rows.
+ *
+ * @generated from message memoir.v1.Supersession
+ */
+export type Supersession = Message<"memoir.v1.Supersession"> & {
+  /**
+   * @generated from field: string winner_pid = 1;
+   */
+  winnerPid: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp at = 2;
+   */
+  at?: Timestamp;
+};
+
+/**
+ * Describes the message memoir.v1.Supersession.
+ * Use `create(SupersessionSchema)` to create a new message.
+ */
+export const SupersessionSchema: GenMessage<Supersession> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 2);
+
+/**
+ * Selects which memory kinds a read includes. Mirrors memoir-core's
+ * `KindSelector`. Per the library's semantics, a selector with BOTH fields
+ * false (the proto3 default, or an omitted selector) means "all kinds" —
+ * not "no kinds". Setting exactly one field filters to that kind.
+ *
+ * @generated from message memoir.v1.KindSelector
+ */
+export type KindSelector = Message<"memoir.v1.KindSelector"> & {
+  /**
+   * @generated from field: bool episodic = 1;
+   */
+  episodic: boolean;
+
+  /**
+   * @generated from field: bool semantic = 2;
+   */
+  semantic: boolean;
+};
+
+/**
+ * Describes the message memoir.v1.KindSelector.
+ * Use `create(KindSelectorSchema)` to create a new message.
+ */
+export const KindSelectorSchema: GenMessage<KindSelector> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 3);
 
 /**
  * Search result with similarity score attached.
@@ -131,7 +217,7 @@ export type SearchHit = Message<"memoir.v1.SearchHit"> & {
  * Use `create(SearchHitSchema)` to create a new message.
  */
 export const SearchHitSchema: GenMessage<SearchHit> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 2);
+  messageDesc(file_memoir_v1_memory, 4);
 
 /**
  * @generated from message memoir.v1.SearchRequest
@@ -175,6 +261,15 @@ export type SearchRequest = Message<"memoir.v1.SearchRequest"> & {
    * @generated from field: optional float min_similarity = 5;
    */
   minSimilarity?: number;
+
+  /**
+   * Restricts retrieval to the selected memory kind(s). Omitted or
+   * both-false = all kinds (see `KindSelector`). Maps to the library's
+   * `SearchBuilder::episodic` / `::semantic` toggles.
+   *
+   * @generated from field: optional memoir.v1.KindSelector kinds = 6;
+   */
+  kinds?: KindSelector;
 };
 
 /**
@@ -182,7 +277,7 @@ export type SearchRequest = Message<"memoir.v1.SearchRequest"> & {
  * Use `create(SearchRequestSchema)` to create a new message.
  */
 export const SearchRequestSchema: GenMessage<SearchRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 3);
+  messageDesc(file_memoir_v1_memory, 5);
 
 /**
  * Caller-supplied filter applied at search time. Mirrors Qdrant's payload
@@ -217,7 +312,7 @@ export type MemoryFilter = Message<"memoir.v1.MemoryFilter"> & {
  * Use `create(MemoryFilterSchema)` to create a new message.
  */
 export const MemoryFilterSchema: GenMessage<MemoryFilter> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 4);
+  messageDesc(file_memoir_v1_memory, 6);
 
 /**
  * One field-targeted condition inside a [`MemoryFilter`].
@@ -267,7 +362,7 @@ export type FilterCondition = Message<"memoir.v1.FilterCondition"> & {
  * Use `create(FilterConditionSchema)` to create a new message.
  */
 export const FilterConditionSchema: GenMessage<FilterCondition> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 5);
+  messageDesc(file_memoir_v1_memory, 7);
 
 /**
  * Concrete value for equality matching. Mirrors memoir-core's `MatchValue`.
@@ -304,7 +399,7 @@ export type MatchValue = Message<"memoir.v1.MatchValue"> & {
  * Use `create(MatchValueSchema)` to create a new message.
  */
 export const MatchValueSchema: GenMessage<MatchValue> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 6);
+  messageDesc(file_memoir_v1_memory, 8);
 
 /**
  * List of values for `IN (...)` matching. Mirrors memoir-core's `MatchValues`.
@@ -335,7 +430,7 @@ export type MatchValues = Message<"memoir.v1.MatchValues"> & {
  * Use `create(MatchValuesSchema)` to create a new message.
  */
 export const MatchValuesSchema: GenMessage<MatchValues> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 7);
+  messageDesc(file_memoir_v1_memory, 9);
 
 /**
  * @generated from message memoir.v1.KeywordList
@@ -352,7 +447,7 @@ export type KeywordList = Message<"memoir.v1.KeywordList"> & {
  * Use `create(KeywordListSchema)` to create a new message.
  */
 export const KeywordListSchema: GenMessage<KeywordList> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 8);
+  messageDesc(file_memoir_v1_memory, 10);
 
 /**
  * @generated from message memoir.v1.IntegerList
@@ -369,7 +464,7 @@ export type IntegerList = Message<"memoir.v1.IntegerList"> & {
  * Use `create(IntegerListSchema)` to create a new message.
  */
 export const IntegerListSchema: GenMessage<IntegerList> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 9);
+  messageDesc(file_memoir_v1_memory, 11);
 
 /**
  * Half-open or closed numeric range. All bounds optional; an entirely-unbounded
@@ -405,7 +500,7 @@ export type NumericRange = Message<"memoir.v1.NumericRange"> & {
  * Use `create(NumericRangeSchema)` to create a new message.
  */
 export const NumericRangeSchema: GenMessage<NumericRange> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 10);
+  messageDesc(file_memoir_v1_memory, 12);
 
 /**
  * @generated from message memoir.v1.SearchResponse
@@ -422,7 +517,7 @@ export type SearchResponse = Message<"memoir.v1.SearchResponse"> & {
  * Use `create(SearchResponseSchema)` to create a new message.
  */
 export const SearchResponseSchema: GenMessage<SearchResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 11);
+  messageDesc(file_memoir_v1_memory, 13);
 
 /**
  * @generated from message memoir.v1.RecallRequest
@@ -439,7 +534,7 @@ export type RecallRequest = Message<"memoir.v1.RecallRequest"> & {
  * Use `create(RecallRequestSchema)` to create a new message.
  */
 export const RecallRequestSchema: GenMessage<RecallRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 12);
+  messageDesc(file_memoir_v1_memory, 14);
 
 /**
  * @generated from message memoir.v1.RecallResponse
@@ -456,7 +551,7 @@ export type RecallResponse = Message<"memoir.v1.RecallResponse"> & {
  * Use `create(RecallResponseSchema)` to create a new message.
  */
 export const RecallResponseSchema: GenMessage<RecallResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 13);
+  messageDesc(file_memoir_v1_memory, 15);
 
 /**
  * @generated from message memoir.v1.RememberRequest
@@ -483,7 +578,7 @@ export type RememberRequest = Message<"memoir.v1.RememberRequest"> & {
  * Use `create(RememberRequestSchema)` to create a new message.
  */
 export const RememberRequestSchema: GenMessage<RememberRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 14);
+  messageDesc(file_memoir_v1_memory, 16);
 
 /**
  * @generated from message memoir.v1.RememberResponse
@@ -505,7 +600,7 @@ export type RememberResponse = Message<"memoir.v1.RememberResponse"> & {
  * Use `create(RememberResponseSchema)` to create a new message.
  */
 export const RememberResponseSchema: GenMessage<RememberResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 15);
+  messageDesc(file_memoir_v1_memory, 17);
 
 /**
  * @generated from message memoir.v1.ForgetRequest
@@ -544,7 +639,7 @@ export type ForgetRequest = Message<"memoir.v1.ForgetRequest"> & {
  * Use `create(ForgetRequestSchema)` to create a new message.
  */
 export const ForgetRequestSchema: GenMessage<ForgetRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 16);
+  messageDesc(file_memoir_v1_memory, 18);
 
 /**
  * @generated from message memoir.v1.ForgetResponse
@@ -565,7 +660,649 @@ export type ForgetResponse = Message<"memoir.v1.ForgetResponse"> & {
  * Use `create(ForgetResponseSchema)` to create a new message.
  */
 export const ForgetResponseSchema: GenMessage<ForgetResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 17);
+  messageDesc(file_memoir_v1_memory, 19);
+
+/**
+ * @generated from message memoir.v1.TimelineRequest
+ */
+export type TimelineRequest = Message<"memoir.v1.TimelineRequest"> & {
+  /**
+   * @generated from field: memoir.v1.Scope scope = 1;
+   */
+  scope?: Scope;
+
+  /**
+   * Restricts to the selected kind(s). Omitted or both-false = all kinds.
+   *
+   * @generated from field: optional memoir.v1.KindSelector kinds = 2;
+   */
+  kinds?: KindSelector;
+
+  /**
+   * Half-open time windows. `*_after` is inclusive (>=), `*_before` is
+   * exclusive (<), matching the library's `start..end` convention. All
+   * optional; unset = unbounded on that side. `created_*` filters on
+   * write-time, `event_at_*` on event-time (rows with no event_at are
+   * excluded by an event_at bound).
+   *
+   * @generated from field: optional google.protobuf.Timestamp created_after = 3;
+   */
+  createdAfter?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp created_before = 4;
+   */
+  createdBefore?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp event_at_after = 5;
+   */
+  eventAtAfter?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp event_at_before = 6;
+   */
+  eventAtBefore?: Timestamp;
+
+  /**
+   * Drops superseded rows when true. Default (false/omitted) INCLUDES them —
+   * timeline is the audit view. The field is named for the non-default
+   * action so proto3's false-default aligns with the library's
+   * include-by-default behavior.
+   *
+   * @generated from field: bool exclude_superseded = 7;
+   */
+  excludeSuperseded: boolean;
+
+  /**
+   * Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
+   *
+   * @generated from field: int32 limit = 8;
+   */
+  limit: number;
+
+  /**
+   * Oldest-first when true. Default (false/omitted) is newest-first by
+   * created_at, matching the library default.
+   *
+   * @generated from field: bool ascending = 9;
+   */
+  ascending: boolean;
+};
+
+/**
+ * Describes the message memoir.v1.TimelineRequest.
+ * Use `create(TimelineRequestSchema)` to create a new message.
+ */
+export const TimelineRequestSchema: GenMessage<TimelineRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 20);
+
+/**
+ * @generated from message memoir.v1.TimelineResponse
+ */
+export type TimelineResponse = Message<"memoir.v1.TimelineResponse"> & {
+  /**
+   * Memories in the requested order. `score` is never set (timeline computes
+   * no similarity). Mirrors `Client::timeline`'s `Vec<Memory>` return.
+   *
+   * @generated from field: repeated memoir.v1.Memory memories = 1;
+   */
+  memories: Memory[];
+};
+
+/**
+ * Describes the message memoir.v1.TimelineResponse.
+ * Use `create(TimelineResponseSchema)` to create a new message.
+ */
+export const TimelineResponseSchema: GenMessage<TimelineResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 21);
+
+/**
+ * @generated from message memoir.v1.RecallAsOfRequest
+ */
+export type RecallAsOfRequest = Message<"memoir.v1.RecallAsOfRequest"> & {
+  /**
+   * @generated from field: memoir.v1.Scope scope = 1;
+   */
+  scope?: Scope;
+
+  /**
+   * The point in time to reconstruct. Memories created on or before this
+   * instant that were active (not yet superseded) as of it are returned.
+   * A future `as_of` yields current state; one before any memory existed
+   * yields empty — both fall out of the library semantics.
+   *
+   * @generated from field: google.protobuf.Timestamp as_of = 2;
+   */
+  asOf?: Timestamp;
+
+  /**
+   * Restricts to the selected kind(s). Omitted or both-false = all kinds.
+   *
+   * @generated from field: optional memoir.v1.KindSelector kinds = 3;
+   */
+  kinds?: KindSelector;
+
+  /**
+   * Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
+   *
+   * @generated from field: int32 limit = 4;
+   */
+  limit: number;
+};
+
+/**
+ * Describes the message memoir.v1.RecallAsOfRequest.
+ * Use `create(RecallAsOfRequestSchema)` to create a new message.
+ */
+export const RecallAsOfRequestSchema: GenMessage<RecallAsOfRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 22);
+
+/**
+ * @generated from message memoir.v1.RecallAsOfResponse
+ */
+export type RecallAsOfResponse = Message<"memoir.v1.RecallAsOfResponse"> & {
+  /**
+   * Memories active as of the requested instant, newest-first. `score` is
+   * never set. Mirrors `Client::recall_as_of`'s `Vec<Memory>` return.
+   *
+   * @generated from field: repeated memoir.v1.Memory memories = 1;
+   */
+  memories: Memory[];
+};
+
+/**
+ * Describes the message memoir.v1.RecallAsOfResponse.
+ * Use `create(RecallAsOfResponseSchema)` to create a new message.
+ */
+export const RecallAsOfResponseSchema: GenMessage<RecallAsOfResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 23);
+
+/**
+ * How Query orders candidates. Mirrors memoir-core's `RankingStrategy`.
+ * A message-with-oneof (not a bare enum) so new strategies and their
+ * parameters are additive — matching the Rust enum's `#[non_exhaustive]`
+ * posture. An unset oneof means "use the library default" (hybrid).
+ *
+ * @generated from message memoir.v1.Ranking
+ */
+export type Ranking = Message<"memoir.v1.Ranking"> & {
+  /**
+   * @generated from oneof memoir.v1.Ranking.strategy
+   */
+  strategy: {
+    /**
+     * @generated from field: memoir.v1.Hybrid hybrid = 1;
+     */
+    value: Hybrid;
+    case: "hybrid";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message memoir.v1.Ranking.
+ * Use `create(RankingSchema)` to create a new message.
+ */
+export const RankingSchema: GenMessage<Ranking> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 24);
+
+/**
+ * Blend of cosine similarity and recency. Mirrors `RankingStrategy::Hybrid`.
+ * score = alpha * cosine + (1 - alpha) * decay(age).
+ *
+ * @generated from message memoir.v1.Hybrid
+ */
+export type Hybrid = Message<"memoir.v1.Hybrid"> & {
+  /**
+   * Weight on cosine in [0.0, 1.0]; (1 - alpha) weights recency.
+   *
+   * @generated from field: float alpha = 1;
+   */
+  alpha: number;
+
+  /**
+   * Recency-decay function applied to the memory's age.
+   *
+   * @generated from field: memoir.v1.Decay decay = 2;
+   */
+  decay?: Decay;
+};
+
+/**
+ * Describes the message memoir.v1.Hybrid.
+ * Use `create(HybridSchema)` to create a new message.
+ */
+export const HybridSchema: GenMessage<Hybrid> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 25);
+
+/**
+ * Recency-decay function. Mirrors memoir-core's `DecayFn`. Message-with-oneof
+ * for the same additive-forward-compat reason as `Ranking`.
+ *
+ * @generated from message memoir.v1.Decay
+ */
+export type Decay = Message<"memoir.v1.Decay"> & {
+  /**
+   * @generated from oneof memoir.v1.Decay.function
+   */
+  function: {
+    /**
+     * @generated from field: memoir.v1.ExponentialDecay exponential = 1;
+     */
+    value: ExponentialDecay;
+    case: "exponential";
+  } | {
+    /**
+     * @generated from field: memoir.v1.ReciprocalDecay reciprocal = 2;
+     */
+    value: ReciprocalDecay;
+    case: "reciprocal";
+  } | {
+    /**
+     * @generated from field: memoir.v1.StepDecay step = 3;
+     */
+    value: StepDecay;
+    case: "step";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message memoir.v1.Decay.
+ * Use `create(DecaySchema)` to create a new message.
+ */
+export const DecaySchema: GenMessage<Decay> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 26);
+
+/**
+ * exp(-ln(2) * age / half_life); reaches 0.5 at half_life.
+ *
+ * @generated from message memoir.v1.ExponentialDecay
+ */
+export type ExponentialDecay = Message<"memoir.v1.ExponentialDecay"> & {
+  /**
+   * @generated from field: google.protobuf.Duration half_life = 1;
+   */
+  halfLife?: Duration;
+};
+
+/**
+ * Describes the message memoir.v1.ExponentialDecay.
+ * Use `create(ExponentialDecaySchema)` to create a new message.
+ */
+export const ExponentialDecaySchema: GenMessage<ExponentialDecay> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 27);
+
+/**
+ * 1 / (1 + age / scale); reaches 0.5 at scale, slower tail than exponential.
+ *
+ * @generated from message memoir.v1.ReciprocalDecay
+ */
+export type ReciprocalDecay = Message<"memoir.v1.ReciprocalDecay"> & {
+  /**
+   * @generated from field: google.protobuf.Duration scale = 1;
+   */
+  scale?: Duration;
+};
+
+/**
+ * Describes the message memoir.v1.ReciprocalDecay.
+ * Use `create(ReciprocalDecaySchema)` to create a new message.
+ */
+export const ReciprocalDecaySchema: GenMessage<ReciprocalDecay> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 28);
+
+/**
+ * Bucketed decay. Buckets are ordered by ascending boundary; an age within
+ * [prev_boundary, boundary] takes that bucket's value; ages past the last
+ * boundary take the last value.
+ *
+ * @generated from message memoir.v1.StepDecay
+ */
+export type StepDecay = Message<"memoir.v1.StepDecay"> & {
+  /**
+   * @generated from field: repeated memoir.v1.DecayBucket buckets = 1;
+   */
+  buckets: DecayBucket[];
+};
+
+/**
+ * Describes the message memoir.v1.StepDecay.
+ * Use `create(StepDecaySchema)` to create a new message.
+ */
+export const StepDecaySchema: GenMessage<StepDecay> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 29);
+
+/**
+ * @generated from message memoir.v1.DecayBucket
+ */
+export type DecayBucket = Message<"memoir.v1.DecayBucket"> & {
+  /**
+   * @generated from field: google.protobuf.Duration boundary = 1;
+   */
+  boundary?: Duration;
+
+  /**
+   * @generated from field: float value = 2;
+   */
+  value: number;
+};
+
+/**
+ * Describes the message memoir.v1.DecayBucket.
+ * Use `create(DecayBucketSchema)` to create a new message.
+ */
+export const DecayBucketSchema: GenMessage<DecayBucket> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 30);
+
+/**
+ * Query result with its hybrid (blended cosine + recency) score attached.
+ * Distinct from `SearchHit`: that hit's `score` is raw cosine; this one's
+ * is the post-re-rank hybrid score.
+ *
+ * @generated from message memoir.v1.QueryHit
+ */
+export type QueryHit = Message<"memoir.v1.QueryHit"> & {
+  /**
+   * @generated from field: memoir.v1.Memory memory = 1;
+   */
+  memory?: Memory;
+
+  /**
+   * @generated from field: float score = 2;
+   */
+  score: number;
+};
+
+/**
+ * Describes the message memoir.v1.QueryHit.
+ * Use `create(QueryHitSchema)` to create a new message.
+ */
+export const QueryHitSchema: GenMessage<QueryHit> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 31);
+
+/**
+ * @generated from message memoir.v1.QueryRequest
+ */
+export type QueryRequest = Message<"memoir.v1.QueryRequest"> & {
+  /**
+   * @generated from field: memoir.v1.Scope scope = 1;
+   */
+  scope?: Scope;
+
+  /**
+   * @generated from field: string query = 2;
+   */
+  query: string;
+
+  /**
+   * Maximum hits to return. `0` = library default (10, `DEFAULT_QUERY_LIMIT`).
+   *
+   * @generated from field: int32 limit = 3;
+   */
+  limit: number;
+
+  /**
+   * Restricts to the selected kind(s). Omitted or both-false = all kinds.
+   *
+   * @generated from field: optional memoir.v1.KindSelector kinds = 4;
+   */
+  kinds?: KindSelector;
+
+  /**
+   * Optional caller-supplied metadata filter, AND-joined with scope+kind.
+   *
+   * @generated from field: optional memoir.v1.MemoryFilter metadata_filter = 5;
+   */
+  metadataFilter?: MemoryFilter;
+
+  /**
+   * Optional cosine floor applied at CANDIDATE-RETRIEVAL, before hybrid
+   * re-ranking — NOT a floor on the final hybrid score. Candidates below
+   * this raw-cosine value never enter the re-rank. Unset = no floor.
+   *
+   * @generated from field: optional float min_similarity = 6;
+   */
+  minSimilarity?: number;
+
+  /**
+   * Half-open time windows on write-time / event-time. See `TimelineRequest`
+   * for the inclusive-after / exclusive-before convention.
+   *
+   * @generated from field: optional google.protobuf.Timestamp created_after = 7;
+   */
+  createdAfter?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp created_before = 8;
+   */
+  createdBefore?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp event_at_after = 9;
+   */
+  eventAtAfter?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp event_at_before = 10;
+   */
+  eventAtBefore?: Timestamp;
+
+  /**
+   * Ranking strategy. Unset = library default hybrid (parameters may drift
+   * pre-1.0; pin an explicit Ranking for stable behavior).
+   *
+   * @generated from field: optional memoir.v1.Ranking ranking = 11;
+   */
+  ranking?: Ranking;
+};
+
+/**
+ * Describes the message memoir.v1.QueryRequest.
+ * Use `create(QueryRequestSchema)` to create a new message.
+ */
+export const QueryRequestSchema: GenMessage<QueryRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 32);
+
+/**
+ * @generated from message memoir.v1.QueryResponse
+ */
+export type QueryResponse = Message<"memoir.v1.QueryResponse"> & {
+  /**
+   * Ranked hits, best-first. Each carries its hybrid score.
+   *
+   * @generated from field: repeated memoir.v1.QueryHit hits = 1;
+   */
+  hits: QueryHit[];
+
+  /**
+   * The ranking that produced this result, with library defaults filled in
+   * when the request left `ranking` unset. Mirrors
+   * `MemoryContext::strategy_used()`.
+   *
+   * @generated from field: memoir.v1.Ranking ranking_used = 2;
+   */
+  rankingUsed?: Ranking;
+};
+
+/**
+ * Describes the message memoir.v1.QueryResponse.
+ * Use `create(QueryResponseSchema)` to create a new message.
+ */
+export const QueryResponseSchema: GenMessage<QueryResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 33);
+
+/**
+ * @generated from message memoir.v1.EditRequest
+ */
+export type EditRequest = Message<"memoir.v1.EditRequest"> & {
+  /**
+   * The memory to edit.
+   *
+   * @generated from field: string pid = 1;
+   */
+  pid: string;
+
+  /**
+   * Fields to overwrite. Each is independent: an unset field is left
+   * untouched, a set field is overwritten. An EditRequest with no fields
+   * set is a no-op that returns the current row. There is no way to clear
+   * `event_at` back to unset over the wire (mirrors the library, which
+   * only supports setting it).
+   *
+   * @generated from field: optional string content = 2;
+   */
+  content?: string;
+
+  /**
+   * @generated from field: optional google.protobuf.Struct metadata = 3;
+   */
+  metadata?: JsonObject;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp event_at = 4;
+   */
+  eventAt?: Timestamp;
+};
+
+/**
+ * Describes the message memoir.v1.EditRequest.
+ * Use `create(EditRequestSchema)` to create a new message.
+ */
+export const EditRequestSchema: GenMessage<EditRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 34);
+
+/**
+ * @generated from message memoir.v1.EditResponse
+ */
+export type EditResponse = Message<"memoir.v1.EditResponse"> & {
+  /**
+   * The updated memory. After a content edit the row is re-embedding, so
+   * `status` is PENDING and the row is briefly excluded from search —
+   * same lifecycle as a fresh Remember.
+   *
+   * @generated from field: memoir.v1.Memory memory = 1;
+   */
+  memory?: Memory;
+};
+
+/**
+ * Describes the message memoir.v1.EditResponse.
+ * Use `create(EditResponseSchema)` to create a new message.
+ */
+export const EditResponseSchema: GenMessage<EditResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 35);
+
+/**
+ * @generated from message memoir.v1.SupersessionHistoryRequest
+ */
+export type SupersessionHistoryRequest = Message<"memoir.v1.SupersessionHistoryRequest"> & {
+  /**
+   * The memory whose supersession trail to read.
+   *
+   * @generated from field: string pid = 1;
+   */
+  pid: string;
+};
+
+/**
+ * Describes the message memoir.v1.SupersessionHistoryRequest.
+ * Use `create(SupersessionHistoryRequestSchema)` to create a new message.
+ */
+export const SupersessionHistoryRequestSchema: GenMessage<SupersessionHistoryRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 36);
+
+/**
+ * @generated from message memoir.v1.SupersessionHistoryResponse
+ */
+export type SupersessionHistoryResponse = Message<"memoir.v1.SupersessionHistoryResponse"> & {
+  /**
+   * The full event trail, oldest first. Empty when the memory was never
+   * superseded (or doesn't exist — both produce no rows).
+   *
+   * @generated from field: repeated memoir.v1.SupersessionEvent events = 1;
+   */
+  events: SupersessionEvent[];
+};
+
+/**
+ * Describes the message memoir.v1.SupersessionHistoryResponse.
+ * Use `create(SupersessionHistoryResponseSchema)` to create a new message.
+ */
+export const SupersessionHistoryResponseSchema: GenMessage<SupersessionHistoryResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 37);
+
+/**
+ * @generated from message memoir.v1.ListAgentsRequest
+ */
+export type ListAgentsRequest = Message<"memoir.v1.ListAgentsRequest"> & {
+  /**
+   * The org whose agents to list.
+   *
+   * @generated from field: string org_id = 1;
+   */
+  orgId: string;
+
+  /**
+   * The user whose agents to list.
+   *
+   * @generated from field: string user_id = 2;
+   */
+  userId: string;
+};
+
+/**
+ * Describes the message memoir.v1.ListAgentsRequest.
+ * Use `create(ListAgentsRequestSchema)` to create a new message.
+ */
+export const ListAgentsRequestSchema: GenMessage<ListAgentsRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 38);
+
+/**
+ * @generated from message memoir.v1.ListAgentsResponse
+ */
+export type ListAgentsResponse = Message<"memoir.v1.ListAgentsResponse"> & {
+  /**
+   * Distinct agent ids in the org + user scope, sorted ascending. Empty
+   * when the scope has no memories yet.
+   *
+   * @generated from field: repeated string agent_ids = 1;
+   */
+  agentIds: string[];
+};
+
+/**
+ * Describes the message memoir.v1.ListAgentsResponse.
+ * Use `create(ListAgentsResponseSchema)` to create a new message.
+ */
+export const ListAgentsResponseSchema: GenMessage<ListAgentsResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 39);
+
+/**
+ * One supersede or unsupersede decision against a memory. Mirrors memoir-
+ * core's `SupersessionEvent`. Distinct from `Supersession` (current marker,
+ * non-null winner): `winner_pid` here is optional because unsupersede events
+ * carry no winner.
+ *
+ * @generated from message memoir.v1.SupersessionEvent
+ */
+export type SupersessionEvent = Message<"memoir.v1.SupersessionEvent"> & {
+  /**
+   * @generated from field: optional string winner_pid = 1;
+   */
+  winnerPid?: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp decided_at = 2;
+   */
+  decidedAt?: Timestamp;
+};
+
+/**
+ * Describes the message memoir.v1.SupersessionEvent.
+ * Use `create(SupersessionEventSchema)` to create a new message.
+ */
+export const SupersessionEventSchema: GenMessage<SupersessionEvent> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 40);
 
 /**
  * @generated from enum memoir.v1.MemoryStatus
@@ -603,6 +1340,36 @@ export enum MemoryStatus {
  */
 export const MemoryStatusSchema: GenEnum<MemoryStatus> = /*@__PURE__*/
   enumDesc(file_memoir_v1_memory, 0);
+
+/**
+ * @generated from enum memoir.v1.MemoryKind
+ */
+export enum MemoryKind {
+  /**
+   * @generated from enum value: MEMORY_KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Raw utterance written via Remember.
+   *
+   * @generated from enum value: MEMORY_KIND_EPISODIC = 1;
+   */
+  EPISODIC = 1,
+
+  /**
+   * Fact derived from an episodic source by extraction.
+   *
+   * @generated from enum value: MEMORY_KIND_SEMANTIC = 2;
+   */
+  SEMANTIC = 2,
+}
+
+/**
+ * Describes the enum memoir.v1.MemoryKind.
+ */
+export const MemoryKindSchema: GenEnum<MemoryKind> = /*@__PURE__*/
+  enumDesc(file_memoir_v1_memory, 1);
 
 /**
  * MemoryService is the canonical read/write surface for processed memories.
@@ -655,6 +1422,86 @@ export const MemoryService: GenService<{
     methodKind: "unary";
     input: typeof ForgetRequestSchema;
     output: typeof ForgetResponseSchema;
+  },
+  /**
+   * Chronological event-log read within a scope. Postgres-only — no vector
+   * search, no LLM. Includes superseded rows by default (audit view).
+   * Newest-first unless `ascending` is set. Wraps memoir-core's
+   * `Client::timeline`.
+   *
+   * @generated from rpc memoir.v1.MemoryService.Timeline
+   */
+  timeline: {
+    methodKind: "unary";
+    input: typeof TimelineRequestSchema;
+    output: typeof TimelineResponseSchema;
+  },
+  /**
+   * Point-in-time read: memoir's state of knowledge as of a timestamp.
+   * Returns memories created on or before `as_of` that were not yet
+   * superseded then. Postgres-only. Wraps memoir-core's
+   * `Client::recall_as_of`.
+   *
+   * @generated from rpc memoir.v1.MemoryService.RecallAsOf
+   */
+  recallAsOf: {
+    methodKind: "unary";
+    input: typeof RecallAsOfRequestSchema;
+    output: typeof RecallAsOfResponseSchema;
+  },
+  /**
+   * Hybrid-ranked retrieval: vector candidates re-ranked by a blend of
+   * cosine similarity and recency, returning prompt-shaped context. Wraps
+   * memoir-core's `Client::query`. The response carries raw memories +
+   * their hybrid score + the strategy used; rendering to a prompt string
+   * is the SDK's job, not the wire's.
+   *
+   * @generated from rpc memoir.v1.MemoryService.Query
+   */
+  query: {
+    methodKind: "unary";
+    input: typeof QueryRequestSchema;
+    output: typeof QueryResponseSchema;
+  },
+  /**
+   * In-place correction of an existing memory — distinct from supersession
+   * (edit overwrites because the original was wrong; supersede preserves
+   * because new info obsoletes old). Content changes trigger re-embedding,
+   * so the row is briefly unsearchable. Wraps memoir-core's `Client::edit`.
+   *
+   * @generated from rpc memoir.v1.MemoryService.Edit
+   */
+  edit: {
+    methodKind: "unary";
+    input: typeof EditRequestSchema;
+    output: typeof EditResponseSchema;
+  },
+  /**
+   * Returns every supersede/unsupersede decision against a memory in
+   * chronological order — the full audit trail behind a row's current
+   * `Memory.supersession` marker. A pid with no events (never superseded
+   * or simply absent) returns an empty list. Wraps memoir-core's
+   * `Client::supersession_history`.
+   *
+   * @generated from rpc memoir.v1.MemoryService.SupersessionHistory
+   */
+  supersessionHistory: {
+    methodKind: "unary";
+    input: typeof SupersessionHistoryRequestSchema;
+    output: typeof SupersessionHistoryResponseSchema;
+  },
+  /**
+   * Lists the distinct agent ids that have memories under an org + user.
+   * Caller-scoped agent discovery for pickers/autocomplete — a tenant sees
+   * only their own agents. An empty org/user returns no agents. Wraps
+   * memoir-core's `Client::list_agents`.
+   *
+   * @generated from rpc memoir.v1.MemoryService.ListAgents
+   */
+  listAgents: {
+    methodKind: "unary";
+    input: typeof ListAgentsRequestSchema;
+    output: typeof ListAgentsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_memoir_v1_memory, 0);

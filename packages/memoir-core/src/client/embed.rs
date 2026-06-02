@@ -41,10 +41,7 @@ impl ClientInner {
     /// [`Self::embed_and_index`]. Returns `Ok(())` for success and the
     /// no-op cascade-delete-race case (source already forgotten); returns
     /// `Err` only when a real failure should flip the job to `failed`.
-    pub(super) async fn run_embed_job(
-        &self,
-        source_pid: &str,
-    ) -> Result<(), crate::store::StoreError> {
+    pub(super) async fn run_embed_job(&self, source_pid: &str) -> Result<(), crate::store::StoreError> {
         let written = match self.store.recall(source_pid).await {
             Ok(memory) => memory,
             Err(crate::store::StoreError::NotFound(_)) => {
@@ -95,11 +92,7 @@ impl ClientInner {
             }
         };
 
-        if let Err(err) = self
-            .index
-            .upsert(&written.pid, &written.scope, written.kind, vector)
-            .await
-        {
+        if let Err(err) = self.index.upsert(&written, vector).await {
             event!(
                 name: "memoir.embed.upsert_failed",
                 Level::WARN,

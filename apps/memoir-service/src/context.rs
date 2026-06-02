@@ -3,6 +3,9 @@ use std::sync::Arc;
 use memoir_core::client::{
     Client as MemoirClient, ClientError as MemoirClientError, WorkerHandle as MemoirWorkerHandle,
 };
+use memoir_core::llm::{
+    DEFAULT_ANTHROPIC_MODEL, DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, DEFAULT_OPENAI_MODEL, LlmConfig,
+};
 use migration::{MigrationError as ServiceMigrationError, bootstrap_and_migrate};
 use qdrant_client::{Qdrant, QdrantError};
 use sea_orm::ConnectOptions;
@@ -122,11 +125,14 @@ impl Memoir {
         qdrant: Qdrant,
         schema: &str,
     ) -> Result<(Arc<MemoirClient>, MemoirWorkerHandle), AppContextError> {
+        let extraction_llm = Self::extraction_llm()?;
+
         tracing::info!("Building memoir client...");
         let client = MemoirClient::builder()
             .database_url(database_url.to_owned())
             .qdrant(qdrant)
             .schema(schema.to_owned())
+            .maybe_extraction_llm(extraction_llm)
             .build()
             .await
             .map_err(AppContextError::Memoir)?;
@@ -144,6 +150,44 @@ impl Memoir {
         tracing::info!("Memoir client + worker ready!");
 
         Ok((Arc::new(client), worker))
+    }
+
+    /// Resolves the operator-configured extraction LLM from the environment.
+    ///
+    /// Returns `None` when `MEMOIR_EXTRACTION_PROVIDER` is unset, leaving the
+    /// extraction role unconfigured: the write-behind worker skips extraction
+    /// jobs and the playground returns 503, while embed-only writes and gRPC
+    /// keep working. The provider selects which `MEMOIR_EXTRACTION_*` vars are
+    /// read; each model/url falls back to memoir-core's documented defaults.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AppContextError::UnknownLlmProvider`] for an unrecognized
+    /// provider, and [`AppContextError::EnvironmentVariableMissing`] when a
+    /// provider that requires an API key has none set.
+    fn extraction_llm() -> Result<Option<LlmConfig>, AppContextError> {
+        let Ok(provider) = std::env::var("MEMOIR_EXTRACTION_PROVIDER") else {
+            return Ok(None);
+        };
+
+        let config = match provider.to_lowercase().as_str() {
+            "ollama" => LlmConfig::ollama(
+                Env::get_or("MEMOIR_EXTRACTION_URL", DEFAULT_OLLAMA_URL),
+                Env::get_or("MEMOIR_EXTRACTION_MODEL", DEFAULT_OLLAMA_MODEL),
+            ),
+            "openai" => LlmConfig::openai(
+                Env::get("MEMOIR_EXTRACTION_API_KEY")?,
+                Env::get_or("MEMOIR_EXTRACTION_MODEL", DEFAULT_OPENAI_MODEL),
+            ),
+            "anthropic" => LlmConfig::anthropic(
+                Env::get("MEMOIR_EXTRACTION_API_KEY")?,
+                Env::get_or("MEMOIR_EXTRACTION_MODEL", DEFAULT_ANTHROPIC_MODEL),
+            ),
+            _ => return Err(AppContextError::UnknownLlmProvider(provider)),
+        };
+
+        tracing::info!(provider = %config.kind(), model = %config.model(), "Extraction LLM configured");
+        Ok(Some(config))
     }
 }
 
@@ -173,4 +217,6 @@ pub(crate) enum AppContextError {
     ServiceMigration(#[from] ServiceMigrationError),
     #[error("jwt configuration error: {0}")]
     Jwt(JwtError),
+    #[error("unknown extraction LLM provider {0:?}; expected one of: ollama, openai, anthropic")]
+    UnknownLlmProvider(String),
 }

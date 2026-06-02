@@ -11,18 +11,51 @@ use std::collections::HashMap;
 
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::{
-    Condition, CreateCollectionBuilder, DeletePointsBuilder, Distance, Filter, PointStruct,
-    QueryPointsBuilder, ScrollPointsBuilder, UpsertPointsBuilder, Value, VectorParamsBuilder,
+    Condition, CreateCollectionBuilder, DeletePointsBuilder, Distance, Filter, PointStruct, QueryPointsBuilder,
+    ScrollPointsBuilder, UpsertPointsBuilder, Value, VectorParamsBuilder,
 };
 use uuid::Uuid;
 
 use super::{MemoryFilter, VectorError, VectorIndex};
-use crate::memory::{KindSelector, MemoryKind, Scope};
+use crate::memory::{KindSelector, Memory, Scope};
 
 const DEFAULT_COLLECTION: &str = "memoir_memories";
 
 /// Payload key under which each point stores its memoir pid.
 const PID_PAYLOAD_KEY: &str = "pid";
+
+/// Payload key for wall-clock write time, encoded as i64 epoch milliseconds.
+///
+/// Filterable via [`super::FilterCondition::Range`] in millisecond units.
+/// Matches the encoding used elsewhere in the polypixel template (verified
+/// against rig-service's `models/messages.rs:139` use of `timestamp_millis`).
+const CREATED_AT_PAYLOAD_KEY: &str = "created_at";
+
+/// Payload key for event time, encoded as i64 epoch milliseconds.
+///
+/// Omitted entirely (not written as null) when the memory has no event-time
+/// known. Range filters against this key implicitly exclude memories whose
+/// event-time is unknown — the desired semantics for "find memories from
+/// last week" (memories without event-time can't satisfy the constraint).
+const EVENT_AT_PAYLOAD_KEY: &str = "event_at";
+
+/// Payload keys owned by memoir-core; consumer metadata cannot use these.
+///
+/// The memory's `metadata` JSON is flattened to top-level payload keys so
+/// caller-supplied [`super::FilterCondition`] entries can match against
+/// metadata fields directly (e.g. `field: "role"` matches `metadata.role`).
+/// Reserved keys are protected from clobbering by validation at write time
+/// — see [`crate::store::MemoryStore::remember`] / the remember client
+/// path — so callers can't smuggle a `pid` or scope value in via metadata.
+pub(crate) const RESERVED_PAYLOAD_KEYS: &[&str] = &[
+    PID_PAYLOAD_KEY,
+    "agent_id",
+    "org_id",
+    "user_id",
+    "kind",
+    CREATED_AT_PAYLOAD_KEY,
+    EVENT_AT_PAYLOAD_KEY,
+];
 
 /// Default [`VectorIndex`] backed by Qdrant.
 ///
@@ -84,25 +117,51 @@ impl VectorIndex for QdrantIndex {
         Ok(())
     }
 
-    async fn upsert(
-        &self,
-        pid: &str,
-        scope: &Scope,
-        kind: MemoryKind,
-        vector: Vec<f32>,
-    ) -> Result<(), VectorError> {
+    async fn upsert(&self, memory: &Memory, vector: Vec<f32>) -> Result<(), VectorError> {
         // First delete any prior points carrying this pid in their payload,
         // since the Qdrant point ID is a fresh UUID per upsert and won't
         // collide with a previous write's ID.
-        self.delete_by_pids(&[pid]).await?;
+        self.delete_by_pids(&[&memory.pid]).await?;
 
-        let payload: HashMap<&str, Value> = HashMap::from([
-            (PID_PAYLOAD_KEY, Value::from(pid.to_string())),
-            ("agent_id", Value::from(scope.agent_id.clone())),
-            ("org_id", Value::from(scope.org_id.clone())),
-            ("user_id", Value::from(scope.user_id.clone())),
-            ("kind", Value::from(kind.as_str().to_string())),
-        ]);
+        // First-class payload keys. Owned by memoir-core and protected
+        // against consumer-metadata clobbering by `RESERVED_PAYLOAD_KEYS`.
+        // Timestamps are i64 epoch milliseconds, matching the polypixel
+        // template convention (rig-service `models/messages.rs:139`).
+        let mut payload: HashMap<String, Value> = HashMap::new();
+        payload.insert(PID_PAYLOAD_KEY.to_string(), Value::from(memory.pid.clone()));
+        payload.insert("agent_id".to_string(), Value::from(memory.scope.agent_id.clone()));
+        payload.insert("org_id".to_string(), Value::from(memory.scope.org_id.clone()));
+        payload.insert("user_id".to_string(), Value::from(memory.scope.user_id.clone()));
+        payload.insert("kind".to_string(), Value::from(memory.kind.to_string()));
+        payload.insert(
+            CREATED_AT_PAYLOAD_KEY.to_string(),
+            Value::from(memory.created_at.timestamp_millis()),
+        );
+        if let Some(event_at) = memory.event_at {
+            // Omit (not write null): Qdrant range filters treat missing
+            // payload keys as "fail to match", which is the right semantic
+            // for "memories with known event-time in this window."
+            payload.insert(
+                EVENT_AT_PAYLOAD_KEY.to_string(),
+                Value::from(event_at.timestamp_millis()),
+            );
+        }
+
+        // Flatten metadata's top-level object into the payload alongside
+        // the first-class keys. Reserved-key collisions are prevented by
+        // validation at the write boundary (Client::remember /
+        // RememberBuilder); reaching this code with a colliding key would
+        // mean a bug upstream, so we drop the colliding entries
+        // defensively rather than panicking. The `From<serde_json::Value>`
+        // impl on qdrant_client `Value` handles every JSON variant.
+        if let Some(obj) = memory.metadata.as_object() {
+            for (k, v) in obj {
+                if RESERVED_PAYLOAD_KEYS.iter().any(|reserved| reserved == k) {
+                    continue;
+                }
+                payload.insert(k.clone(), Value::from(v.clone()));
+            }
+        }
 
         let point = PointStruct::new(Uuid::new_v4().to_string(), vector, payload);
 
@@ -138,11 +197,7 @@ impl VectorIndex for QdrantIndex {
             Condition::matches("user_id", scope.user_id),
         ];
         if !kinds.includes_all() {
-            let names: Vec<String> = kinds
-                .included_kinds()
-                .into_iter()
-                .map(|k| k.as_str().to_string())
-                .collect();
+            let names: Vec<String> = kinds.included_kinds().into_iter().map(|k| k.to_string()).collect();
             must.push(Condition::matches("kind", names));
         }
 
@@ -203,11 +258,7 @@ impl VectorIndex for QdrantIndex {
         Ok(())
     }
 
-    async fn list_pids_in_scope(
-        &self,
-        scope: Scope,
-        page_size: usize,
-    ) -> Result<Vec<String>, VectorError> {
+    async fn list_pids_in_scope(&self, scope: Scope, page_size: usize) -> Result<Vec<String>, VectorError> {
         let filter = Filter::must(vec![
             Condition::matches("agent_id", scope.agent_id),
             Condition::matches("org_id", scope.org_id),

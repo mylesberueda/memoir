@@ -114,13 +114,16 @@ async fn build_test_client(extraction: Option<LlmConfig>) -> Result<TestClient> 
     // waiting for `wait_until_indexed` to never succeed (the row stays
     // `pending` and `Client::search` filters it out).
     //
-    // Short poll interval is appropriate for tests — production deployments
-    // use the default 1-second interval. Short lease so a misbehaving test
-    // doesn't pin a job for a minute.
+    // The lease must exceed a single extraction inference. Capable local
+    // models (qwen3:14b and up) take 10-30s per call on consumer hardware,
+    // especially on a cold load. A lease shorter than that expires
+    // mid-inference, the reconciler assumes the worker died and re-leases
+    // the job, and the same call restarts until max_attempts — the job
+    // never completes. 60s clears a cold large-model inference.
     let worker = client
         .spawn_worker()
         .poll_interval(Duration::from_millis(50))
-        .lease_duration(Duration::from_secs(10))
+        .lease_duration(Duration::from_secs(60))
         .drain_timeout(Duration::from_secs(5))
         .start()
         .await
@@ -194,6 +197,37 @@ impl Drop for TestClient {
                 "[TestClient::drop] cleanup panicked (schema={schema} collection={collection}): {panic:?}"
             );
         }
+    }
+}
+
+impl TestClient {
+    /// Opens a fresh `DatabaseConnection` pinned to this test's schema.
+    ///
+    /// Used by migration-layer tests that need to issue raw SQL against
+    /// memoir-core's tables — e.g. verifying a trigger's side-effect or
+    /// asserting a CHECK constraint rejects bad inserts. The returned
+    /// connection's `search_path` is set to the test's schema first then
+    /// `public`, matching the convention `Client::new` uses internally.
+    pub async fn raw_db(&self) -> Result<DatabaseConnection> {
+        let database_url =
+            std::env::var("DATABASE_URL").context("DATABASE_URL env var must be set")?;
+        let search_path = format!("{},public", self.schema);
+        let options = sea_orm::ConnectOptions::new(database_url)
+            .set_schema_search_path(search_path)
+            .to_owned();
+        Database::connect(options).await.context("connect raw_db")
+    }
+
+    /// Opens a fresh `Qdrant` client targeting the configured QDRANT_URL.
+    ///
+    /// Used by payload-layer tests that need to inspect raw Qdrant point
+    /// payloads — e.g. verifying that the upsert path wrote the expected
+    /// `created_at` / `event_at` / metadata-flattened fields. The
+    /// collection name is `self.collection`; callers issue scrolls/queries
+    /// against that name.
+    pub fn raw_qdrant(&self) -> Result<Qdrant> {
+        let qdrant_url = std::env::var("QDRANT_URL").context("QDRANT_URL env var must be set")?;
+        Qdrant::from_url(&qdrant_url).build().context("build raw_qdrant client")
     }
 }
 

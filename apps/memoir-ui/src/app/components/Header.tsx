@@ -4,25 +4,32 @@ import { logout } from '@actions/auth';
 import { Button, ThemePicker } from '@components';
 import useAuth from '@hooks/useAuth';
 import { useLayoutContext } from '@providers';
-import { Bell, ChevronRight, LogOut, Menu } from 'lucide-react';
+import { Bell, LogOut, Menu } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useTransition } from 'react';
 import { Avatar, Badge, Dropdown } from 'rsc-daisyui';
 
-interface BreadcrumbItem {
+interface Crumb {
 	label: string;
-	href?: string;
+	href: string;
+}
+
+function toCrumbs(pathname: string): Crumb[] {
+	const segments = pathname.split('/').filter(Boolean);
+	return segments.map((segment, index) => ({
+		label: segment.replace(/-/g, ' '),
+		href: `/${segments.slice(0, index + 1).join('/')}`,
+	}));
 }
 
 export default function Header() {
 	const layout = useLayoutContext();
 	const { user } = useAuth();
+	const pathname = usePathname();
 	const [isPending, startTransition] = useTransition();
 
-	const breadcrumbs: BreadcrumbItem[] = [
-		{ label: 'memoir', href: '#' },
-		{ label: 'dashboard', href: '#' },
-	];
+	const crumbs = toCrumbs(pathname);
 
 	const handleLogout = () => {
 		startTransition(() => {
@@ -31,28 +38,36 @@ export default function Header() {
 	};
 
 	return (
-		<nav className="flex h-full items-center justify-between border-base-300 bg-base-200 px-3 sm:px-6 border-b">
-			<div className="hidden max-w-[300px] items-center space-x-1 truncate font-medium text-sm sm:flex">
+		<nav className="flex h-full items-center justify-between border-base-300 bg-base-100 px-3 sm:px-6 border-b">
+			<div className="flex min-w-0 items-center gap-2">
 				{!layout.isSidebarOpen && (
-					<Button
-						type="button"
-						className="top-4 left-4 z-[70] rounded-lg bg-base-200 p-2 lg:hidden"
-						onClick={layout.toggleSidebar}>
+					<Button type="button" className="rounded-field bg-base-200 p-2 lg:hidden" onClick={layout.toggleSidebar}>
 						<Menu className="h-5 w-5 text-base-content" />
 					</Button>
 				)}
-				{breadcrumbs.map((item, index) => (
-					<div key={item.label} className="flex items-center">
-						{index > 0 && <ChevronRight className="mx-1 h-4 w-4 text-base-content" />}
-						{item.href ? (
-							<Link href={item.href} className="text-base-content transition-colors">
-								{item.label}
-							</Link>
-						) : (
-							<span className="text-base-content">{item.label}</span>
-						)}
-					</div>
-				))}
+				<nav aria-label="Breadcrumb" className="hidden min-w-0 items-center text-sm sm:flex">
+					<ol className="flex min-w-0 items-center gap-1.5">
+						{crumbs.map((crumb, index) => {
+							const isLast = index === crumbs.length - 1;
+							return (
+								<li key={crumb.href} className="flex min-w-0 items-center gap-1.5">
+									{index > 0 && <span className="text-base-content/25 select-none">/</span>}
+									{isLast ? (
+										<span className="truncate font-display font-medium text-base-content capitalize">
+											{crumb.label}
+										</span>
+									) : (
+										<Link
+											href={crumb.href}
+											className="truncate text-base-content/55 capitalize transition-colors hover:text-base-content">
+											{crumb.label}
+										</Link>
+									)}
+								</li>
+							);
+						})}
+					</ol>
+				</nav>
 			</div>
 			<div className="ml-auto flex items-center gap-2 sm:ml-0 sm:gap-4">
 				<button

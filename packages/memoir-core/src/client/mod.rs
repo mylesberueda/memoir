@@ -1,22 +1,33 @@
 //! High-level facade composing the embedder, store, and vector index.
 
 mod admin;
+mod edit;
 mod embed;
 mod error;
 mod extract;
+mod query;
+mod recall_as_of;
 mod reconcile;
 mod remember;
 mod search;
+mod timeline;
 mod worker;
 
 pub use admin::RetryBuilder;
+pub use edit::EditBuilder;
 pub use error::ClientError;
+pub use query::{
+    DEFAULT_HYBRID_ALPHA, DEFAULT_HYBRID_HALF_LIFE_DAYS, DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, QueryBuilder,
+    RankingStrategy,
+};
+pub use recall_as_of::RecallAsOfBuilder;
 pub use reconcile::{ReconcileBuilder, ReconcileSummary};
 pub use remember::{DEFAULT_SYSTEM_PROMPT, RememberBuilder};
 pub use search::{DEFAULT_LIMIT, SearchBuilder};
+pub use timeline::TimelineBuilder;
 pub use worker::{
-    DEFAULT_DRAIN_TIMEOUT, DEFAULT_LEASE_DURATION, DEFAULT_MAX_ATTEMPTS, DEFAULT_POLL_INTERVAL,
-    WorkerBuilder, WorkerHandle,
+    DEFAULT_DRAIN_TIMEOUT, DEFAULT_LEASE_DURATION, DEFAULT_MAX_ATTEMPTS, DEFAULT_POLL_INTERVAL, WorkerBuilder,
+    WorkerHandle,
 };
 
 use std::sync::Arc;
@@ -27,8 +38,8 @@ use sea_orm::{ConnectOptions, Database};
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
 use crate::jobs::{MemoryJobsStore, PostgresJobsStore};
-use crate::llm::{LlmConfig, LlmRegistry, LlmRole, RigLlmProvider};
-use crate::memory::{ForgetTarget, Memory};
+use crate::llm::{LlmConfig, LlmRegistry, LlmRole};
+use crate::memory::{ForgetTarget, Memory, SupersessionEvent};
 use crate::store::{MemoryStore, PostgresStore};
 use crate::vector::{QdrantIndex, VectorIndex};
 
@@ -124,7 +135,9 @@ impl Client {
         // path. Listing `public` second lets shared extensions (pgcrypto,
         // etc.) resolve.
         let search_path = format!("{schema},public");
-        let options = ConnectOptions::new(database_url).set_schema_search_path(search_path).to_owned();
+        let options = ConnectOptions::new(database_url)
+            .set_schema_search_path(search_path)
+            .to_owned();
         let db = Database::connect(options).await.map_err(ClientError::Database)?;
 
         let embedder = OnnxEmbedding::new()?;
@@ -139,10 +152,10 @@ impl Client {
 
         let mut llms = LlmRegistry::new();
         if let Some(config) = extraction_llm {
-            install_llm(&mut llms, LlmRole::Extraction, config)?;
+            llms.install(LlmRole::Extraction, config)?;
         }
         if let Some(config) = contradiction_llm {
-            install_llm(&mut llms, LlmRole::Contradiction, config)?;
+            llms.install(LlmRole::Contradiction, config)?;
         }
 
         Ok(Client {
@@ -157,26 +170,6 @@ impl Client {
             }),
         })
     }
-}
-
-fn install_llm(
-    registry: &mut LlmRegistry,
-    role: LlmRole,
-    config: LlmConfig,
-) -> Result<(), ClientError> {
-    let kind = config.kind();
-    let provider = RigLlmProvider::new(config)?;
-    registry.insert(role, provider);
-
-    tracing::event!(
-        name: "memoir.client.llm_configured",
-        tracing::Level::INFO,
-        role = role.as_str(),
-        provider = kind.as_str(),
-        "configured {{provider}} provider for {{role}}",
-    );
-
-    Ok(())
 }
 
 impl Client {
@@ -224,6 +217,11 @@ impl Client {
         &self.inner.index
     }
 
+    /// Returns the registry of LLM providers configured on this client.
+    pub fn llms(&self) -> &LlmRegistry {
+        &self.inner.llms
+    }
+
     /// Writes `prompt` as an episodic memory under `scope`.
     ///
     /// Returns a per-call builder; await it to persist the row and enqueue
@@ -234,7 +232,11 @@ impl Client {
     /// write-only.
     ///
     /// Attach optional JSON metadata via [`RememberBuilder::metadata`];
-    /// without it the column defaults to `{}`.
+    /// without it the column defaults to `{}`. Attach a parsed event-time
+    /// via [`RememberBuilder::event_at`] when the content references a
+    /// specific moment (e.g. "the deployment happened Friday"); without it,
+    /// the memory has no event-time and is excluded from event-time range
+    /// filters at search time.
     ///
     /// # Examples
     ///
@@ -258,6 +260,34 @@ impl Client {
     /// extract job cannot be enqueued.
     pub fn remember(&self, prompt: impl Into<String>, scope: crate::memory::Scope) -> RememberBuilder<'_> {
         RememberBuilder::new(self, prompt.into(), scope)
+    }
+
+    /// Mutates an existing memory in place — a correction, not a supersession.
+    ///
+    /// Returns a per-call builder; await it to apply the patch. Use this when
+    /// the original row was *wrong* and the caller is overwriting it (typo,
+    /// misheard utterance, wrong parsed date). When the original was *true at
+    /// the time* but new information now obsoletes it, use the contradiction
+    /// path that calls `MemoryStore::supersede` instead — `edit` discards the
+    /// old text, supersede preserves it.
+    ///
+    /// `created_at` is preserved; `updated_at` bumps automatically via the
+    /// database trigger. Content changes flip the row's vector-index state
+    /// back to `pending` and enqueue a re-embed job, so the row drops out of
+    /// search hits until the worker drains the queue — same lifecycle as a
+    /// fresh `remember()`. See [`EditBuilder`] for the builder methods.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::NotFound`] when no memory matches `pid`,
+    /// [`crate::store::StoreError::UnsupportedEdit`] when the target row's
+    /// kind does not support in-place edits (today: every non-Episodic
+    /// kind), [`ClientError::ReservedMetadataKey`] when metadata contains a
+    /// reserved payload key, and [`ClientError::Jobs`] when the re-embed
+    /// job cannot be enqueued.
+    pub fn edit(&self, pid: impl Into<String>) -> EditBuilder<'_> {
+        EditBuilder::new(self, pid.into())
     }
 
     /// Searches indexed memories in `scope` by vector similarity to `query`.
@@ -294,6 +324,73 @@ impl Client {
     /// pids cannot be hydrated to full rows.
     pub fn search(&self, query: impl Into<String>, scope: crate::memory::Scope) -> SearchBuilder<'_> {
         SearchBuilder::new(self, query.into(), scope)
+    }
+
+    /// Returns memories in `scope` ordered chronologically — the event log.
+    ///
+    /// Postgres-only read; no embedding, no Qdrant. Includes superseded rows
+    /// by default (this is the audit view). Default order is newest-first,
+    /// default limit is [`crate::store::DEFAULT_TIMELINE_LIMIT`]. See
+    /// [`TimelineBuilder`] for the builder methods.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::InvalidScope`] when a `Scope` target has
+    /// empty fields, or wrapping
+    /// [`crate::store::StoreError::Database`] for database failures.
+    pub fn timeline(&self, scope: crate::memory::Scope) -> TimelineBuilder<'_> {
+        TimelineBuilder::new(self, scope)
+    }
+
+    /// Retrieves memories in `scope` ranked by hybrid cosine-and-recency, as
+    /// a prompt-shaped [`MemoryContext`].
+    ///
+    /// Mirrors [`Client::search`]'s candidate-retrieval primitives but
+    /// re-ranks the top-K candidates by combining vector similarity with
+    /// recency before returning. Default strategy is
+    /// [`RankingStrategy::default_hybrid`]; override via
+    /// [`QueryBuilder::ranking`]. **The default strategy's parameter values
+    /// are explicitly allowed to drift pre-1.0** — callers depending on a
+    /// specific ranking must pass an explicit `RankingStrategy::Hybrid {
+    /// .. }`.
+    ///
+    /// Returns a [`MemoryContext`] suitable for dropping into a system
+    /// prompt via [`Display`]. See [`MemoryContext`] for the rendering
+    /// shape and the staleness caveat for cached output.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Embedding`] if the query cannot be embedded,
+    /// [`ClientError::Vector`] if the vector index search fails, and
+    /// [`ClientError::Store`] wrapping a database failure when the matched
+    /// pids cannot be hydrated to full rows.
+    ///
+    /// [`Display`]: std::fmt::Display
+    pub fn query(&self, query: impl Into<String>, scope: crate::memory::Scope) -> QueryBuilder<'_> {
+        QueryBuilder::new(self, query.into(), scope)
+    }
+
+    /// Returns memoir's state of knowledge in `scope` as of `as_of`.
+    ///
+    /// A memory is included when it was written on or before `as_of` and was
+    /// not yet superseded then. Pure Postgres read; no Qdrant, no embedder.
+    /// Newest-first by `created_at`, default limit
+    /// [`crate::store::DEFAULT_TIMELINE_LIMIT`]. See [`RecallAsOfBuilder`]
+    /// for the builder methods.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::InvalidScope`] when a `Scope` target has
+    /// empty fields, or wrapping
+    /// [`crate::store::StoreError::Database`] for database failures.
+    pub fn recall_as_of(
+        &self,
+        scope: crate::memory::Scope,
+        as_of: impl Into<chrono::DateTime<chrono::FixedOffset>>,
+    ) -> RecallAsOfBuilder<'_> {
+        RecallAsOfBuilder::new(self, scope, as_of.into())
     }
 
     /// Looks up a single memory by its public id, at any lifecycle state.
@@ -440,10 +537,7 @@ impl Client {
     /// # Errors
     ///
     /// Returns [`ClientError::Jobs`] wrapping any database failure.
-    pub async fn failed_jobs(
-        &self,
-        limit: usize,
-    ) -> Result<Vec<crate::jobs::FailedJob>, ClientError> {
+    pub async fn failed_jobs(&self, limit: usize) -> Result<Vec<crate::jobs::FailedJob>, ClientError> {
         Ok(self.inner.jobs.list_failed(limit).await?)
     }
 
@@ -532,6 +626,37 @@ impl Client {
         );
         Ok(())
     }
+
+    /// Returns the full supersede/unsupersede event trail for `pid`.
+    ///
+    /// Each [`SupersessionEvent`] is one decision against the memory,
+    /// chronological (oldest first). An event with `winner_pid = None` is
+    /// an unsupersede. A pid with no events — never superseded, or simply
+    /// not present in the store — returns an empty vec, not an error.
+    ///
+    /// Surfaces the audit trail behind a row's current `Memory.supersession`
+    /// marker, for the supersession-audit UI and rig-service introspection
+    /// of contradiction-detection decisions over time.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping a database failure.
+    pub async fn supersession_history(&self, pid: &str) -> Result<Vec<SupersessionEvent>, ClientError> {
+        Ok(self.inner.store.supersession_history(pid).await?)
+    }
+
+    /// Lists the distinct agent ids with memories under `org_id` + `user_id`.
+    ///
+    /// Caller-scoped agent discovery: returns only the agents within the given
+    /// org and user, sorted ascending, so a tenant never sees another tenant's
+    /// agents. A scope with no memories yet returns an empty vec, not an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping a database failure.
+    pub async fn list_agents(&self, org_id: &str, user_id: &str) -> Result<Vec<String>, ClientError> {
+        Ok(self.inner.store.list_agent_ids(org_id, user_id).await?)
+    }
 }
 
 #[cfg(test)]
@@ -542,12 +667,12 @@ mod tests {
     #[test]
     fn should_install_extraction_llm_into_empty_registry() {
         let mut registry = LlmRegistry::new();
-        install_llm(
-            &mut registry,
-            LlmRole::Extraction,
-            LlmConfig::ollama("http://localhost:11434", "llama3.2"),
-        )
-        .unwrap();
+        registry
+            .install(
+                LlmRole::Extraction,
+                LlmConfig::ollama("http://localhost:11434", "llama3.2"),
+            )
+            .unwrap();
 
         let provider = registry.get(LlmRole::Extraction).expect("extraction provider present");
         assert_eq!(provider.kind(), LlmKind::Ollama);
@@ -557,18 +682,18 @@ mod tests {
     #[test]
     fn should_install_both_extraction_and_contradiction_llms_independently() {
         let mut registry = LlmRegistry::new();
-        install_llm(
-            &mut registry,
-            LlmRole::Extraction,
-            LlmConfig::ollama("http://localhost:11434", "extraction-model"),
-        )
-        .unwrap();
-        install_llm(
-            &mut registry,
-            LlmRole::Contradiction,
-            LlmConfig::ollama("http://localhost:11434", "contradiction-model"),
-        )
-        .unwrap();
+        registry
+            .install(
+                LlmRole::Extraction,
+                LlmConfig::ollama("http://localhost:11434", "extraction-model"),
+            )
+            .unwrap();
+        registry
+            .install(
+                LlmRole::Contradiction,
+                LlmConfig::ollama("http://localhost:11434", "contradiction-model"),
+            )
+            .unwrap();
 
         assert_eq!(registry.get(LlmRole::Extraction).unwrap().model(), "extraction-model");
         assert_eq!(

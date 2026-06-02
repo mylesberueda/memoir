@@ -14,30 +14,37 @@ pub struct Scope {
     pub user_id: String,
 }
 
+/// Reasons a [`Scope`] fails validation.
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum ScopeError {
+    #[error("scope: agent_id, org_id, and user_id must all be non-empty")]
+    Empty,
+}
+
+impl Scope {
+    /// Returns `Ok(())` when every field is non-empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ScopeError::Empty`] when any of `agent_id`, `org_id`, or
+    /// `user_id` is the empty string.
+    pub fn validate(&self) -> Result<(), ScopeError> {
+        if self.agent_id.is_empty() || self.org_id.is_empty() || self.user_id.is_empty() {
+            return Err(ScopeError::Empty);
+        }
+        Ok(())
+    }
+}
+
 /// Kind of memory written to or read from storage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "lowercase")]
 pub enum MemoryKind {
     /// Conversational memory; written by `Client::remember`.
     Episodic,
 
     /// Structured fact extracted from episodic memory by an LLM (epic 0006).
     Semantic,
-}
-
-impl MemoryKind {
-    /// Returns the canonical lowercase string used in storage.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Episodic => "episodic",
-            Self::Semantic => "semantic",
-        }
-    }
-}
-
-impl std::fmt::Display for MemoryKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
 }
 
 /// Selects which memory kinds a read includes.
@@ -58,7 +65,10 @@ pub struct KindSelector {
 
 impl Default for KindSelector {
     fn default() -> Self {
-        Self { episodic: true, semantic: true }
+        Self {
+            episodic: true,
+            semantic: true,
+        }
     }
 }
 
@@ -86,34 +96,106 @@ impl KindSelector {
     }
 }
 
-/// A stored memory and (if from a vector search) its similarity score.
+/// A stored memory, with optional similarity score from vector search.
 ///
-/// `score` is `Some` only for memories returned by a similarity search;
-/// memories returned by direct lookup (`Client::recall`) have `score = None`.
+/// Carries three distinct timestamps that should not be confused:
+/// `created_at` (when memoir was told), `updated_at` (last in-place edit),
+/// and `event_at` (when the remembered event actually occurred). The first
+/// two are wall-clock; the third is event-time and may predate `created_at`
+/// by arbitrary amounts.
 ///
-/// `source_pid` is `Some` for `MemoryKind::Semantic` rows extracted from an
-/// episodic memory; `None` for episodic rows. The link is enforced at the
-/// database level with `ON DELETE CASCADE`, so forgetting the source
-/// automatically removes derived semantic memories.
-///
-/// `superseded_by` is `Some` when a contradiction-detection pass has marked
-/// this row as outdated, pointing at the winning memory's pid. Superseded
-/// rows are filtered out of `Client::remember` search results but remain
-/// visible via direct `Client::recall` (operators may need to inspect
-/// soft-deleted state). The FK uses `ON DELETE SET NULL`: if the
-/// superseder itself is forgotten, the previously-superseded row becomes
-/// active again.
+/// Soft-deletion via [`SupersessionInfo`] keeps superseded rows in the
+/// store, but [`crate::client::Client::search`] filters them out by
+/// default. They remain reachable via [`crate::client::Client::recall`].
 #[derive(Debug, Clone)]
 pub struct Memory {
+    /// Public id; opaque, stable for the lifetime of the row.
     pub pid: String,
+
+    /// Tenant + agent + user partition. See [`Scope`].
     pub scope: Scope,
+
+    /// Raw text of the memory.
     pub content: String,
+
+    /// Arbitrary JSON attached at write time; round-trips unchanged.
     pub metadata: serde_json::Value,
+
+    /// Episodic (raw utterance) or semantic (LLM-extracted fact).
     pub kind: MemoryKind,
+
+    /// Originating episodic pid for semantic rows; `None` for episodic.
+    ///
+    /// Enforced at the database with `ON DELETE CASCADE`: forgetting the
+    /// source automatically removes derived semantic memories.
     pub source_pid: Option<String>,
-    pub superseded_by: Option<String>,
+
+    /// Soft-deletion marker; `None` when active.
+    ///
+    /// Populated by contradiction-detection passes or operator action.
+    /// The nested type ties winner pid and decision time together so
+    /// neither can exist without the other.
+    pub supersession: Option<SupersessionInfo>,
+
+    /// Wall-clock time memoir received the utterance.
     pub created_at: DateTime<FixedOffset>,
+
+    /// Wall-clock time of the row's last in-place mutation.
+    ///
+    /// Auto-bumped by the database trigger on every UPDATE. Equals
+    /// `created_at` for memories never edited via
+    /// [`crate::client::Client::edit`].
+    pub updated_at: DateTime<FixedOffset>,
+
+    /// Event-time of the thing being remembered; `None` when unknown.
+    ///
+    /// Distinct from `created_at`: "the deployment happened Friday" said
+    /// today carries `event_at = Friday`, `created_at = today`. Set by
+    /// consumers via `RememberBuilder::event_at` or by LLM extraction.
+    /// `None` is appropriate when no event-time is meaningful
+    /// (preferences, identity facts).
+    pub event_at: Option<DateTime<FixedOffset>>,
+
+    /// Cosine similarity score; `Some` only on vector-search results.
     pub score: Option<f32>,
+
+    /// Processing lifecycle state of the row's vector index.
+    ///
+    /// `Pending` immediately after a write (embedding + vector upsert in
+    /// flight), `Indexed` once searchable, `Failed` if embedding errored.
+    /// Mirrors the `memories.qdrant_status` column. Consumers use this as the
+    /// canonical "is this memory fully processed yet" signal.
+    pub status: crate::store::IndexStatus,
+}
+
+/// Latest supersession state for a [`Memory`] — winner pid and decision time.
+///
+/// Reflects only the current state. Full supersession history, including
+/// reversals, lives in the `supersession_events` audit table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SupersessionInfo {
+    /// Pid of the memory that supersedes this one.
+    pub winner_pid: String,
+
+    /// Wall-clock time the supersession decision was made.
+    pub at: DateTime<FixedOffset>,
+}
+
+/// One supersede or unsupersede decision against a memory.
+///
+/// Mirrors one row of the `supersession_events` audit table. A `winner_pid`
+/// of `None` is an unsupersede — the memory was restored to active.
+///
+/// Returned in chronological order by
+/// [`crate::store::MemoryStore::supersession_history`] and surfaced by
+/// [`crate::client::Client::supersession_history`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SupersessionEvent {
+    /// Pid of the memory that took precedence; `None` for an unsupersede event.
+    pub winner_pid: Option<String>,
+
+    /// Wall-clock time the decision was recorded.
+    pub decided_at: DateTime<FixedOffset>,
 }
 
 /// Target of a forget operation: a single memory or a whole scope.
@@ -187,6 +269,7 @@ mod tests {
     use chrono::Utc;
 
     fn fixture(content: &str) -> Memory {
+        let now: DateTime<FixedOffset> = Utc::now().into();
         Memory {
             pid: "test".into(),
             scope: Scope {
@@ -198,30 +281,38 @@ mod tests {
             metadata: serde_json::json!({}),
             kind: MemoryKind::Episodic,
             source_pid: None,
-            superseded_by: None,
-            created_at: Utc::now().into(),
+            supersession: None,
+            created_at: now,
+            updated_at: now,
+            event_at: None,
             score: None,
+            status: crate::store::IndexStatus::Pending,
         }
     }
 
     #[test]
     fn should_render_memory_kind_as_lowercase_string() {
-        assert_eq!(MemoryKind::Episodic.as_str(), "episodic");
-        assert_eq!(MemoryKind::Semantic.as_str(), "semantic");
+        assert_eq!(MemoryKind::Episodic.as_ref(), "episodic");
+        assert_eq!(MemoryKind::Semantic.as_ref(), "semantic");
     }
 
     #[test]
-    fn should_display_memory_kind_matching_as_str() {
+    fn should_display_memory_kind_matching_as_ref() {
         assert_eq!(MemoryKind::Episodic.to_string(), "episodic");
         assert_eq!(MemoryKind::Semantic.to_string(), "semantic");
     }
 
     #[test]
+    fn should_parse_memory_kind_from_str() {
+        use std::str::FromStr as _;
+        assert_eq!(MemoryKind::from_str("episodic").unwrap(), MemoryKind::Episodic);
+        assert_eq!(MemoryKind::from_str("semantic").unwrap(), MemoryKind::Semantic);
+        assert!(MemoryKind::from_str("nonsense").is_err());
+    }
+
+    #[test]
     fn should_display_memories_with_system_prompt_and_bullets() {
-        let memories = Memories::new(
-            vec![fixture("first"), fixture("second")],
-            Some("Context:".into()),
-        );
+        let memories = Memories::new(vec![fixture("first"), fixture("second")], Some("Context:".into()));
 
         assert_eq!(memories.to_string(), "Context:\n- first\n- second\n");
     }
@@ -244,5 +335,54 @@ mod tests {
         let memories = Memories::new(vec![fixture("a"), fixture("b")], None);
         assert_eq!(memories.len(), 2);
         assert_eq!(memories[0].content, "a");
+    }
+
+    #[test]
+    fn should_default_event_at_to_none_in_fixture() {
+        let memory = fixture("hello");
+        assert!(
+            memory.event_at.is_none(),
+            "fixture default event_at must be None — most memories have no meaningful event-time"
+        );
+    }
+
+    #[test]
+    fn should_reject_scope_with_empty_agent_id() {
+        let scope = Scope {
+            agent_id: "".to_string(),
+            org_id: "o".to_string(),
+            user_id: "u".to_string(),
+        };
+        assert_eq!(scope.validate(), Err(ScopeError::Empty));
+    }
+
+    #[test]
+    fn should_reject_scope_with_empty_org_id() {
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "".to_string(),
+            user_id: "u".to_string(),
+        };
+        assert_eq!(scope.validate(), Err(ScopeError::Empty));
+    }
+
+    #[test]
+    fn should_reject_scope_with_empty_user_id() {
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "o".to_string(),
+            user_id: "".to_string(),
+        };
+        assert_eq!(scope.validate(), Err(ScopeError::Empty));
+    }
+
+    #[test]
+    fn should_accept_scope_with_all_non_empty_fields() {
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "o".to_string(),
+            user_id: "u".to_string(),
+        };
+        assert!(scope.validate().is_ok());
     }
 }

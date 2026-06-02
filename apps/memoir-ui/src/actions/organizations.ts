@@ -3,19 +3,17 @@
 import type { Organization, OrganizationMember, ResourcePermission } from '@/lib/proto-shims';
 import type { ActionResult } from '.';
 
-export type { Organization, OrganizationMember };
-
-export type ListOrganizationsResponse = { organizations: Organization[] };
-export type GetOrganizationResponse = {
+type ListOrganizationsResponse = { organizations: Organization[] };
+type GetOrganizationResponse = {
 	organization?: Organization;
 	userRole?: string;
 	permissions?: Record<string, ResourcePermission>;
 };
-export type CreateOrganizationResponse = { organization?: Organization };
-export type UpdateOrganizationResponse = { organization?: Organization };
-export type ListMembersResponse = { members: OrganizationMember[] };
-export type AddMemberResponse = { member?: OrganizationMember };
-export type UpdateMemberResponse = { member?: OrganizationMember };
+type CreateOrganizationResponse = { organization?: Organization };
+type UpdateOrganizationResponse = { organization?: Organization };
+type ListMembersResponse = { members: OrganizationMember[] };
+type AddMemberResponse = { member?: OrganizationMember };
+type UpdateMemberResponse = { member?: OrganizationMember };
 
 const NOT_IMPLEMENTED: ActionResult<never> = { success: false, error: 'Not implemented' };
 

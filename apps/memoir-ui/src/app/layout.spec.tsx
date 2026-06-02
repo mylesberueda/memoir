@@ -8,6 +8,13 @@ vi.mock('@components/Toast', () => ({
 	ToastContainer: () => <div data-testid="toast-container">Toast Container</div>,
 }));
 
+// next/font/google loaders are build-time macros; under Vitest they are not callable.
+vi.mock('next/font/google', () => ({
+	Fraunces: () => ({ variable: '--font-display' }),
+	Hanken_Grotesk: () => ({ variable: '--font-body' }),
+	JetBrains_Mono: () => ({ variable: '--font-mono' }),
+}));
+
 describe('RootLayout', () => {
 	const mockChildren = <div data-testid="layout-children">Test Content</div>;
 

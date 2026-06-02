@@ -15,13 +15,21 @@ import { describe, expect, it } from 'vitest';
 import { AuthServiceAuthProvider } from './auth-service';
 
 const SERVICE_URL = process.env.MEMOIR_SERVICE_URL;
-const USERNAME = process.env.MEMOIR_TEST_USERNAME;
-const PASSWORD = process.env.MEMOIR_TEST_PASSWORD;
+const HAS_ENV = Boolean(SERVICE_URL && process.env.MEMOIR_TEST_USERNAME && process.env.MEMOIR_TEST_PASSWORD);
 
-describe.skipIf(!SERVICE_URL || !USERNAME || !PASSWORD)('AuthServiceAuthProvider integration', () => {
+function requireEnv(name: string): string {
+	const value = process.env[name];
+	if (!value) throw new Error(`${name} is required to run AuthServiceAuthProvider integration tests`);
+	return value;
+}
+
+describe.skipIf(!HAS_ENV)('AuthServiceAuthProvider integration', () => {
+	const USERNAME = requireEnv('MEMOIR_TEST_USERNAME');
+	const PASSWORD = requireEnv('MEMOIR_TEST_PASSWORD');
+
 	it('should issue access and refresh tokens for valid credentials', async () => {
 		const provider = new AuthServiceAuthProvider();
-		const result = await provider.login(USERNAME!, PASSWORD!);
+		const result = await provider.login(USERNAME, PASSWORD);
 
 		expect(result.success, `login failed: ${result.success ? '' : result.error}`).toBe(true);
 		if (!result.success) return;
@@ -39,7 +47,7 @@ describe.skipIf(!SERVICE_URL || !USERNAME || !PASSWORD)('AuthServiceAuthProvider
 
 	it('should reject login when password is wrong', async () => {
 		const provider = new AuthServiceAuthProvider();
-		const result = await provider.login(USERNAME!, `${PASSWORD!}-wrong`);
+		const result = await provider.login(USERNAME, `${PASSWORD}-wrong`);
 
 		expect(result.success).toBe(false);
 		if (result.success) return;
@@ -55,7 +63,7 @@ describe.skipIf(!SERVICE_URL || !USERNAME || !PASSWORD)('AuthServiceAuthProvider
 
 	it('should exchange a refresh token for a fresh access token', async () => {
 		const provider = new AuthServiceAuthProvider();
-		const login = await provider.login(USERNAME!, PASSWORD!);
+		const login = await provider.login(USERNAME, PASSWORD);
 		expect(login.success).toBe(true);
 		if (!login.success || login.data.type !== 'tokens') return;
 

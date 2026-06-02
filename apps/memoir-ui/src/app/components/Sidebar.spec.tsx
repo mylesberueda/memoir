@@ -107,7 +107,7 @@ describe('Sidebar Component', () => {
 	it('renders sidebar with branding', () => {
 		renderWithLayoutProvider(<Sidebar />);
 
-		expect(screen.getByText('MEMOIR')).toBeInTheDocument();
+		expect(screen.getByText('Memoir')).toBeInTheDocument();
 	});
 
 	it('renders all navigation sections', () => {
@@ -220,7 +220,7 @@ describe('Sidebar Component', () => {
 		});
 		renderWithLayoutProvider(<Sidebar />);
 
-		expect(screen.getByText('MEMOIR')).toBeInTheDocument();
+		expect(screen.getByText('Memoir')).toBeInTheDocument();
 		expect(screen.getByText('Dashboard')).toBeInTheDocument();
 	});
 
@@ -237,10 +237,8 @@ describe('Sidebar Component', () => {
 		const nav = screen.getByRole('navigation');
 		expect(nav).toBeInTheDocument();
 
-		const brandLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('MEMOIR'));
-		expect(brandLink).toHaveAttribute('href', '/');
-		expect(brandLink).toHaveAttribute('target', '_blank');
-		expect(brandLink).toHaveAttribute('rel', 'noopener noreferrer');
+		const brandLink = screen.getAllByTestId('nav-link').find((link) => link.textContent?.includes('Memoir'));
+		expect(brandLink).toHaveAttribute('href', '/dashboard');
 	});
 
 	describe('when user is not provided', () => {
@@ -290,7 +288,7 @@ describe('Sidebar Component', () => {
 		it('still renders all navigation sections and branding', () => {
 			renderWithLayoutProvider(<Sidebar />);
 
-			expect(screen.getByText('MEMOIR')).toBeInTheDocument();
+			expect(screen.getByText('Memoir')).toBeInTheDocument();
 			expect(screen.getByText('Overview')).toBeInTheDocument();
 			expect(screen.getAllByText('Test Org').length).toBeGreaterThanOrEqual(1);
 			expect(screen.getByText('Dashboard')).toBeInTheDocument();

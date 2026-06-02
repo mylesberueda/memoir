@@ -19,8 +19,8 @@ use tracing::{Instrument, Level, event, info_span};
 
 use crate::jobs::{Job, JobsError, MemoryJobsStore};
 use crate::llm::{
-    DEFAULT_EXTRACTION_PROMPT, ExtractionOutput, LlmError, LlmKind, LlmProvider, LlmRole,
-    MAX_CONTENT_CHARS, parse_extraction,
+    AcceptAllEventAt, DEFAULT_EXTRACTION_PROMPT, EventAtValidator, ExtractionOutput, LlmError, LlmKind, LlmProvider,
+    LlmRole, MAX_CONTENT_CHARS, build_extraction_content, parse_extraction,
 };
 use crate::memory::MemoryKind;
 use crate::store::{MemoryStore, StoreError};
@@ -105,7 +105,8 @@ impl ClientInner {
 
         // Step 3: LLM call.
         let content_len = source.content.len();
-        let raw = match provider.extract(DEFAULT_EXTRACTION_PROMPT, &source.content).await {
+        let extraction_content = build_extraction_content(source.created_at, &source.content);
+        let raw = match provider.extract(DEFAULT_EXTRACTION_PROMPT, &extraction_content).await {
             Ok(raw) => raw,
             Err(err) => {
                 event!(
@@ -151,17 +152,20 @@ impl ClientInner {
         // Step 5: persist semantic rows + enqueue embed jobs.
         let provider_kind = provider.kind();
         let provider_model = provider.model().to_string();
+        let validator = AcceptAllEventAt;
         let mut persisted_pids: Vec<String> = Vec::with_capacity(parsed.facts.len());
 
         for fact in parsed.facts {
-            // Skip empty / over-length facts at the boundary. The LLM may
-            // emit either; we do not want to write them.
             let content_chars = fact.content.chars().count();
             if fact.content.is_empty() || content_chars > MAX_CONTENT_CHARS {
                 continue;
             }
 
             let metadata = build_semantic_metadata(provider_kind, &provider_model, fact.confidence);
+
+            let event_at = fact
+                .event_at
+                .and_then(|candidate| validator.validate(source.created_at, candidate));
 
             let written = self
                 .store
@@ -171,6 +175,7 @@ impl ClientInner {
                     metadata,
                     MemoryKind::Semantic,
                     Some(source_pid.clone()),
+                    event_at,
                 )
                 .await
                 .map_err(|err| ExtractError::Persist(err.to_string()))?;
@@ -211,7 +216,7 @@ fn build_semantic_metadata(
 ) -> serde_json::Value {
     serde_json::json!({
         "origin": "extraction",
-        "provider": provider.as_str(),
+        "provider": provider.as_ref(),
         "model": model,
         "confidence": confidence,
     })

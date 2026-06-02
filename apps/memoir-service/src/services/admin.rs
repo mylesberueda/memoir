@@ -17,8 +17,8 @@
 //!    [`crate::services::conversions`] — surfaces `InvalidArgument` for
 //!    malformed input.
 //! 5. Call the corresponding `ctx.memoir.<admin_method>`; map any
-//!    [`memoir_core::client::ClientError`] to a `tonic::Status` via
-//!    [`crate::services::conversions::client_error_to_status`].
+//!    [`memoir_core::client::ClientError`] to a `tonic::Status` via the
+//!    `From` impl in memoir-core (behind the `grpc` feature).
 //! 6. Wrap the library return value in the proto response shape.
 //!
 //! ## Admin-only enforcement
@@ -49,9 +49,9 @@ use tonic::{Request, Response, Status};
 use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
-    client_error_to_status, failed_job_to_proto, job_kind_filter_from_proto, reconcile_summary_to_proto,
-    u64_count_to_proto,
+    WireFailedJob, WireReconcileResponse, job_kind_filter_from_proto, u64_count_to_proto,
 };
+use crate::services::wire::WireError;
 
 /// Default cap when `ListFailedJobsRequest.limit == 0`.
 ///
@@ -127,9 +127,9 @@ impl AdminService for Admin {
             .memoir
             .failed_jobs(resolved_limit)
             .await
-            .map_err(client_error_to_status)?;
+            .map_err(WireError::into_status)?;
 
-        let proto_jobs = jobs.into_iter().map(failed_job_to_proto).collect();
+        let proto_jobs = jobs.into_iter().map(|j| WireFailedJob::from(j).0).collect();
         Ok(Response::new(ListFailedJobsResponse { jobs: proto_jobs }))
     }
 
@@ -154,7 +154,7 @@ impl AdminService for Admin {
             .memoir
             .pending_jobs_count()
             .await
-            .map_err(client_error_to_status)?;
+            .map_err(WireError::into_status)?;
         let wire_count = u64_count_to_proto(count, "pending_jobs_count")?;
         Ok(Response::new(PendingJobsCountResponse { count: wire_count }))
     }
@@ -174,7 +174,7 @@ impl AdminService for Admin {
             "AdminService.RetryJob invoked",
         );
 
-        self.ctx.memoir.retry_job(id).await.map_err(client_error_to_status)?;
+        self.ctx.memoir.retry_job(id).await.map_err(WireError::into_status)?;
         Ok(Response::new(RetryJobResponse {}))
     }
 
@@ -206,7 +206,7 @@ impl AdminService for Admin {
             .memoir
             .delete_failed_job(id)
             .await
-            .map_err(client_error_to_status)?;
+            .map_err(WireError::into_status)?;
         Ok(Response::new(DeleteFailedJobResponse {}))
     }
 
@@ -243,7 +243,7 @@ impl AdminService for Admin {
         if dry_run {
             builder = builder.dry_run();
         }
-        let affected = builder.await.map_err(client_error_to_status)?;
+        let affected = builder.await.map_err(WireError::into_status)?;
         let wire_affected = u64_count_to_proto(affected, "retry_failed_jobs.affected")?;
 
         Ok(Response::new(RetryFailedJobsResponse {
@@ -280,7 +280,7 @@ impl AdminService for Admin {
             .memoir
             .unsupersede(&pid)
             .await
-            .map_err(client_error_to_status)?;
+            .map_err(WireError::into_status)?;
         Ok(Response::new(UnsupersedeResponse {}))
     }
 
@@ -324,9 +324,9 @@ impl AdminService for Admin {
         if only_clean_orphans {
             builder = builder.only_clean_orphans();
         }
-        let summary = builder.await.map_err(client_error_to_status)?;
+        let summary = builder.await.map_err(WireError::into_status)?;
 
-        Ok(Response::new(reconcile_summary_to_proto(summary)))
+        Ok(Response::new(WireReconcileResponse::from(summary).0))
     }
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { getOrganizationByPid } from '@actions/organizations';
+import { PageContainer, PageHeader } from '@components';
 import { useOrganizations } from '@providers/OrganizationContextProvider';
 import { Users2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -62,35 +63,35 @@ export default function OrgMembersClient() {
 
 	if (isLoading) {
 		return (
-			<div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+			<PageContainer width="list">
 				<div className="mb-8">
 					<div className="h-9 w-64 bg-base-300 rounded animate-pulse" />
 					<div className="h-5 w-96 bg-base-300 rounded animate-pulse mt-2" />
 				</div>
 				<div className="h-64 bg-base-300 rounded animate-pulse" />
-			</div>
+			</PageContainer>
 		);
 	}
 
 	if (error) {
 		return (
-			<div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+			<PageContainer width="list">
 				<div className="alert alert-error">
 					<span>Failed to load organization. {error}</span>
 				</div>
-			</div>
+			</PageContainer>
 		);
 	}
 
 	if (!organization) {
 		return (
-			<div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+			<PageContainer width="list">
 				<div className="flex flex-col items-center justify-center py-16 text-center">
 					<Users2 className="h-16 w-16 text-base-content/30 mb-4" />
 					<h2 className="text-xl font-semibold text-base-content mb-2">No Organization Selected</h2>
 					<p className="text-base-content/70 max-w-md">Select an organization from the sidebar to manage members.</p>
 				</div>
-			</div>
+			</PageContainer>
 		);
 	}
 
@@ -98,12 +99,13 @@ export default function OrgMembersClient() {
 	const isAdmin = isOwner || userRole === 'admin';
 
 	return (
-		<div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-			<div className="mb-8">
-				<h1 className="text-3xl font-bold text-base-content">Members</h1>
-				<p className="mt-2 text-base-content/70">Manage members and invite new people to your organization.</p>
-			</div>
+		<PageContainer width="list">
+			<PageHeader
+				eyebrow="Organization"
+				title="Members"
+				description="Manage members and invite new people to your organization."
+			/>
 			<MemberManagement organization={organization} isAdmin={isAdmin} isOwner={isOwner} />
-		</div>
+		</PageContainer>
 	);
 }

@@ -21,19 +21,25 @@
 //!   `serde_json::to_value` / `serde_json::from_value` pair is the
 //!   canonical conversion path per the pbjson-types maintainer.
 
-use memoir_core::client::{ClientError, ReconcileSummary};
-use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind, JobsError};
-use memoir_core::memory::{ForgetTarget, Memory as LibMemory, Scope as LibScope};
-use memoir_core::store::StoreError;
+use memoir_core::client::{DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, RankingStrategy, ReconcileSummary};
+use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind};
+use memoir_core::memory::{
+    ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory, Scope as LibScope,
+    SupersessionEvent as LibSupersessionEvent,
+};
+use memoir_core::store::{AsOfParams, DEFAULT_TIMELINE_LIMIT, TimelineDirection, TimelineParams};
 use memoir_core::vector::{
     FilterCondition as LibFilterCondition, MatchValue as LibMatchValue, MatchValues as LibMatchValues,
-    MemoryFilter as LibMemoryFilter, NumericRange as LibNumericRange, VectorError,
+    MemoryFilter as LibMemoryFilter, NumericRange as LibNumericRange,
 };
 use memoir_sdk::memoir::v1::{
-    FailedJob as ProtoFailedJob, FilterCondition as ProtoFilterCondition, ForgetRequest, JobKind as ProtoJobKind,
-    MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues, Memory as ProtoMemory,
-    MemoryFilter as ProtoMemoryFilter, MemoryStatus, NumericRange as ProtoNumericRange, ReconcileResponse,
-    Scope as ProtoScope, filter_condition, forget_request, match_value, match_values,
+    Decay as ProtoDecay, DecayBucket as ProtoDecayBucket, EditRequest, ExponentialDecay, FailedJob as ProtoFailedJob,
+    FilterCondition as ProtoFilterCondition, ForgetRequest, Hybrid as ProtoHybrid, JobKind as ProtoJobKind,
+    KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues,
+    MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit, QueryRequest, QueryResponse,
+    Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReciprocalDecay, ReconcileResponse,
+    Scope as ProtoScope, StepDecay, SupersessionEvent as ProtoSupersessionEvent, SupersessionHistoryRequest,
+    TimelineRequest, TimelineResponse, decay, filter_condition, forget_request, match_value, match_values, ranking,
 };
 use tonic::Status;
 
@@ -104,25 +110,6 @@ pub(crate) fn metadata_to_proto(value: serde_json::Value) -> pbjson_types::Struc
     serde_json::from_value::<pbjson_types::Struct>(value).unwrap_or_default()
 }
 
-/// Converts a library `Memory` into the wire shape.
-///
-/// `processed_at` is always `None` in v0.1 — memoir-core does not yet
-/// track a dedicated processed timestamp (see `memory.proto` field
-/// comment). The `status` field is set to PENDING for newly-written
-/// rows; a future library schema migration will let this surface
-/// PROCESSED/FAILED based on `qdrant_status`.
-pub(crate) fn memory_to_proto(memory: LibMemory) -> ProtoMemory {
-    ProtoMemory {
-        pid: memory.pid,
-        scope: Some(scope_to_proto(memory.scope)),
-        content: memory.content,
-        metadata: Some(metadata_to_proto(memory.metadata)),
-        created_at: Some(timestamp_from_chrono(memory.created_at)),
-        processed_at: None,
-        status: MemoryStatus::Pending as i32,
-    }
-}
-
 /// Converts `ForgetRequest.target` (oneof) into the library `ForgetTarget`.
 ///
 /// Proto3 oneof maps to `Option<Target>` in the generated code. An unset
@@ -162,84 +149,388 @@ pub(crate) fn timestamp_from_chrono(dt: chrono::DateTime<chrono::FixedOffset>) -
     }
 }
 
-/// Maps a [`memoir_core::client::ClientError`] to a [`tonic::Status`].
+/// Converts a wire `Timestamp` to a `chrono::DateTime<FixedOffset>` (UTC offset).
 ///
-/// The mapping follows gRPC semantics:
+/// # Errors
 ///
-/// | Library error                                        | gRPC code         |
-/// |------------------------------------------------------|-------------------|
-/// | `Store(StoreError::NotFound)` / `Jobs(JobsError::NotFound)` | `NotFound`       |
-/// | `Store(StoreError::InvalidScope)`                    | `InvalidArgument` |
-/// | `Vector(VectorError::NotFound)`                      | `NotFound`        |
-/// | `Vector(VectorError::BadRequest)`                    | `InvalidArgument` |
-/// | `Vector(VectorError::Connection)` / `Database`       | `Unavailable`     |
-/// | `Store(StoreError::Database)` / `Jobs(...Database)`  | `Internal`        |
-/// | `Embedding(_)` / `Llm(_)` / `Migration(_)`           | `Internal`        |
+/// Returns [`Status::invalid_argument`] when the seconds/nanos do not form a
+/// representable instant (out-of-range or invalid nanos).
+fn timestamp_to_chrono(ts: pbjson_types::Timestamp) -> Result<chrono::DateTime<chrono::FixedOffset>, Status> {
+    chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
+        .map(|dt| dt.fixed_offset())
+        .ok_or_else(|| Status::invalid_argument("timestamp: not a representable instant"))
+}
+
+/// Converts a wire `KindSelector` into the library shape.
 ///
-/// Wire messages are opaque ("internal error", "memory not found", etc.)
-/// — never the inner error's `Display`. Full error context is logged
-/// server-side at WARN/ERROR with structured fields so operators can
-/// triage without exposing internals to callers.
-pub(crate) fn client_error_to_status(err: ClientError) -> Status {
-    match &err {
-        ClientError::Store(StoreError::NotFound(pid)) => {
-            tracing::debug!(error.kind = "store.not_found", memory.pid = %pid, "client error mapped to NOT_FOUND");
-            Status::not_found("memory not found")
+/// `None` (omitted) and a both-false selector both map to
+/// [`LibKindSelector::default`] — all kinds — matching the library's
+/// "toggled neither = retrieve both" rule. Setting exactly one field filters
+/// to that kind.
+fn kind_selector_from_proto(kinds: Option<ProtoKindSelector>) -> LibKindSelector {
+    match kinds {
+        None
+        | Some(ProtoKindSelector {
+            episodic: false,
+            semantic: false,
+        }) => LibKindSelector::default(),
+        Some(ProtoKindSelector { episodic, semantic }) => LibKindSelector { episodic, semantic },
+    }
+}
+
+/// A validated `Timeline` request: scope plus query parameters.
+///
+/// `TryFrom<TimelineRequest>` performs boundary validation — the request's
+/// shared-vocabulary fields (scope, timestamps, kinds) are checked and
+/// converted here. The handler destructures this rather than juggling a
+/// tuple.
+#[derive(Debug)]
+pub(crate) struct TimelineArgs {
+    pub scope: LibScope,
+    pub params: TimelineParams,
+}
+
+impl TryFrom<TimelineRequest> for TimelineArgs {
+    type Error = Status;
+
+    fn try_from(request: TimelineRequest) -> Result<Self, Status> {
+        let limit = if request.limit > 0 {
+            request.limit as usize
+        } else {
+            DEFAULT_TIMELINE_LIMIT
+        };
+        let direction = if request.ascending {
+            TimelineDirection::Ascending
+        } else {
+            TimelineDirection::Descending
+        };
+        Ok(Self {
+            scope: scope_from_proto(request.scope)?,
+            params: TimelineParams {
+                kinds: kind_selector_from_proto(request.kinds),
+                created_after: request.created_after.map(timestamp_to_chrono).transpose()?,
+                created_before: request.created_before.map(timestamp_to_chrono).transpose()?,
+                event_at_after: request.event_at_after.map(timestamp_to_chrono).transpose()?,
+                event_at_before: request.event_at_before.map(timestamp_to_chrono).transpose()?,
+                include_superseded: !request.exclude_superseded,
+                limit,
+                direction,
+            },
+        })
+    }
+}
+
+/// Wraps a library timeline result in the wire response shape.
+pub(crate) fn timeline_response(memories: Vec<LibMemory>) -> TimelineResponse {
+    use crate::services::wire::WireMemory;
+    TimelineResponse {
+        memories: memories.into_iter().map(|m| WireMemory::from(m).0).collect(),
+    }
+}
+
+/// A validated `RecallAsOf` request: scope plus point-in-time parameters.
+#[derive(Debug)]
+pub(crate) struct RecallAsOfArgs {
+    pub scope: LibScope,
+    pub params: AsOfParams,
+}
+
+impl TryFrom<RecallAsOfRequest> for RecallAsOfArgs {
+    type Error = Status;
+
+    fn try_from(request: RecallAsOfRequest) -> Result<Self, Status> {
+        let as_of = request
+            .as_of
+            .ok_or_else(|| Status::invalid_argument("as_of: required"))?;
+        let limit = if request.limit > 0 {
+            request.limit as usize
+        } else {
+            DEFAULT_TIMELINE_LIMIT
+        };
+        Ok(Self {
+            scope: scope_from_proto(request.scope)?,
+            params: AsOfParams {
+                as_of: timestamp_to_chrono(as_of)?,
+                kinds: kind_selector_from_proto(request.kinds),
+                limit,
+            },
+        })
+    }
+}
+
+/// Wraps a library recall-as-of result in the wire response shape.
+pub(crate) fn recall_as_of_response(memories: Vec<LibMemory>) -> RecallAsOfResponse {
+    use crate::services::wire::WireMemory;
+    RecallAsOfResponse {
+        memories: memories.into_iter().map(|m| WireMemory::from(m).0).collect(),
+    }
+}
+
+/// Converts a wire `Duration` to a `chrono::Duration` at seconds granularity.
+///
+/// The library's decay functions operate on whole seconds (`num_seconds`),
+/// so sub-second precision is intentionally dropped.
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when the value is out of
+/// `chrono::Duration`'s representable range.
+fn duration_to_chrono(d: pbjson_types::Duration) -> Result<chrono::Duration, Status> {
+    chrono::Duration::try_seconds(d.seconds)
+        .ok_or_else(|| Status::invalid_argument("duration: out of representable range"))
+}
+
+/// Converts a `chrono::Duration` to a wire `Duration` (seconds, no nanos).
+fn duration_to_proto(d: chrono::Duration) -> pbjson_types::Duration {
+    pbjson_types::Duration {
+        seconds: d.num_seconds(),
+        nanos: 0,
+    }
+}
+
+/// Converts a wire `Ranking` to the library [`RankingStrategy`].
+///
+/// `None` (unset) maps to [`RankingStrategy::default_hybrid`], matching the
+/// library's "no strategy = default hybrid" behavior.
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when a `Hybrid` lacks its `decay`,
+/// a `Decay` lacks its function, or a duration is out of range.
+fn ranking_from_proto(proto: Option<ProtoRanking>) -> Result<RankingStrategy, Status> {
+    let Some(ranking) = proto.and_then(|r| r.strategy) else {
+        return Ok(RankingStrategy::default_hybrid());
+    };
+    match ranking {
+        ranking::Strategy::Hybrid(h) => {
+            let decay = h
+                .decay
+                .and_then(|d| d.function)
+                .ok_or_else(|| Status::invalid_argument("ranking.hybrid.decay: required"))?;
+            let decay = match decay {
+                decay::Function::Exponential(e) => DecayFn::Exponential {
+                    half_life: duration_to_chrono(
+                        e.half_life
+                            .ok_or_else(|| Status::invalid_argument("decay.exponential.half_life: required"))?,
+                    )?,
+                },
+                decay::Function::Reciprocal(r) => DecayFn::Reciprocal {
+                    scale: duration_to_chrono(
+                        r.scale
+                            .ok_or_else(|| Status::invalid_argument("decay.reciprocal.scale: required"))?,
+                    )?,
+                },
+                decay::Function::Step(s) => {
+                    let mut thresholds = Vec::with_capacity(s.buckets.len());
+                    for bucket in s.buckets {
+                        let boundary = duration_to_chrono(
+                            bucket
+                                .boundary
+                                .ok_or_else(|| Status::invalid_argument("decay.step.bucket.boundary: required"))?,
+                        )?;
+                        thresholds.push((boundary, bucket.value));
+                    }
+                    DecayFn::Step { thresholds }
+                }
+            };
+            Ok(RankingStrategy::Hybrid { alpha: h.alpha, decay })
         }
-        ClientError::Store(StoreError::InvalidScope(detail)) => {
-            tracing::warn!(error.kind = "store.invalid_scope", error.detail = %detail, "client error mapped to INVALID_ARGUMENT");
-            Status::invalid_argument("scope: agent_id, org_id, and user_id must all be non-empty")
+    }
+}
+
+/// Converts a library [`RankingStrategy`] back to the wire `Ranking`.
+fn ranking_to_proto(strategy: &RankingStrategy) -> ProtoRanking {
+    let strategy = match strategy {
+        RankingStrategy::Hybrid { alpha, decay } => ranking::Strategy::Hybrid(ProtoHybrid {
+            alpha: *alpha,
+            decay: Some(ProtoDecay {
+                function: Some(decay_fn_to_proto(decay)),
+            }),
+        }),
+        // `RankingStrategy` is #[non_exhaustive]: a core build newer than this
+        // service could carry a variant we can't represent. Treat it as
+        // version skew and echo the default hybrid so the response stays
+        // well-formed.
+        other => {
+            tracing::warn!(strategy = ?other, "unknown RankingStrategy variant; echoing default hybrid");
+            return ranking_to_proto(&RankingStrategy::default_hybrid());
         }
-        ClientError::Store(StoreError::Database(detail)) => {
-            tracing::error!(error.kind = "store.database", error.detail = %detail, "client error mapped to INTERNAL");
-            Status::internal("internal error")
+    };
+    ProtoRanking {
+        strategy: Some(strategy),
+    }
+}
+
+/// Converts a library [`DecayFn`] to the wire `Decay`'s oneof function.
+fn decay_fn_to_proto(decay: &DecayFn) -> decay::Function {
+    match decay {
+        DecayFn::Exponential { half_life } => decay::Function::Exponential(ExponentialDecay {
+            half_life: Some(duration_to_proto(*half_life)),
+        }),
+        DecayFn::Reciprocal { scale } => decay::Function::Reciprocal(ReciprocalDecay {
+            scale: Some(duration_to_proto(*scale)),
+        }),
+        DecayFn::Step { thresholds } => decay::Function::Step(StepDecay {
+            buckets: thresholds
+                .iter()
+                .map(|(boundary, value)| ProtoDecayBucket {
+                    boundary: Some(duration_to_proto(*boundary)),
+                    value: *value,
+                })
+                .collect(),
+        }),
+        // #[non_exhaustive] forward-compat: fall back to the default decay.
+        other => {
+            tracing::warn!(decay = ?other, "unknown DecayFn variant; echoing default exponential");
+            decay::Function::Exponential(ExponentialDecay {
+                half_life: Some(duration_to_proto(chrono::Duration::days(7))),
+            })
         }
-        ClientError::Jobs(JobsError::NotFound(id)) => {
-            tracing::debug!(error.kind = "jobs.not_found", job.id = %id, "client error mapped to NOT_FOUND");
-            Status::not_found("job not found")
+    }
+}
+
+/// A validated `Query` request: scope, query text, and all builder knobs.
+#[derive(Debug)]
+pub(crate) struct QueryArgs {
+    pub query: String,
+    pub scope: LibScope,
+    pub limit: usize,
+    pub kinds: memoir_core::memory::KindSelector,
+    pub metadata_filter: Option<LibMemoryFilter>,
+    pub min_similarity: Option<f32>,
+    pub created_after: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub created_before: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub event_at_after: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub event_at_before: Option<chrono::DateTime<chrono::FixedOffset>>,
+    pub ranking: RankingStrategy,
+}
+
+impl TryFrom<QueryRequest> for QueryArgs {
+    type Error = Status;
+
+    fn try_from(request: QueryRequest) -> Result<Self, Status> {
+        if request.query.is_empty() {
+            return Err(Status::invalid_argument("query: required"));
         }
-        ClientError::Jobs(JobsError::Database(detail)) => {
-            tracing::error!(error.kind = "jobs.database", error.detail = %detail, "client error mapped to INTERNAL");
-            Status::internal("internal error")
+        let limit = if request.limit > 0 {
+            request.limit as usize
+        } else {
+            DEFAULT_QUERY_LIMIT
+        };
+        Ok(Self {
+            query: request.query,
+            scope: scope_from_proto(request.scope)?,
+            limit,
+            kinds: kind_selector_from_proto(request.kinds),
+            metadata_filter: metadata_filter_from_proto(request.metadata_filter)?,
+            min_similarity: request.min_similarity,
+            created_after: request.created_after.map(timestamp_to_chrono).transpose()?,
+            created_before: request.created_before.map(timestamp_to_chrono).transpose()?,
+            event_at_after: request.event_at_after.map(timestamp_to_chrono).transpose()?,
+            event_at_before: request.event_at_before.map(timestamp_to_chrono).transpose()?,
+            ranking: ranking_from_proto(request.ranking)?,
+        })
+    }
+}
+
+/// Wraps a library `MemoryContext` in the wire `QueryResponse`.
+///
+/// Each hit carries its hybrid score (from `Memory.score`, populated by
+/// `query`). `ranking_used` echoes the strategy that produced the result.
+pub(crate) fn query_response(context: MemoryContext) -> QueryResponse {
+    use crate::services::wire::WireMemory;
+    let ranking_used = Some(ranking_to_proto(context.strategy_used()));
+    let hits = context
+        .memories()
+        .iter()
+        .cloned()
+        .map(|m| {
+            let score = m.score.unwrap_or(0.0);
+            QueryHit {
+                memory: Some(WireMemory::from(m).0),
+                score,
+            }
+        })
+        .collect();
+    QueryResponse { hits, ranking_used }
+}
+
+/// A validated `Edit` request: the target pid plus the optional field edits.
+///
+/// Each `Option` is "untouched when `None`, overwrite when `Some`", mirroring
+/// the library's `EditBuilder`. Reserved-metadata-key validation runs
+/// library-side in `Client::edit`; the handler maps the resulting error.
+#[derive(Debug)]
+pub(crate) struct EditArgs {
+    pub pid: String,
+    pub content: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+    pub event_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+}
+
+impl TryFrom<EditRequest> for EditArgs {
+    type Error = Status;
+
+    fn try_from(request: EditRequest) -> Result<Self, Status> {
+        if request.pid.is_empty() {
+            return Err(Status::invalid_argument("pid: required"));
         }
-        ClientError::Vector(VectorError::NotFound(detail)) => {
-            tracing::debug!(error.kind = "vector.not_found", error.detail = %detail, "client error mapped to NOT_FOUND");
-            Status::not_found("vector index entry not found")
+        let metadata = request.metadata.map(serde_json::to_value).transpose().map_err(|err| {
+            tracing::warn!(error.message = %err, "rejected EditRequest with malformed metadata");
+            Status::invalid_argument("metadata: not representable as JSON")
+        })?;
+        Ok(Self {
+            pid: request.pid,
+            content: request.content,
+            metadata,
+            event_at: request.event_at.map(timestamp_to_chrono).transpose()?,
+        })
+    }
+}
+
+// `ClientError → Status` is owned by `services/wire::WireError`.
+// Call sites use `.map_err(WireError::into_status)?`.
+
+/// A validated `SupersessionHistory` request: just the target pid.
+#[derive(Debug)]
+pub(crate) struct SupersessionHistoryArgs {
+    pub pid: String,
+}
+
+impl TryFrom<SupersessionHistoryRequest> for SupersessionHistoryArgs {
+    type Error = Status;
+
+    fn try_from(request: SupersessionHistoryRequest) -> Result<Self, Status> {
+        if request.pid.is_empty() {
+            return Err(Status::invalid_argument("pid: required"));
         }
-        ClientError::Vector(VectorError::BadRequest(detail)) => {
-            tracing::warn!(error.kind = "vector.bad_request", error.detail = %detail, "client error mapped to INVALID_ARGUMENT");
-            Status::invalid_argument("invalid request to vector backend")
-        }
-        ClientError::Vector(VectorError::Connection(detail)) => {
-            tracing::error!(error.kind = "vector.connection", error.detail = %detail, "client error mapped to UNAVAILABLE");
-            Status::unavailable("vector backend unavailable")
-        }
-        ClientError::Database(detail) => {
-            tracing::error!(error.kind = "database", error.detail = %detail, "client error mapped to UNAVAILABLE");
-            Status::unavailable("database unavailable")
-        }
-        ClientError::Embedding(detail) => {
-            tracing::error!(error.kind = "embedding", error.detail = %detail, "client error mapped to INTERNAL");
-            Status::internal("internal error")
-        }
-        ClientError::Llm(detail) => {
-            tracing::error!(error.kind = "llm", error.detail = %detail, "client error mapped to INTERNAL");
-            Status::internal("internal error")
-        }
-        ClientError::Migration(detail) => {
-            tracing::error!(error.kind = "migration", error.detail = %detail, "client error mapped to INTERNAL");
-            Status::internal("internal error")
-        }
+        Ok(Self { pid: request.pid })
+    }
+}
+
+/// Wire form of a [`LibSupersessionEvent`]. Build via `WireSupersessionEvent::from(event)`.
+pub(crate) struct WireSupersessionEvent(pub ProtoSupersessionEvent);
+
+impl From<LibSupersessionEvent> for WireSupersessionEvent {
+    fn from(event: LibSupersessionEvent) -> Self {
+        Self(ProtoSupersessionEvent {
+            winner_pid: event.winner_pid,
+            decided_at: Some(timestamp_from_chrono(event.decided_at)),
+        })
     }
 }
 
 // ─── AdminService conversions ──────────────────────────────────────────────
 
-/// Converts a library `JobKind` to the wire enum's discriminant.
-pub(crate) fn job_kind_to_proto(kind: LibJobKind) -> ProtoJobKind {
-    match kind {
-        LibJobKind::Embed => ProtoJobKind::Embed,
-        LibJobKind::Extract => ProtoJobKind::Extract,
+/// Wire form of a [`LibJobKind`]. Build via `WireJobKind::from(kind)`.
+pub(crate) struct WireJobKind(pub ProtoJobKind);
+
+impl From<LibJobKind> for WireJobKind {
+    fn from(kind: LibJobKind) -> Self {
+        Self(match kind {
+            LibJobKind::Embed => ProtoJobKind::Embed,
+            LibJobKind::Extract => ProtoJobKind::Extract,
+        })
     }
 }
 
@@ -249,6 +540,9 @@ pub(crate) fn job_kind_to_proto(kind: LibJobKind) -> ProtoJobKind {
 /// kinds" — matching the library's `RetryBuilder` default. Unknown
 /// discriminants (e.g., a forward-compatible proto carrying a value this
 /// build doesn't recognize) are rejected with `InvalidArgument`.
+///
+/// Left as a free function because there is no proto wrapper type to
+/// newtype — the wire shape is a naked `optional int32`, not a message.
 ///
 /// # Errors
 ///
@@ -267,25 +561,28 @@ pub(crate) fn job_kind_filter_from_proto(value: Option<i32>) -> Result<Option<Li
     }
 }
 
-/// Converts a library `FailedJob` row to the wire shape.
+/// Wire form of a [`LibFailedJob`]. Build via `WireFailedJob::from(job)`.
 ///
 /// Mirrors the library type exactly per `admin.proto`'s `FailedJob`
-/// message — id, source pid, kind, attempts, optional failure reason,
-/// last update. The original job payload and the referenced memory's
-/// content are **never** included; that PII boundary is enforced at
-/// the library by the type's shape.
-pub(crate) fn failed_job_to_proto(job: LibFailedJob) -> ProtoFailedJob {
-    ProtoFailedJob {
-        id: job.id,
-        source_pid: job.source_pid,
-        kind: job_kind_to_proto(job.kind) as i32,
-        attempts: job.attempts,
-        failure_reason: job.failure_reason,
-        updated_at: Some(timestamp_from_chrono(job.updated_at)),
+/// message. The original job payload and the referenced memory's content
+/// are **never** included; that PII boundary is enforced at the library
+/// by the type's shape.
+pub(crate) struct WireFailedJob(pub ProtoFailedJob);
+
+impl From<LibFailedJob> for WireFailedJob {
+    fn from(job: LibFailedJob) -> Self {
+        Self(ProtoFailedJob {
+            id: job.id,
+            source_pid: job.source_pid,
+            kind: WireJobKind::from(job.kind).0 as i32,
+            attempts: job.attempts,
+            failure_reason: job.failure_reason,
+            updated_at: Some(timestamp_from_chrono(job.updated_at)),
+        })
     }
 }
 
-/// Converts the library's `ReconcileSummary` to the wire `ReconcileResponse`.
+/// Wire form of a [`ReconcileSummary`]. Build via `WireReconcileResponse::from(summary)`.
 ///
 /// All three counters are `usize` in the library; `int64` on the wire.
 /// `usize as i64` is lossy only when `usize > i64::MAX` (impossible on
@@ -293,11 +590,15 @@ pub(crate) fn failed_job_to_proto(job: LibFailedJob) -> ProtoFailedJob {
 /// than 9 quintillion rows), so a saturating cast is safe enough; we
 /// use `i64::try_from` defensively and return zero on overflow with a
 /// loud warning so operators see something is wrong.
-pub(crate) fn reconcile_summary_to_proto(summary: ReconcileSummary) -> ReconcileResponse {
-    ReconcileResponse {
-        failed_retried: usize_to_i64_saturating(summary.failed_retried, "failed_retried"),
-        failed_recovered: usize_to_i64_saturating(summary.failed_recovered, "failed_recovered"),
-        orphans_deleted: usize_to_i64_saturating(summary.orphans_deleted, "orphans_deleted"),
+pub(crate) struct WireReconcileResponse(pub ReconcileResponse);
+
+impl From<ReconcileSummary> for WireReconcileResponse {
+    fn from(summary: ReconcileSummary) -> Self {
+        Self(ReconcileResponse {
+            failed_retried: usize_to_i64_saturating(summary.failed_retried, "failed_retried"),
+            failed_recovered: usize_to_i64_saturating(summary.failed_recovered, "failed_recovered"),
+            orphans_deleted: usize_to_i64_saturating(summary.orphans_deleted, "orphans_deleted"),
+        })
     }
 }
 
@@ -422,6 +723,11 @@ fn numeric_range_from_proto(range: ProtoNumericRange) -> LibNumericRange {
 
 #[cfg(test)]
 mod tests {
+    use memoir_core::client::ClientError;
+    use memoir_core::jobs::JobsError;
+    use memoir_core::store::StoreError;
+    use memoir_core::vector::VectorError;
+
     use super::*;
 
     #[test]
@@ -527,37 +833,37 @@ mod tests {
     #[test]
     fn should_map_store_not_found_to_grpc_not_found() {
         let err = ClientError::Store(StoreError::NotFound("abc".into()));
-        let status = client_error_to_status(err);
+        let status = crate::services::wire::WireError::into_status(err);
         assert_eq!(status.code(), tonic::Code::NotFound);
     }
 
     #[test]
     fn should_map_store_invalid_scope_to_grpc_invalid_argument() {
         let err = ClientError::Store(StoreError::InvalidScope("empty".into()));
-        let status = client_error_to_status(err);
+        let status = crate::services::wire::WireError::into_status(err);
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
     }
 
     #[test]
     fn should_map_vector_connection_to_grpc_unavailable() {
         let err = ClientError::Vector(VectorError::Connection("dial failed".into()));
-        let status = client_error_to_status(err);
+        let status = crate::services::wire::WireError::into_status(err);
         assert_eq!(status.code(), tonic::Code::Unavailable);
     }
 
     #[test]
     fn should_map_jobs_not_found_to_grpc_not_found() {
         let err = ClientError::Jobs(JobsError::NotFound("42".into()));
-        let status = client_error_to_status(err);
+        let status = crate::services::wire::WireError::into_status(err);
         assert_eq!(status.code(), tonic::Code::NotFound);
     }
 
     #[test]
     fn should_never_echo_database_error_detail_to_status_message() {
-        let err = ClientError::Store(StoreError::Database(
+        let err = ClientError::Store(StoreError::Database(sea_orm::DbErr::Custom(
             "connection string: postgres://user:s3cret@host/db".into(),
-        ));
-        let status = client_error_to_status(err);
+        )));
+        let status = crate::services::wire::WireError::into_status(err);
         let message = status.message();
         assert!(!message.contains("s3cret"));
         assert!(!message.contains("postgres://"));
@@ -567,16 +873,14 @@ mod tests {
 
     #[test]
     fn should_round_trip_job_kind_embed() {
-        let lib = LibJobKind::Embed;
-        let proto = job_kind_to_proto(lib);
+        let proto = WireJobKind::from(LibJobKind::Embed).0;
         let back = job_kind_filter_from_proto(Some(proto as i32)).unwrap();
         assert_eq!(back, Some(LibJobKind::Embed));
     }
 
     #[test]
     fn should_round_trip_job_kind_extract() {
-        let lib = LibJobKind::Extract;
-        let proto = job_kind_to_proto(lib);
+        let proto = WireJobKind::from(LibJobKind::Extract).0;
         let back = job_kind_filter_from_proto(Some(proto as i32)).unwrap();
         assert_eq!(back, Some(LibJobKind::Extract));
     }
@@ -610,7 +914,7 @@ mod tests {
             failure_reason: Some("timeout".into()),
             updated_at,
         };
-        let proto = failed_job_to_proto(lib);
+        let proto = WireFailedJob::from(lib).0;
         assert_eq!(proto.id, 42);
         assert_eq!(proto.source_pid, "src_abc");
         assert_eq!(proto.kind, ProtoJobKind::Embed as i32);
@@ -626,7 +930,7 @@ mod tests {
             failed_recovered: 0,
             orphans_deleted: 0,
         };
-        let proto = reconcile_summary_to_proto(summary);
+        let proto = WireReconcileResponse::from(summary).0;
         assert_eq!(proto.failed_retried, 0);
         assert_eq!(proto.failed_recovered, 0);
         assert_eq!(proto.orphans_deleted, 0);
@@ -639,7 +943,7 @@ mod tests {
             failed_recovered: 3,
             orphans_deleted: 12,
         };
-        let proto = reconcile_summary_to_proto(summary);
+        let proto = WireReconcileResponse::from(summary).0;
         assert_eq!(proto.failed_retried, 5);
         assert_eq!(proto.failed_recovered, 3);
         assert_eq!(proto.orphans_deleted, 12);
@@ -696,5 +1000,284 @@ mod tests {
         };
         let err = metadata_filter_from_proto(Some(proto)).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    fn timeline_scope() -> ProtoScope {
+        ProtoScope {
+            agent_id: "a".into(),
+            org_id: "o".into(),
+            user_id: "u".into(),
+        }
+    }
+
+    /// Test helper: convert a request and project to its `TimelineParams`.
+    fn timeline_args(request: TimelineRequest) -> Result<TimelineParams, Status> {
+        TimelineArgs::try_from(request).map(|args| args.params)
+    }
+
+    #[test]
+    fn should_map_omitted_kind_selector_to_all_kinds() {
+        let selector = kind_selector_from_proto(None);
+        assert!(selector.episodic && selector.semantic, "omitted selector = all kinds");
+    }
+
+    #[test]
+    fn should_map_both_false_kind_selector_to_all_kinds() {
+        let selector = kind_selector_from_proto(Some(ProtoKindSelector {
+            episodic: false,
+            semantic: false,
+        }));
+        assert!(
+            selector.episodic && selector.semantic,
+            "both-false selector = all kinds, matching the library's neither-toggled rule",
+        );
+    }
+
+    #[test]
+    fn should_map_single_kind_selector_to_that_kind_only() {
+        let selector = kind_selector_from_proto(Some(ProtoKindSelector {
+            episodic: true,
+            semantic: false,
+        }));
+        assert!(selector.episodic && !selector.semantic);
+    }
+
+    #[test]
+    fn should_default_include_superseded_when_exclude_flag_false() {
+        let params = timeline_args(TimelineRequest {
+            scope: Some(timeline_scope()),
+            exclude_superseded: false,
+            ..TimelineRequest::default()
+        })
+        .unwrap();
+        assert!(
+            params.include_superseded,
+            "exclude_superseded=false must map to include_superseded=true (audit-view default)",
+        );
+    }
+
+    #[test]
+    fn should_exclude_superseded_when_exclude_flag_true() {
+        let params = timeline_args(TimelineRequest {
+            scope: Some(timeline_scope()),
+            exclude_superseded: true,
+            ..TimelineRequest::default()
+        })
+        .unwrap();
+        assert!(!params.include_superseded);
+    }
+
+    #[test]
+    fn should_default_to_descending_when_ascending_flag_false() {
+        let params = timeline_args(TimelineRequest {
+            scope: Some(timeline_scope()),
+            ascending: false,
+            ..TimelineRequest::default()
+        })
+        .unwrap();
+        assert_eq!(params.direction, TimelineDirection::Descending);
+    }
+
+    #[test]
+    fn should_map_ascending_flag_to_ascending_direction() {
+        let params = timeline_args(TimelineRequest {
+            scope: Some(timeline_scope()),
+            ascending: true,
+            ..TimelineRequest::default()
+        })
+        .unwrap();
+        assert_eq!(params.direction, TimelineDirection::Ascending);
+    }
+
+    #[test]
+    fn should_map_zero_limit_to_library_default() {
+        let params = timeline_args(TimelineRequest {
+            scope: Some(timeline_scope()),
+            limit: 0,
+            ..TimelineRequest::default()
+        })
+        .unwrap();
+        assert_eq!(params.limit, DEFAULT_TIMELINE_LIMIT);
+    }
+
+    #[test]
+    fn should_reject_timeline_with_unset_scope() {
+        let err = TimelineArgs::try_from(TimelineRequest::default()).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    fn as_of_ts() -> pbjson_types::Timestamp {
+        pbjson_types::Timestamp {
+            seconds: 1_900_000_000,
+            nanos: 0,
+        }
+    }
+
+    #[test]
+    fn should_reject_recall_as_of_with_unset_as_of() {
+        let err = RecallAsOfArgs::try_from(RecallAsOfRequest {
+            scope: Some(timeline_scope()),
+            as_of: None,
+            ..RecallAsOfRequest::default()
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_reject_recall_as_of_with_unset_scope() {
+        let err = RecallAsOfArgs::try_from(RecallAsOfRequest {
+            scope: None,
+            as_of: Some(as_of_ts()),
+            ..RecallAsOfRequest::default()
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_map_recall_as_of_zero_limit_to_library_default() {
+        let args = RecallAsOfArgs::try_from(RecallAsOfRequest {
+            scope: Some(timeline_scope()),
+            as_of: Some(as_of_ts()),
+            limit: 0,
+            ..RecallAsOfRequest::default()
+        })
+        .unwrap();
+        assert_eq!(args.params.limit, DEFAULT_TIMELINE_LIMIT);
+    }
+
+    #[test]
+    fn should_map_recall_as_of_both_false_kinds_to_all() {
+        let args = RecallAsOfArgs::try_from(RecallAsOfRequest {
+            scope: Some(timeline_scope()),
+            as_of: Some(as_of_ts()),
+            kinds: Some(ProtoKindSelector {
+                episodic: false,
+                semantic: false,
+            }),
+            ..RecallAsOfRequest::default()
+        })
+        .unwrap();
+        assert!(args.params.kinds.episodic && args.params.kinds.semantic);
+    }
+
+    #[test]
+    fn should_default_ranking_to_hybrid_when_unset() {
+        let strategy = ranking_from_proto(None).unwrap();
+        assert_eq!(strategy, RankingStrategy::default_hybrid());
+    }
+
+    #[test]
+    fn should_round_trip_hybrid_exponential_ranking() {
+        let original = RankingStrategy::Hybrid {
+            alpha: 0.6,
+            decay: DecayFn::Exponential {
+                half_life: chrono::Duration::days(3),
+            },
+        };
+        let proto = ranking_to_proto(&original);
+        let back = ranking_from_proto(Some(proto)).unwrap();
+        assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_round_trip_hybrid_step_ranking() {
+        let original = RankingStrategy::Hybrid {
+            alpha: 0.4,
+            decay: DecayFn::Step {
+                thresholds: vec![(chrono::Duration::hours(1), 1.0), (chrono::Duration::days(1), 0.5)],
+            },
+        };
+        let proto = ranking_to_proto(&original);
+        let back = ranking_from_proto(Some(proto)).unwrap();
+        assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_reject_hybrid_ranking_missing_decay() {
+        let proto = ProtoRanking {
+            strategy: Some(ranking::Strategy::Hybrid(ProtoHybrid {
+                alpha: 0.5,
+                decay: None,
+            })),
+        };
+        let err = ranking_from_proto(Some(proto)).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_reject_query_with_empty_query_string() {
+        let err = QueryArgs::try_from(QueryRequest {
+            scope: Some(timeline_scope()),
+            query: String::new(),
+            ..QueryRequest::default()
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_map_query_zero_limit_to_library_default() {
+        let args = QueryArgs::try_from(QueryRequest {
+            scope: Some(timeline_scope()),
+            query: "hello".into(),
+            limit: 0,
+            ..QueryRequest::default()
+        })
+        .unwrap();
+        assert_eq!(args.limit, DEFAULT_QUERY_LIMIT);
+        assert_eq!(args.ranking, RankingStrategy::default_hybrid());
+    }
+
+    #[test]
+    fn should_reject_edit_with_empty_pid() {
+        let err = EditArgs::try_from(EditRequest {
+            pid: String::new(),
+            content: Some("x".into()),
+            ..EditRequest::default()
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_map_empty_edit_request_to_all_none_patch() {
+        let args = EditArgs::try_from(EditRequest {
+            pid: "p1".into(),
+            ..EditRequest::default()
+        })
+        .unwrap();
+        assert!(args.content.is_none() && args.metadata.is_none() && args.event_at.is_none());
+    }
+
+    #[test]
+    fn should_pass_through_edit_fields_when_set() {
+        let args = EditArgs::try_from(EditRequest {
+            pid: "p1".into(),
+            content: Some("new".into()),
+            event_at: Some(as_of_ts()),
+            ..EditRequest::default()
+        })
+        .unwrap();
+        assert_eq!(args.content.as_deref(), Some("new"));
+        assert!(args.event_at.is_some());
+    }
+
+    #[test]
+    fn should_reject_supersession_history_request_with_empty_pid() {
+        let err = SupersessionHistoryArgs::try_from(SupersessionHistoryRequest { pid: String::new() }).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_map_unsupersede_event_to_proto_with_unset_winner() {
+        let event = LibSupersessionEvent {
+            winner_pid: None,
+            decided_at: chrono::Utc::now().into(),
+        };
+        let wire: WireSupersessionEvent = event.into();
+        assert!(wire.0.winner_pid.is_none(), "unsupersede preserves None on the wire");
+        assert!(wire.0.decided_at.is_some());
     }
 }

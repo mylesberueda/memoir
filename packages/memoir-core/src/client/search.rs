@@ -3,10 +3,12 @@
 use std::future::{Future, IntoFuture};
 use std::pin::Pin;
 
+use chrono::{DateTime, FixedOffset};
+
 use crate::embedding::EmbeddingModel;
 use crate::memory::{KindSelector, Memories, Scope};
 use crate::store::MemoryStore;
-use crate::vector::{MemoryFilter, VectorIndex};
+use crate::vector::{FilterCondition, MemoryFilter, NumericRange, VectorIndex};
 
 use super::{Client, ClientError};
 
@@ -53,6 +55,25 @@ pub const DEFAULT_LIMIT: usize = 10;
 /// # Ok(())
 /// # }
 /// ```
+///
+/// Filter by time windows on either `created_at` (write time) or `event_at`
+/// (event time). Bounds are half-open: `after` is inclusive (`>=`), `before`
+/// is exclusive (`<`), matching Rust's `start..end` convention. Filtering by
+/// `event_at` implicitly excludes memories with no known event-time.
+///
+/// ```no_run
+/// # use chrono::{DateTime, Utc};
+/// # use memoir_core::client::Client;
+/// # use memoir_core::memory::Scope;
+/// # async fn example(client: &Client, scope: Scope, week_ago: DateTime<Utc>, now: DateTime<Utc>) -> Result<(), Box<dyn std::error::Error>> {
+/// let memories = client
+///     .search("deployment status", scope)
+///     .created_after(week_ago)
+///     .created_before(now)
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
 #[must_use = "search(..) returns a builder that must be awaited"]
 pub struct SearchBuilder<'a> {
     client: &'a Client,
@@ -63,6 +84,8 @@ pub struct SearchBuilder<'a> {
     semantic: bool,
     metadata_filter: Option<MemoryFilter>,
     min_similarity: Option<f32>,
+    created_at_range: NumericRange,
+    event_at_range: NumericRange,
 }
 
 impl<'a> SearchBuilder<'a> {
@@ -76,6 +99,8 @@ impl<'a> SearchBuilder<'a> {
             semantic: false,
             metadata_filter: None,
             min_similarity: None,
+            created_at_range: NumericRange::default(),
+            event_at_range: NumericRange::default(),
         }
     }
 
@@ -124,6 +149,49 @@ impl<'a> SearchBuilder<'a> {
         self
     }
 
+    /// Restricts retrieval to memories written at or after `at` (inclusive).
+    ///
+    /// Filters on the `created_at` payload key. Combine with
+    /// [`Self::created_before`] for a half-open window. Multiple calls
+    /// replace (last wins). Accepts any value convertible to
+    /// `DateTime<FixedOffset>`, including `DateTime<Utc>`.
+    pub fn created_after(mut self, at: impl Into<DateTime<FixedOffset>>) -> Self {
+        self.created_at_range.gte = Some(at.into().timestamp_millis() as f64);
+        self
+    }
+
+    /// Restricts retrieval to memories written strictly before `at` (exclusive).
+    ///
+    /// Filters on the `created_at` payload key. Half-open semantics
+    /// (`< at`) match Rust's `start..end` convention: `.created_after(jan_1)`
+    /// `.created_before(feb_1)` retrieves January's memories. Multiple calls
+    /// replace (last wins).
+    pub fn created_before(mut self, at: impl Into<DateTime<FixedOffset>>) -> Self {
+        self.created_at_range.lt = Some(at.into().timestamp_millis() as f64);
+        self
+    }
+
+    /// Restricts retrieval to memories whose event-time is at or after `at` (inclusive).
+    ///
+    /// Filters on the `event_at` payload key. Memories with no known
+    /// event-time (the key is absent from the payload) are excluded by
+    /// this filter — Qdrant treats missing range-target keys as
+    /// non-matches. Combine with [`Self::event_at_before`] for a window.
+    pub fn event_at_after(mut self, at: impl Into<DateTime<FixedOffset>>) -> Self {
+        self.event_at_range.gte = Some(at.into().timestamp_millis() as f64);
+        self
+    }
+
+    /// Restricts retrieval to memories whose event-time is strictly before `at` (exclusive).
+    ///
+    /// Filters on the `event_at` payload key. Half-open semantics; see
+    /// [`Self::created_before`] for the rationale. Memories with no known
+    /// event-time are excluded.
+    pub fn event_at_before(mut self, at: impl Into<DateTime<FixedOffset>>) -> Self {
+        self.event_at_range.lt = Some(at.into().timestamp_millis() as f64);
+        self
+    }
+
     fn kind_selector(&self) -> KindSelector {
         kind_selector(self.episodic, self.semantic)
     }
@@ -134,6 +202,37 @@ fn kind_selector(episodic: bool, semantic: bool) -> KindSelector {
         (false, false) => KindSelector::default(),
         (episodic, semantic) => KindSelector { episodic, semantic },
     }
+}
+
+/// Folds the time-range bounds into the caller-supplied metadata filter.
+///
+/// Time-range conditions are AND-joined with `metadata_filter.must` — both
+/// represent "must match" predicates. `must_not` and `should` from the
+/// caller-supplied filter are passed through unchanged. Returns `None` when
+/// neither the caller filter nor any time-range bound is set, so the
+/// vector backend skips filter translation entirely.
+fn combine_filter(
+    metadata_filter: Option<MemoryFilter>,
+    created_at: NumericRange,
+    event_at: NumericRange,
+) -> Option<MemoryFilter> {
+    if metadata_filter.is_none() && created_at.is_unbounded() && event_at.is_unbounded() {
+        return None;
+    }
+    let mut combined = metadata_filter.unwrap_or_default();
+    if !created_at.is_unbounded() {
+        combined.must.push(FilterCondition::Range {
+            field: "created_at".to_string(),
+            range: created_at,
+        });
+    }
+    if !event_at.is_unbounded() {
+        combined.must.push(FilterCondition::Range {
+            field: "event_at".to_string(),
+            range: event_at,
+        });
+    }
+    Some(combined)
 }
 
 impl<'a> IntoFuture for SearchBuilder<'a> {
@@ -154,15 +253,19 @@ async fn execute(builder: SearchBuilder<'_>) -> Result<Memories, ClientError> {
         limit,
         metadata_filter,
         min_similarity,
+        created_at_range,
+        event_at_range,
         ..
     } = builder;
+
+    let combined_filter = combine_filter(metadata_filter, created_at_range, event_at_range);
 
     let inner = client.inner.clone();
 
     let query_vector = inner.embedder.embed(&query).await?;
     let hits = inner
         .index
-        .search(scope, query_vector, limit, kinds, metadata_filter, min_similarity)
+        .search(scope, query_vector, limit, kinds, combined_filter, min_similarity)
         .await?;
 
     let pids: Vec<&str> = hits.iter().map(|(pid, _)| pid.as_str()).collect();

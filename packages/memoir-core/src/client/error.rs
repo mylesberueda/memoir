@@ -27,4 +27,9 @@ pub enum ClientError {
 
     #[error("database connection failed: {0}")]
     Database(#[from] sea_orm::DbErr),
+
+    #[error(
+        "metadata uses reserved key '{key}'; reserved keys are owned by memoir-core's payload schema and cannot be set via metadata"
+    )]
+    ReservedMetadataKey { key: String },
 }

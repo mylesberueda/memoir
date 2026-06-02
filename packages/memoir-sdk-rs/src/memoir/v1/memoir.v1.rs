@@ -472,6 +472,44 @@ pub struct Memory {
     /// FAILED at the handler boundary.
     #[prost(enumeration="MemoryStatus", tag="7")]
     pub status: i32,
+    /// Wall-clock time of the row's last in-place edit. Equals `created_at`
+    /// for memories never edited. Maps from memoir-core's `Memory.updated_at`.
+    #[prost(message, optional, tag="8")]
+    pub updated_at: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Event-time of the thing being remembered, distinct from `created_at`
+    /// (when memoir was told). Unset when no event-time is known (preferences,
+    /// identity facts). Maps from memoir-core's `Memory.event_at`.
+    #[prost(message, optional, tag="9")]
+    pub event_at: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Soft-deletion marker; unset when the memory is active. Maps from
+    /// memoir-core's `Memory.supersession` (`SupersessionInfo`).
+    #[prost(message, optional, tag="10")]
+    pub supersession: ::core::option::Option<Supersession>,
+    /// Episodic (raw utterance written via Remember) or semantic (a fact the
+    /// extraction worker derived from an episodic source). Maps from
+    /// memoir-core's `Memory.kind`.
+    #[prost(enumeration="MemoryKind", tag="11")]
+    pub kind: i32,
+}
+/// Latest supersession state for a Memory — winner pid and decision time.
+/// Mirrors memoir-core's `SupersessionInfo`. Present only on superseded rows.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Supersession {
+    #[prost(string, tag="1")]
+    pub winner_pid: ::prost::alloc::string::String,
+    #[prost(message, optional, tag="2")]
+    pub at: ::core::option::Option<::pbjson_types::Timestamp>,
+}
+/// Selects which memory kinds a read includes. Mirrors memoir-core's
+/// `KindSelector`. Per the library's semantics, a selector with BOTH fields
+/// false (the proto3 default, or an omitted selector) means "all kinds" —
+/// not "no kinds". Setting exactly one field filters to that kind.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct KindSelector {
+    #[prost(bool, tag="1")]
+    pub episodic: bool,
+    #[prost(bool, tag="2")]
+    pub semantic: bool,
 }
 /// Search result with similarity score attached.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -511,6 +549,11 @@ pub struct SearchRequest {
     /// Unset = no floor.
     #[prost(float, optional, tag="5")]
     pub min_similarity: ::core::option::Option<f32>,
+    /// Restricts retrieval to the selected memory kind(s). Omitted or
+    /// both-false = all kinds (see `KindSelector`). Maps to the library's
+    /// `SearchBuilder::episodic` / `::semantic` toggles.
+    #[prost(message, optional, tag="6")]
+    pub kinds: ::core::option::Option<KindSelector>,
 }
 /// Caller-supplied filter applied at search time. Mirrors Qdrant's payload
 /// filter structure one-to-one but is a memoir-owned type so consumers do not
@@ -673,6 +716,270 @@ pub struct ForgetResponse {
     #[prost(string, repeated, tag="1")]
     pub deleted_pids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct TimelineRequest {
+    #[prost(message, optional, tag="1")]
+    pub scope: ::core::option::Option<Scope>,
+    /// Restricts to the selected kind(s). Omitted or both-false = all kinds.
+    #[prost(message, optional, tag="2")]
+    pub kinds: ::core::option::Option<KindSelector>,
+    /// Half-open time windows. `*_after` is inclusive (>=), `*_before` is
+    /// exclusive (<), matching the library's `start..end` convention. All
+    /// optional; unset = unbounded on that side. `created_*` filters on
+    /// write-time, `event_at_*` on event-time (rows with no event_at are
+    /// excluded by an event_at bound).
+    #[prost(message, optional, tag="3")]
+    pub created_after: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="4")]
+    pub created_before: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="5")]
+    pub event_at_after: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="6")]
+    pub event_at_before: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Drops superseded rows when true. Default (false/omitted) INCLUDES them —
+    /// timeline is the audit view. The field is named for the non-default
+    /// action so proto3's false-default aligns with the library's
+    /// include-by-default behavior.
+    #[prost(bool, tag="7")]
+    pub exclude_superseded: bool,
+    /// Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
+    #[prost(int32, tag="8")]
+    pub limit: i32,
+    /// Oldest-first when true. Default (false/omitted) is newest-first by
+    /// created_at, matching the library default.
+    #[prost(bool, tag="9")]
+    pub ascending: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TimelineResponse {
+    /// Memories in the requested order. `score` is never set (timeline computes
+    /// no similarity). Mirrors `Client::timeline`'s `Vec<Memory>` return.
+    #[prost(message, repeated, tag="1")]
+    pub memories: ::prost::alloc::vec::Vec<Memory>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RecallAsOfRequest {
+    #[prost(message, optional, tag="1")]
+    pub scope: ::core::option::Option<Scope>,
+    /// The point in time to reconstruct. Memories created on or before this
+    /// instant that were active (not yet superseded) as of it are returned.
+    /// A future `as_of` yields current state; one before any memory existed
+    /// yields empty — both fall out of the library semantics.
+    #[prost(message, optional, tag="2")]
+    pub as_of: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Restricts to the selected kind(s). Omitted or both-false = all kinds.
+    #[prost(message, optional, tag="3")]
+    pub kinds: ::core::option::Option<KindSelector>,
+    /// Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
+    #[prost(int32, tag="4")]
+    pub limit: i32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RecallAsOfResponse {
+    /// Memories active as of the requested instant, newest-first. `score` is
+    /// never set. Mirrors `Client::recall_as_of`'s `Vec<Memory>` return.
+    #[prost(message, repeated, tag="1")]
+    pub memories: ::prost::alloc::vec::Vec<Memory>,
+}
+/// How Query orders candidates. Mirrors memoir-core's `RankingStrategy`.
+/// A message-with-oneof (not a bare enum) so new strategies and their
+/// parameters are additive — matching the Rust enum's `#\[non_exhaustive\]`
+/// posture. An unset oneof means "use the library default" (hybrid).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Ranking {
+    #[prost(oneof="ranking::Strategy", tags="1")]
+    pub strategy: ::core::option::Option<ranking::Strategy>,
+}
+/// Nested message and enum types in `Ranking`.
+pub mod ranking {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Strategy {
+        #[prost(message, tag="1")]
+        Hybrid(super::Hybrid),
+    }
+}
+/// Blend of cosine similarity and recency. Mirrors `RankingStrategy::Hybrid`.
+/// score = alpha * cosine + (1 - alpha) * decay(age).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Hybrid {
+    /// Weight on cosine in \[0.0, 1.0\]; (1 - alpha) weights recency.
+    #[prost(float, tag="1")]
+    pub alpha: f32,
+    /// Recency-decay function applied to the memory's age.
+    #[prost(message, optional, tag="2")]
+    pub decay: ::core::option::Option<Decay>,
+}
+/// Recency-decay function. Mirrors memoir-core's `DecayFn`. Message-with-oneof
+/// for the same additive-forward-compat reason as `Ranking`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Decay {
+    #[prost(oneof="decay::Function", tags="1, 2, 3")]
+    pub function: ::core::option::Option<decay::Function>,
+}
+/// Nested message and enum types in `Decay`.
+pub mod decay {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Function {
+        #[prost(message, tag="1")]
+        Exponential(super::ExponentialDecay),
+        #[prost(message, tag="2")]
+        Reciprocal(super::ReciprocalDecay),
+        #[prost(message, tag="3")]
+        Step(super::StepDecay),
+    }
+}
+/// exp(-ln(2) * age / half_life); reaches 0.5 at half_life.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ExponentialDecay {
+    #[prost(message, optional, tag="1")]
+    pub half_life: ::core::option::Option<::pbjson_types::Duration>,
+}
+/// 1 / (1 + age / scale); reaches 0.5 at scale, slower tail than exponential.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReciprocalDecay {
+    #[prost(message, optional, tag="1")]
+    pub scale: ::core::option::Option<::pbjson_types::Duration>,
+}
+/// Bucketed decay. Buckets are ordered by ascending boundary; an age within
+/// \[prev_boundary, boundary\] takes that bucket's value; ages past the last
+/// boundary take the last value.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct StepDecay {
+    #[prost(message, repeated, tag="1")]
+    pub buckets: ::prost::alloc::vec::Vec<DecayBucket>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct DecayBucket {
+    #[prost(message, optional, tag="1")]
+    pub boundary: ::core::option::Option<::pbjson_types::Duration>,
+    #[prost(float, tag="2")]
+    pub value: f32,
+}
+/// Query result with its hybrid (blended cosine + recency) score attached.
+/// Distinct from `SearchHit`: that hit's `score` is raw cosine; this one's
+/// is the post-re-rank hybrid score.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryHit {
+    #[prost(message, optional, tag="1")]
+    pub memory: ::core::option::Option<Memory>,
+    #[prost(float, tag="2")]
+    pub score: f32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryRequest {
+    #[prost(message, optional, tag="1")]
+    pub scope: ::core::option::Option<Scope>,
+    #[prost(string, tag="2")]
+    pub query: ::prost::alloc::string::String,
+    /// Maximum hits to return. `0` = library default (10, `DEFAULT_QUERY_LIMIT`).
+    #[prost(int32, tag="3")]
+    pub limit: i32,
+    /// Restricts to the selected kind(s). Omitted or both-false = all kinds.
+    #[prost(message, optional, tag="4")]
+    pub kinds: ::core::option::Option<KindSelector>,
+    /// Optional caller-supplied metadata filter, AND-joined with scope+kind.
+    #[prost(message, optional, tag="5")]
+    pub metadata_filter: ::core::option::Option<MemoryFilter>,
+    /// Optional cosine floor applied at CANDIDATE-RETRIEVAL, before hybrid
+    /// re-ranking — NOT a floor on the final hybrid score. Candidates below
+    /// this raw-cosine value never enter the re-rank. Unset = no floor.
+    #[prost(float, optional, tag="6")]
+    pub min_similarity: ::core::option::Option<f32>,
+    /// Half-open time windows on write-time / event-time. See `TimelineRequest`
+    /// for the inclusive-after / exclusive-before convention.
+    #[prost(message, optional, tag="7")]
+    pub created_after: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="8")]
+    pub created_before: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="9")]
+    pub event_at_after: ::core::option::Option<::pbjson_types::Timestamp>,
+    #[prost(message, optional, tag="10")]
+    pub event_at_before: ::core::option::Option<::pbjson_types::Timestamp>,
+    /// Ranking strategy. Unset = library default hybrid (parameters may drift
+    /// pre-1.0; pin an explicit Ranking for stable behavior).
+    #[prost(message, optional, tag="11")]
+    pub ranking: ::core::option::Option<Ranking>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct QueryResponse {
+    /// Ranked hits, best-first. Each carries its hybrid score.
+    #[prost(message, repeated, tag="1")]
+    pub hits: ::prost::alloc::vec::Vec<QueryHit>,
+    /// The ranking that produced this result, with library defaults filled in
+    /// when the request left `ranking` unset. Mirrors
+    /// `MemoryContext::strategy_used()`.
+    #[prost(message, optional, tag="2")]
+    pub ranking_used: ::core::option::Option<Ranking>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditRequest {
+    /// The memory to edit.
+    #[prost(string, tag="1")]
+    pub pid: ::prost::alloc::string::String,
+    /// Fields to overwrite. Each is independent: an unset field is left
+    /// untouched, a set field is overwritten. An EditRequest with no fields
+    /// set is a no-op that returns the current row. There is no way to clear
+    /// `event_at` back to unset over the wire (mirrors the library, which
+    /// only supports setting it).
+    #[prost(string, optional, tag="2")]
+    pub content: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, optional, tag="3")]
+    pub metadata: ::core::option::Option<::pbjson_types::Struct>,
+    #[prost(message, optional, tag="4")]
+    pub event_at: ::core::option::Option<::pbjson_types::Timestamp>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EditResponse {
+    /// The updated memory. After a content edit the row is re-embedding, so
+    /// `status` is PENDING and the row is briefly excluded from search —
+    /// same lifecycle as a fresh Remember.
+    #[prost(message, optional, tag="1")]
+    pub memory: ::core::option::Option<Memory>,
+}
+// ─── SupersessionHistory ───────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SupersessionHistoryRequest {
+    /// The memory whose supersession trail to read.
+    #[prost(string, tag="1")]
+    pub pid: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SupersessionHistoryResponse {
+    /// The full event trail, oldest first. Empty when the memory was never
+    /// superseded (or doesn't exist — both produce no rows).
+    #[prost(message, repeated, tag="1")]
+    pub events: ::prost::alloc::vec::Vec<SupersessionEvent>,
+}
+// ─── ListAgents ──────────────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListAgentsRequest {
+    /// The org whose agents to list.
+    #[prost(string, tag="1")]
+    pub org_id: ::prost::alloc::string::String,
+    /// The user whose agents to list.
+    #[prost(string, tag="2")]
+    pub user_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListAgentsResponse {
+    /// Distinct agent ids in the org + user scope, sorted ascending. Empty
+    /// when the scope has no memories yet.
+    #[prost(string, repeated, tag="1")]
+    pub agent_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+/// One supersede or unsupersede decision against a memory. Mirrors memoir-
+/// core's `SupersessionEvent`. Distinct from `Supersession` (current marker,
+/// non-null winner): `winner_pid` here is optional because unsupersede events
+/// carry no winner.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SupersessionEvent {
+    #[prost(string, optional, tag="1")]
+    pub winner_pid: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, optional, tag="2")]
+    pub decided_at: ::core::option::Option<::pbjson_types::Timestamp>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum MemoryStatus {
@@ -704,6 +1011,37 @@ impl MemoryStatus {
             "MEMORY_STATUS_PENDING" => Some(Self::Pending),
             "MEMORY_STATUS_PROCESSED" => Some(Self::Processed),
             "MEMORY_STATUS_FAILED" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum MemoryKind {
+    Unspecified = 0,
+    /// Raw utterance written via Remember.
+    Episodic = 1,
+    /// Fact derived from an episodic source by extraction.
+    Semantic = 2,
+}
+impl MemoryKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "MEMORY_KIND_UNSPECIFIED",
+            Self::Episodic => "MEMORY_KIND_EPISODIC",
+            Self::Semantic => "MEMORY_KIND_SEMANTIC",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MEMORY_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "MEMORY_KIND_EPISODIC" => Some(Self::Episodic),
+            "MEMORY_KIND_SEMANTIC" => Some(Self::Semantic),
             _ => None,
         }
     }
