@@ -5,6 +5,7 @@ mod categorize;
 mod edit;
 mod embed;
 mod error;
+mod feedback;
 mod extract;
 mod query;
 mod recall_as_of;
@@ -18,6 +19,7 @@ mod worker;
 pub use admin::RetryBuilder;
 pub use edit::EditBuilder;
 pub use error::ClientError;
+pub use feedback::FeedbackBuilder;
 pub use query::{
     BlendWeights, DEFAULT_HYBRID_ALPHA, DEFAULT_HYBRID_HALF_LIFE_DAYS, DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext,
     QueryBuilder, RankingStrategy,
@@ -542,6 +544,30 @@ impl Client {
     /// See [`Self::reject`].
     pub async fn mark_stale(&self, pid: &str) -> Result<(), ClientError> {
         self.retire(pid, crate::memory::RetirementReason::Stale).await
+    }
+
+    /// Corrects a wrong extraction by teaching, not editing (epic 0011).
+    ///
+    /// `pid` is the wrong *semantic* memory the user saw in recall. Awaiting
+    /// the returned builder enqueues a reprocess of that fact's episodic
+    /// source: the derived rows are retired as `rejected` and re-derived with
+    /// the correction in context, so a corrected fact replaces the wrong one.
+    /// The user never hand-writes a semantic row — semantic memory stays
+    /// always-derived. Fire-and-forget: returns once the job is enqueued.
+    ///
+    /// To correct the episodic record itself, use [`Self::edit`]; that is a
+    /// different correction (the source changed, not a wrong extraction). See
+    /// [`FeedbackBuilder`] for the builder methods.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::NotFound`] when no memory matches `pid`,
+    /// [`ClientError::NotCorrectable`] when the target is not a semantic row
+    /// or has no episodic source, and [`ClientError::Jobs`] when the reprocess
+    /// job cannot be enqueued.
+    pub fn feedback(&self, pid: impl Into<String>) -> FeedbackBuilder<'_> {
+        FeedbackBuilder::new(self, pid.into())
     }
 
     /// Retires `pid` with `reason`: marks the column, then evicts the vector.

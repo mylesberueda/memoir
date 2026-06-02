@@ -130,6 +130,11 @@ impl From<WireError> for Status {
                 "client.reserved_metadata_key",
                 format!("metadata key '{key}' is reserved by memoir-core's payload schema"),
             ),
+            ClientError::NotCorrectable { pid, reason } => (
+                Code::FailedPrecondition,
+                "client.not_correctable",
+                format!("memory {pid} is not correctable via feedback: {reason}"),
+            ),
         };
 
         match code {

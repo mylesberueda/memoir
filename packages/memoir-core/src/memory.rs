@@ -83,7 +83,7 @@ pub enum RetirementReason {
 /// use memoir_core::memory::Confidence;
 ///
 /// assert_eq!(Confidence::new(73).get(), 73);
-/// assert_eq!(Confidence::new(150).get(), 100); // clamped
+/// assert_eq!(Confidence::new(120).get(), 100); // clamped
 /// assert_eq!(Confidence::from_unit_scale(0.42).get(), 42);
 /// assert_eq!(Confidence::from_unit_scale(1.7).get(), 100); // clamped
 /// ```

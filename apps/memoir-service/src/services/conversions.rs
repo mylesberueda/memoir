@@ -34,7 +34,7 @@ use memoir_core::vector::{
 };
 use memoir_sdk::memoir::v1::{
     BlendWeights as ProtoBlendWeights, Blended as ProtoBlended, Decay as ProtoDecay, DecayBucket as ProtoDecayBucket,
-    EditRequest, ExponentialDecay, FailedJob as ProtoFailedJob,
+    EditRequest, ExponentialDecay, FailedJob as ProtoFailedJob, FeedbackRequest,
     FilterCondition as ProtoFilterCondition, ForgetRequest, Hybrid as ProtoHybrid, JobKind as ProtoJobKind,
     KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues,
     MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit, QueryRequest, QueryResponse,
@@ -528,6 +528,31 @@ impl TryFrom<EditRequest> for EditArgs {
 
 // `ClientError → Status` is owned by `services/wire::WireError`.
 // Call sites use `.map_err(WireError::into_status)?`.
+
+/// A validated `Feedback` request: the wrong semantic pid + optional correction.
+///
+/// Target-kind validation (must be a semantic row with an episodic source)
+/// runs library-side in `Client::feedback`; the handler maps the resulting
+/// `NotCorrectable` error.
+#[derive(Debug)]
+pub(crate) struct FeedbackArgs {
+    pub pid: String,
+    pub correction: Option<String>,
+}
+
+impl TryFrom<FeedbackRequest> for FeedbackArgs {
+    type Error = Status;
+
+    fn try_from(request: FeedbackRequest) -> Result<Self, Status> {
+        if request.pid.is_empty() {
+            return Err(Status::invalid_argument("pid: required"));
+        }
+        Ok(Self {
+            pid: request.pid,
+            correction: request.correction,
+        })
+    }
+}
 
 /// A validated `SupersessionHistory` request: just the target pid.
 #[derive(Debug)]

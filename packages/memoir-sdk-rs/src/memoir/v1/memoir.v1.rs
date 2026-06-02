@@ -977,6 +977,26 @@ pub struct EditResponse {
     #[prost(message, optional, tag="1")]
     pub memory: ::core::option::Option<Memory>,
 }
+// ─── Feedback ──────────────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FeedbackRequest {
+    /// The wrong *semantic* memory the user is correcting (the fact they saw in
+    /// recall). Must be a semantic row with an episodic source; an episodic pid
+    /// is rejected (correct those via Edit).
+    #[prost(string, tag="1")]
+    pub pid: ::prost::alloc::string::String,
+    /// The user's correction, woven into the re-extraction prompt so the model
+    /// fixes its reasoning. Optional, but supplying it is the point — without it
+    /// the source is re-extracted blind.
+    #[prost(string, optional, tag="2")]
+    pub correction: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Empty: feedback is fire-and-forget. The correction completes behind the
+/// worker queue; re-Recall later to observe the corrected rows.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FeedbackResponse {
+}
 // ─── SupersessionHistory ───────────────────────────────────────────────────
 
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

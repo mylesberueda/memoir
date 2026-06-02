@@ -51,6 +51,13 @@ service MemoryService {
   // so the row is briefly unsearchable. Wraps memoir-core's `Client::edit`.
   rpc Edit(EditRequest) returns (EditResponse);
 
+  // Corrects a wrong extraction by teaching, not editing. The pid is the
+  // wrong *semantic* memory the user saw; memoir retires its derived rows
+  // and re-derives from the episodic source with the correction in context.
+  // Fire-and-forget: returns once the reprocess is enqueued. To correct the
+  // episodic record itself, use Edit. Wraps memoir-core's `Client::feedback`.
+  rpc Feedback(FeedbackRequest) returns (FeedbackResponse);
+
   // Returns every supersede/unsupersede decision against a memory in
   // chronological order — the full audit trail behind a row's current
   // `Memory.supersession` marker. A pid with no events (never superseded
@@ -494,6 +501,25 @@ message EditResponse {
   // `status` is PENDING and the row is briefly excluded from search —
   // same lifecycle as a fresh Remember.
   Memory memory = 1;
+}
+
+// ─── Feedback ──────────────────────────────────────────────────────────────
+
+message FeedbackRequest {
+  // The wrong *semantic* memory the user is correcting (the fact they saw in
+  // recall). Must be a semantic row with an episodic source; an episodic pid
+  // is rejected (correct those via Edit).
+  string pid = 1;
+
+  // The user's correction, woven into the re-extraction prompt so the model
+  // fixes its reasoning. Optional, but supplying it is the point — without it
+  // the source is re-extracted blind.
+  optional string correction = 2;
+}
+
+message FeedbackResponse {
+  // Empty: feedback is fire-and-forget. The correction completes behind the
+  // worker queue; re-Recall later to observe the corrected rows.
 }
 
 // ─── SupersessionHistory ───────────────────────────────────────────────────

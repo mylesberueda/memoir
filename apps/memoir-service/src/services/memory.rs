@@ -29,17 +29,17 @@ use std::sync::Arc;
 use memoir_core::store::TimelineDirection;
 use memoir_sdk::memoir::v1::memory_service_server::MemoryService;
 use memoir_sdk::memoir::v1::{
-    EditRequest, EditResponse, ForgetRequest, ForgetResponse, ListAgentsRequest, ListAgentsResponse, QueryRequest,
-    QueryResponse, RecallAsOfRequest, RecallAsOfResponse, RecallRequest, RecallResponse, RememberRequest,
-    RememberResponse, SearchHit, SearchRequest, SearchResponse, SupersessionHistoryRequest,
-    SupersessionHistoryResponse, TimelineRequest, TimelineResponse,
+    EditRequest, EditResponse, FeedbackRequest, FeedbackResponse, ForgetRequest, ForgetResponse, ListAgentsRequest,
+    ListAgentsResponse, QueryRequest, QueryResponse, RecallAsOfRequest, RecallAsOfResponse, RecallRequest,
+    RecallResponse, RememberRequest, RememberResponse, SearchHit, SearchRequest, SearchResponse,
+    SupersessionHistoryRequest, SupersessionHistoryResponse, TimelineRequest, TimelineResponse,
 };
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
-    EditArgs, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs, WireSupersessionEvent,
+    EditArgs, FeedbackArgs, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs, WireSupersessionEvent,
     forget_target_from_proto, metadata_filter_from_proto, metadata_from_proto, query_response, recall_as_of_response,
     scope_from_proto, timeline_response,
 };
@@ -430,6 +430,29 @@ impl MemoryService for Memory {
         Ok(Response::new(EditResponse {
             memory: Some(WireMemory::from(updated).0),
         }))
+    }
+
+    async fn feedback(&self, request: Request<FeedbackRequest>) -> Result<Response<FeedbackResponse>, Status> {
+        let caller = self.auth().authenticate(&request).await?;
+        let pid = principal_pid(&caller.principal).to_owned();
+        let args: FeedbackArgs = request.into_inner().try_into()?;
+
+        tracing::event!(
+            name: "memoir.service.memory.feedback.invoked",
+            tracing::Level::INFO,
+            caller.pid = %pid,
+            memory.pid = %args.pid,
+            correction.set = args.correction.is_some(),
+            "MemoryService.Feedback invoked",
+        );
+
+        let mut builder = self.ctx.memoir.feedback(args.pid);
+        if let Some(correction) = args.correction {
+            builder = builder.correction(correction);
+        }
+        builder.await.map_err(WireError::into_status)?;
+
+        Ok(Response::new(FeedbackResponse {}))
     }
 
     async fn supersession_history(
