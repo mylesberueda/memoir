@@ -40,8 +40,8 @@ pub(crate) struct AppContext {
 
 impl AppContext {
     pub(crate) async fn new() -> Result<Arc<Self>, AppContextError> {
-        let service_schema = Env::get_or("MEMOIR_SERVICE_SCHEMA", migration::DEFAULT_SCHEMA);
-        let memoir_schema = Env::get_or("MEMOIR_SCHEMA", memoir_core::DEFAULT_SCHEMA);
+        let service_schema = Env::get_or("SERVICE_SCHEMA", migration::DEFAULT_SCHEMA);
+        let memoir_schema = Env::get_or("CORE_SCHEMA", memoir_core::DEFAULT_SCHEMA);
         let database_url = Env::get("DATABASE_URL")?;
 
         // memoir-service owns its own pool, pinned to its own schema. memoir-core

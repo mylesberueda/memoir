@@ -2,8 +2,8 @@
 //!
 //! Invoked via `sea-orm-cli` (typically `pnpm nx run memoir-service:migrate:up`).
 //! Reads `DATABASE_URL` from environment and writes memoir-service's auth +
-//! tenant tables into the configured schema (default `memoir`). The schema
-//! name comes from the `MEMOIR_SCHEMA` env var, defaulting to
+//! tenant tables into the configured schema (default `memoir_service`). The
+//! schema name comes from the `SERVICE_SCHEMA` env var, defaulting to
 //! [`migration::DEFAULT_SCHEMA`]. The schema is created if absent before
 //! delegating to sea-orm's CLI machinery, mirroring the runtime path at
 //! [`migration::bootstrap_and_migrate`].
@@ -15,11 +15,11 @@ async fn main() {
     let _ = dotenvy::dotenv();
 
     let schema =
-        std::env::var("MEMOIR_SCHEMA").unwrap_or_else(|_| migration::DEFAULT_SCHEMA.to_owned());
+        std::env::var("SERVICE_SCHEMA").unwrap_or_else(|_| migration::DEFAULT_SCHEMA.to_owned());
 
     bootstrap_schema(&schema).await;
 
-    // Forward MEMOIR_SCHEMA into the DATABASE_SCHEMA env var that
+    // Forward SERVICE_SCHEMA into the DATABASE_SCHEMA env var that
     // sea-orm-cli reads to set the search_path on its connection. Operators
     // configure exactly one variable.
     if std::env::var_os("DATABASE_SCHEMA").is_none() {

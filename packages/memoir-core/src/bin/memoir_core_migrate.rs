@@ -3,7 +3,7 @@
 //! Invoked via `sea-orm-cli` (typically `pnpm nx run memoir-core:migrate:up`).
 //! Reads `DATABASE_URL` from environment and writes memoir-core's tables into
 //! the configured schema (default `memoir`). The schema name comes from the
-//! `MEMOIR_SCHEMA` env var, defaulting to
+//! `CORE_SCHEMA` env var, defaulting to
 //! [`memoir_core::migration::DEFAULT_SCHEMA`]. The schema is created if absent
 //! before delegating to sea-orm's CLI machinery, mirroring the runtime path
 //! at [`memoir_core::migration::bootstrap_and_migrate`].
@@ -14,7 +14,7 @@ use sea_orm_migration::sea_orm::{ConnectionTrait, Database};
 async fn main() {
     let _ = dotenvy::dotenv();
 
-    let schema = std::env::var("MEMOIR_SCHEMA").unwrap_or_else(|_| memoir_core::migration::DEFAULT_SCHEMA.to_owned());
+    let schema = std::env::var("CORE_SCHEMA").unwrap_or_else(|_| memoir_core::migration::DEFAULT_SCHEMA.to_owned());
 
     // Bootstrap the schema before sea-orm-cli takes over. sea-orm-cli sets
     // the search_path on its own connection per `--database-schema` (or
@@ -23,7 +23,7 @@ async fn main() {
     bootstrap_schema(&schema).await;
 
     // sea-orm-cli reads `--database-schema` or the `DATABASE_SCHEMA` env var
-    // for the search_path. Forward MEMOIR_SCHEMA into it so the operator
+    // for the search_path. Forward CORE_SCHEMA into it so the operator
     // only configures one env var.
     if std::env::var_os("DATABASE_SCHEMA").is_none() {
         // SAFETY: setting env in a single-threaded prelude (before any other
