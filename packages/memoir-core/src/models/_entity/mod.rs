@@ -2,6 +2,6 @@
 
 pub mod prelude;
 
-pub mod memories;
-pub mod memory_jobs;
-pub mod supersession_events;
+pub mod api_keys;
+pub mod bootstrap_tokens;
+pub mod users;

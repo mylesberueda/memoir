@@ -903,7 +903,10 @@ mod tests {
         let proto = proto_struct(serde_json::json!({ "conversation_id": 42 }));
         let result = Metadata::try_from(Some(proto)).unwrap();
         assert_eq!(*result, serde_json::json!({ "conversation_id": 42 }));
-        assert!(result["conversation_id"].is_i64(), "whole number must land as an integer");
+        assert!(
+            result["conversation_id"].is_i64(),
+            "whole number must land as an integer"
+        );
     }
 
     #[test]
@@ -920,10 +923,7 @@ mod tests {
         // filterable, so only they are narrowed. A nested `1.0` stays a float.
         let proto = proto_struct(serde_json::json!({ "nested": { "count": 1 } }));
         let result = Metadata::try_from(Some(proto)).unwrap();
-        assert!(
-            result["nested"]["count"].is_f64(),
-            "nested numbers are not narrowed",
-        );
+        assert!(result["nested"]["count"].is_f64(), "nested numbers are not narrowed",);
     }
 
     #[test]

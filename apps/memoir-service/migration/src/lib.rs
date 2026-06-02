@@ -20,10 +20,10 @@ mod m20000000_000005_create_bootstrap_tokens;
 
 /// Default Postgres schema for memoir-service's auth + tenant tables.
 ///
-/// Distinct from memoir-core's `memoir` schema. Each migrator owns its own
-/// `seaql_migrations` ledger, and putting them in the same schema would
-/// cause them to clobber each other's migration history. Same DB, separate
-/// schemas — co-located but isolated.
+/// Defaults to a schema distinct from memoir-core's `memoir`, but the two
+/// migrators no longer rely on schema isolation to coexist: each overrides
+/// [`MigratorTrait::migration_table_name`] so their ledgers are separate
+/// tables even when both schemas resolve to the same one (e.g. `public`).
 pub const DEFAULT_SCHEMA: &str = "memoir_service";
 
 static SCHEMA_NAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z_][a-z0-9_]*$").unwrap());
@@ -42,6 +42,17 @@ pub struct Migrator;
 
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
+    /// Ledger table for memoir-service's migration history.
+    ///
+    /// Distinct from sea-orm's default `seaql_migrations` so memoir-service
+    /// and memoir-core can share one Postgres schema (both default to `public`
+    /// for schema-less entity codegen) without their ledgers colliding. Each
+    /// migrator reads only its own rows; sharing one table makes each reject
+    /// the other's applied migrations as "missing files".
+    fn migration_table_name() -> DynIden {
+        Alias::new("memoir_service_migrations").into_iden()
+    }
+
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         // Chronological order. Later migrations may depend on earlier ones
         // (e.g., 000003+ depend on the nanoid() function from 000001 and on

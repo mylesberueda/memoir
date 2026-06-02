@@ -40,8 +40,8 @@ use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
     EditArgs, FeedbackArgs, Metadata, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs,
-    WireSupersessionEvent, forget_target_from_proto, metadata_filter_from_proto, query_response,
-    recall_as_of_response, scope_from_proto, timeline_response,
+    WireSupersessionEvent, forget_target_from_proto, metadata_filter_from_proto, query_response, recall_as_of_response,
+    scope_from_proto, timeline_response,
 };
 use crate::services::wire::{WireError, WireMemory};
 

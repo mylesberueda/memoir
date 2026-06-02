@@ -38,6 +38,17 @@ pub struct Migrator;
 
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
+    /// Ledger table for memoir-core's migration history.
+    ///
+    /// Distinct from sea-orm's default `seaql_migrations` so memoir-core and
+    /// memoir-service can share one Postgres schema (both default to `public`
+    /// for schema-less entity codegen) without their ledgers colliding. Each
+    /// migrator reads only its own rows; sharing one table makes each reject
+    /// the other's applied migrations as "missing files".
+    fn migration_table_name() -> DynIden {
+        Alias::new("memoir_core_migrations").into_iden()
+    }
+
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
             Box::new(m20000000_000001_create_memories::Migration),
