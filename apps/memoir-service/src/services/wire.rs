@@ -21,7 +21,7 @@ use memoir_sdk::memoir::v1::{
 };
 use tonic::Status;
 
-use super::conversions::{metadata_to_proto, scope_to_proto, timestamp_from_chrono};
+use super::conversions::{scope_to_proto, timestamp_from_chrono};
 
 /// Wire form of a [`LibMemory`]. Build via `WireMemory::from(memory)`.
 pub(crate) struct WireMemory(pub ProtoMemory);
@@ -40,7 +40,7 @@ impl From<LibMemory> for WireMemory {
             pid: memory.pid,
             scope: Some(scope_to_proto(memory.scope)),
             content: memory.content,
-            metadata: Some(metadata_to_proto(memory.metadata)),
+            metadata: Some(serde_json::from_value(memory.metadata).unwrap_or_default()),
             created_at: Some(timestamp_from_chrono(memory.created_at)),
             processed_at: None,
             status: match memory.status {

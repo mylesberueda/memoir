@@ -16,10 +16,14 @@
 //!   safe-to-wire message; never the inner error's `Display`.
 //! - **Conversions from library → proto are infallible** (`From` impls) —
 //!   library values are already validated.
-//! - **Metadata round-trips through serde.** `pbjson_types::Struct` and
-//!   `serde_json::Value` both implement `Serialize`/`Deserialize`; the
-//!   `serde_json::to_value` / `serde_json::from_value` pair is the
-//!   canonical conversion path per the pbjson-types maintainer.
+//! - **Metadata bridges serde and the wire `Struct`.** `pbjson_types::Struct`
+//!   and `serde_json::Value` both implement `Serialize`/`Deserialize`; the
+//!   `serde_json::to_value` / `serde_json::from_value` pair is the canonical
+//!   conversion path per the pbjson-types maintainer. Inbound metadata flows
+//!   through [`Metadata`], which additionally narrows the integers proto3
+//!   widens to `f64`; outbound is a direct `from_value` at the wire layer.
+
+use std::ops::Deref;
 
 use memoir_core::client::{DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, RankingStrategy, ReconcileSummary};
 use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind};
@@ -79,36 +83,76 @@ pub(crate) fn scope_to_proto(scope: LibScope) -> ProtoScope {
     }
 }
 
-/// Converts a wire metadata `Struct` into the library's `serde_json::Value`.
+/// Consumer-supplied memory metadata at the gRPC boundary.
 ///
-/// `None` (proto3 unset) maps to `serde_json::json!({})` to match the
-/// library's column default. Non-object payloads (arrays, scalars) are
-/// accepted — JSONB doesn't constrain shape — but malformed inputs
-/// (`NaN`, infinity) fail at serde and surface as `InvalidArgument`.
-///
-/// # Errors
-///
-/// Returns [`Status::invalid_argument`] when the struct cannot be
-/// represented as JSON (e.g., contains `NaN`).
-pub(crate) fn metadata_from_proto(meta: Option<pbjson_types::Struct>) -> Result<serde_json::Value, Status> {
-    let Some(struct_value) = meta else {
-        return Ok(serde_json::json!({}));
-    };
-    serde_json::to_value(struct_value).map_err(|err| {
-        tracing::warn!(error.message = %err, "rejected RememberRequest with malformed metadata");
-        Status::invalid_argument("metadata: not representable as JSON")
-    })
+/// A thin wrapper over `serde_json::Value` — metadata is opaque, consumer-owned
+/// JSON, so this newtype carries no schema. It exists solely to own the one
+/// invariant the wire boundary needs: `google.protobuf.Struct` encodes every
+/// number as an IEEE-754 double, so an inbound integer (`conversation_id: 1`)
+/// arrives as `1.0`. Stored that way, an integer payload filter would never
+/// match it. [`Metadata::try_from`] normalizes whole-number doubles back to
+/// integers so consumer filters behave as written. `Deref`s to the inner
+/// value so call sites treat it as a plain `serde_json::Value`.
+#[derive(Debug)]
+pub(crate) struct Metadata(serde_json::Value);
+
+impl Deref for Metadata {
+    type Target = serde_json::Value;
+
+    fn deref(&self) -> &serde_json::Value {
+        &self.0
+    }
 }
 
-/// Converts library `serde_json::Value` metadata back to the wire `Struct`.
+impl Metadata {
+    /// Consumes the wrapper, yielding the inner value for the library call.
+    pub(crate) fn into_inner(self) -> serde_json::Value {
+        self.0
+    }
+}
+
+impl TryFrom<Option<pbjson_types::Struct>> for Metadata {
+    type Error = Status;
+
+    /// Converts inbound wire metadata, normalizing widened integers.
+    ///
+    /// `None` (proto3 unset) maps to `{}` to match the library's column
+    /// default. Non-object payloads (arrays, scalars) are accepted — JSONB
+    /// doesn't constrain shape.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Status::invalid_argument`] when the struct cannot be
+    /// represented as JSON (e.g., contains `NaN`).
+    fn try_from(meta: Option<pbjson_types::Struct>) -> Result<Self, Status> {
+        let Some(struct_value) = meta else {
+            return Ok(Self(serde_json::json!({})));
+        };
+        let mut value = serde_json::to_value(struct_value).map_err(|err| {
+            tracing::warn!(error.message = %err, "rejected metadata that is not representable as JSON");
+            Status::invalid_argument("metadata: not representable as JSON")
+        })?;
+        narrow_whole_number_doubles(&mut value);
+        Ok(Self(value))
+    }
+}
+
+/// Rewrites every top-level whole-number `f64` in a JSON object to an `i64`.
 ///
-/// Falls back to an empty `Struct` if the value is not a JSON object —
-/// the proto field's `Struct` type can only encode objects, so a scalar
-/// or array metadata value is mapped to `{}` on the way out. This case
-/// should not occur in practice (the library writes JSON objects) but
-/// is handled defensively.
-pub(crate) fn metadata_to_proto(value: serde_json::Value) -> pbjson_types::Struct {
-    serde_json::from_value::<pbjson_types::Struct>(value).unwrap_or_default()
+/// Only top-level keys are flattened into the Qdrant payload and become
+/// filterable (see `qdrant::QdrantIndex::upsert`), so only they need to match
+/// the integer type a consumer filters with. Nested numbers are left as serde
+/// parsed them. A non-object value (array/scalar) is a no-op.
+fn narrow_whole_number_doubles(value: &mut serde_json::Value) {
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    for field in object.values_mut() {
+        let Some(float) = field.as_f64() else { continue };
+        if field.is_f64() && float.fract() == 0.0 && i64::try_from(float as i128).is_ok() {
+            *field = serde_json::Value::from(float as i64);
+        }
+    }
 }
 
 /// Converts `ForgetRequest.target` (oneof) into the library `ForgetTarget`.
@@ -513,10 +557,15 @@ impl TryFrom<EditRequest> for EditArgs {
         if request.pid.is_empty() {
             return Err(Status::invalid_argument("pid: required"));
         }
-        let metadata = request.metadata.map(serde_json::to_value).transpose().map_err(|err| {
-            tracing::warn!(error.message = %err, "rejected EditRequest with malformed metadata");
-            Status::invalid_argument("metadata: not representable as JSON")
-        })?;
+        // `metadata` is proto-`optional`: `None` leaves the row's metadata
+        // untouched, `Some` replaces it. Route the present case through
+        // `Metadata` for the same integer-narrowing the remember path gets,
+        // while preserving the outer `Option` so absence still means "no
+        // change".
+        let metadata = request
+            .metadata
+            .map(|struct_value| Metadata::try_from(Some(struct_value)).map(Metadata::into_inner))
+            .transpose()?;
         Ok(Self {
             pid: request.pid,
             content: request.content,
@@ -826,45 +875,73 @@ mod tests {
         assert_eq!(back, original);
     }
 
+    /// Builds a wire `Struct` from a JSON value the way the proto layer
+    /// delivers one — proto3 widens every number to `f64` in the process.
+    fn proto_struct(value: serde_json::Value) -> pbjson_types::Struct {
+        serde_json::from_value(value).expect("value encodes as a Struct")
+    }
+
     #[test]
     fn should_default_unset_metadata_to_empty_object() {
-        let result = metadata_from_proto(None).unwrap();
-        assert_eq!(result, serde_json::json!({}));
+        let result = Metadata::try_from(None).unwrap();
+        assert_eq!(*result, serde_json::json!({}));
     }
 
     #[test]
-    fn should_round_trip_metadata_string_values_unchanged() {
-        // Strings round-trip exactly through pbjson_types::Struct.
-        let original = serde_json::json!({ "source": "test", "tag": "rust" });
-        let proto = metadata_to_proto(original.clone());
-        let back = metadata_from_proto(Some(proto)).unwrap();
-        assert_eq!(back, original);
+    fn should_preserve_string_values_when_converting_metadata() {
+        let proto = proto_struct(serde_json::json!({ "source": "test", "tag": "rust" }));
+        let result = Metadata::try_from(Some(proto)).unwrap();
+        assert_eq!(*result, serde_json::json!({ "source": "test", "tag": "rust" }));
     }
 
     #[test]
-    fn should_round_trip_metadata_integers_as_floats() {
-        // Proto3 `google.protobuf.Value.number_value` is `double` per spec.
-        // Integers round-trip through `f64`, so `42` (integer) comes back as
-        // `42.0` (float). This is a wire-level behavior — consumers needing
-        // integer fidelity must encode them as strings.
-        let original = serde_json::json!({ "count": 42 });
-        let proto = metadata_to_proto(original);
-        let back = metadata_from_proto(Some(proto)).unwrap();
-        assert_eq!(back, serde_json::json!({ "count": 42.0 }));
+    fn should_narrow_whole_number_doubles_to_integers() {
+        // The wire delivers `42` as the double `42.0` (proto3
+        // `google.protobuf.Value.number_value` is `double`). The boundary
+        // narrows whole numbers back to integers so a consumer's integer
+        // payload filter matches what was stored.
+        let proto = proto_struct(serde_json::json!({ "conversation_id": 42 }));
+        let result = Metadata::try_from(Some(proto)).unwrap();
+        assert_eq!(*result, serde_json::json!({ "conversation_id": 42 }));
+        assert!(result["conversation_id"].is_i64(), "whole number must land as an integer");
     }
 
     #[test]
-    fn should_preserve_nested_object_structure_through_metadata_round_trip() {
-        // Deeply-nested objects retain their shape; only the leaf number
-        // representation is affected (per the previous test).
-        let original = serde_json::json!({
+    fn should_keep_fractional_doubles_as_floats() {
+        let proto = proto_struct(serde_json::json!({ "score": 0.5 }));
+        let result = Metadata::try_from(Some(proto)).unwrap();
+        assert_eq!(*result, serde_json::json!({ "score": 0.5 }));
+        assert!(result["score"].is_f64(), "fractional number must stay a float");
+    }
+
+    #[test]
+    fn should_leave_nested_numbers_unnarrowed() {
+        // Only top-level keys flatten into the Qdrant payload and become
+        // filterable, so only they are narrowed. A nested `1.0` stays a float.
+        let proto = proto_struct(serde_json::json!({ "nested": { "count": 1 } }));
+        let result = Metadata::try_from(Some(proto)).unwrap();
+        assert!(
+            result["nested"]["count"].is_f64(),
+            "nested numbers are not narrowed",
+        );
+    }
+
+    #[test]
+    fn should_preserve_nested_object_structure_when_converting_metadata() {
+        let proto = proto_struct(serde_json::json!({
             "source": "test",
             "tags": ["one", "two"],
             "flags": { "enabled": true },
-        });
-        let proto = metadata_to_proto(original.clone());
-        let back = metadata_from_proto(Some(proto)).unwrap();
-        assert_eq!(back, original);
+        }));
+        let result = Metadata::try_from(Some(proto)).unwrap();
+        assert_eq!(
+            *result,
+            serde_json::json!({
+                "source": "test",
+                "tags": ["one", "two"],
+                "flags": { "enabled": true },
+            })
+        );
     }
 
     #[test]

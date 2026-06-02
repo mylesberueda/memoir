@@ -39,9 +39,9 @@ use tonic::{Request, Response, Status};
 use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
-    EditArgs, FeedbackArgs, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs, WireSupersessionEvent,
-    forget_target_from_proto, metadata_filter_from_proto, metadata_from_proto, query_response, recall_as_of_response,
-    scope_from_proto, timeline_response,
+    EditArgs, FeedbackArgs, Metadata, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs,
+    WireSupersessionEvent, forget_target_from_proto, metadata_filter_from_proto, query_response,
+    recall_as_of_response, scope_from_proto, timeline_response,
 };
 use crate::services::wire::{WireError, WireMemory};
 
@@ -197,7 +197,7 @@ impl MemoryService for Memory {
             return Err(Status::invalid_argument("content: required"));
         }
         let scope = scope_from_proto(scope)?;
-        let metadata = metadata_from_proto(metadata)?;
+        let metadata = Metadata::try_from(metadata)?;
 
         tracing::event!(
             name: "memoir.service.memory.remember.invoked",
@@ -214,7 +214,7 @@ impl MemoryService for Memory {
             .ctx
             .memoir
             .remember(content, scope)
-            .metadata(metadata)
+            .metadata(metadata.into_inner())
             .await
             .map_err(WireError::into_status)?;
 
