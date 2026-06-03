@@ -20,10 +20,10 @@
 //! # Examples
 //!
 //! ```no_run
-//! use memoir_core::nli::NliClassifier;
+//! use memoir_core::nli::{NliClassifier, NliConfig};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let classifier = NliClassifier::new()?;
+//! let classifier = NliClassifier::new(NliConfig::default())?;
 //! let results = classifier.classify(
 //!     "We decided to use Pulumi instead of Terraform",
 //!     &["a decision that was made", "a personal preference"],
@@ -45,17 +45,76 @@ use ort::session::Session;
 use ort::value::Tensor;
 use tokenizers::Tokenizer;
 
-/// HuggingFace repo holding the pre-exported ONNX model.
+/// Default HuggingFace repo holding the pre-exported ONNX model.
 ///
 /// MoritzLaurer's model is trained on 33 classification datasets, making it far
 /// better at zero-shot classification than a plain NLI cross-encoder.
-const MODEL_REPO: &str = "MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33";
+const DEFAULT_MODEL_REPO: &str = "MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33";
 
-/// The quantized ONNX model file within the repo (~87 MB).
-const MODEL_FILE: &str = "onnx/model_quantized.onnx";
+/// Default quantized ONNX model file within the repo (~87 MB).
+const DEFAULT_MODEL_FILE: &str = "onnx/model_quantized.onnx";
 
-/// The tokenizer file within the repo.
-const TOKENIZER_FILE: &str = "tokenizer.json";
+/// Default tokenizer file within the repo.
+const DEFAULT_TOKENIZER_FILE: &str = "tokenizer.json";
+
+/// Source of the zero-shot NLI classifier model.
+///
+/// Selects which model [`NliClassifier::new`] downloads and loads for the
+/// categorize stage. [`NliConfig::default`] is the model memoir ships with
+/// (MoritzLaurer's DeBERTa-v3-xsmall); a consumer overrides it to point the
+/// classifier at a different HuggingFace repo. Mirrors [`crate::llm::LlmConfig`]'s
+/// enum-of-sources shape — one variant today, room to add others (a local path,
+/// a direct URL) without a breaking change.
+///
+/// # Examples
+///
+/// ```
+/// # use memoir_core::nli::NliConfig;
+/// // The shipped default.
+/// let config = NliConfig::default();
+///
+/// // A different zero-shot NLI repo, ONNX export + tokenizer.
+/// let custom = NliConfig::huggingface(
+///     "my-org/my-zeroshot-model",
+///     "onnx/model.onnx",
+///     "tokenizer.json",
+/// );
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum NliConfig {
+    /// A model hosted on the HuggingFace Hub.
+    HuggingFace {
+        /// Repo id, e.g. `"MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33"`.
+        repo: String,
+        /// Path to the ONNX model file within the repo.
+        model_file: String,
+        /// Path to the tokenizer JSON within the repo.
+        tokenizer_file: String,
+    },
+}
+
+impl NliConfig {
+    /// Builds a config for a model on the HuggingFace Hub.
+    #[must_use]
+    pub fn huggingface(
+        repo: impl Into<String>,
+        model_file: impl Into<String>,
+        tokenizer_file: impl Into<String>,
+    ) -> Self {
+        Self::HuggingFace {
+            repo: repo.into(),
+            model_file: model_file.into(),
+            tokenizer_file: tokenizer_file.into(),
+        }
+    }
+}
+
+impl Default for NliConfig {
+    /// The model memoir ships with — MoritzLaurer's DeBERTa-v3-xsmall.
+    fn default() -> Self {
+        Self::huggingface(DEFAULT_MODEL_REPO, DEFAULT_MODEL_FILE, DEFAULT_TOKENIZER_FILE)
+    }
+}
 
 /// Index of the entailment logit in the model's two-class output.
 ///
@@ -113,20 +172,27 @@ impl std::fmt::Debug for NliClassifier {
 }
 
 impl NliClassifier {
-    /// Creates a classifier, downloading the model if not already cached.
+    /// Creates a classifier from `config`, downloading the model if not cached.
     ///
     /// This is synchronous and blocks on the HuggingFace download and ONNX
     /// session creation — mirroring [`crate::embedding::OnnxEmbedding::new`].
     /// Call it from a blocking context (e.g. `tokio::task::spawn_blocking`)
-    /// when constructing from async code.
+    /// when constructing from async code. Pass [`NliConfig::default`] for the
+    /// model memoir ships with.
     ///
     /// # Errors
     ///
     /// Returns [`NliError::Download`] if the model or tokenizer cannot be
     /// fetched, [`NliError::ModelLoad`] if the ONNX session cannot be built,
     /// and [`NliError::TokenizerLoad`] if the tokenizer cannot be parsed.
-    pub fn new() -> Result<Self, NliError> {
-        let (model_path, tokenizer_path) = download_model_files()?;
+    pub fn new(config: NliConfig) -> Result<Self, NliError> {
+        let NliConfig::HuggingFace {
+            repo,
+            model_file,
+            tokenizer_file,
+        } = config;
+
+        let (model_path, tokenizer_path) = download_model_files(&repo, &model_file, &tokenizer_file)?;
 
         let (session, execution_provider) = create_session(&model_path)?;
 
@@ -135,7 +201,7 @@ impl NliClassifier {
         tracing::event!(
             name: "memoir.nli.loaded",
             tracing::Level::INFO,
-            model = MODEL_REPO,
+            model = %repo,
             execution_provider = execution_provider.ort_name(),
             "NLI classifier loaded with {{execution_provider}}",
         );
@@ -242,16 +308,20 @@ impl NliClassifier {
 }
 
 /// Downloads the model and tokenizer from HuggingFace, caching them locally.
-fn download_model_files() -> Result<(std::path::PathBuf, std::path::PathBuf), NliError> {
+fn download_model_files(
+    repo: &str,
+    model_file: &str,
+    tokenizer_file: &str,
+) -> Result<(std::path::PathBuf, std::path::PathBuf), NliError> {
     let api = hf_hub::api::sync::Api::new().map_err(|e| NliError::Download(e.to_string()))?;
-    let repo = api.model(MODEL_REPO.to_string());
+    let repo = api.model(repo.to_string());
 
     let model_path = repo
-        .get(MODEL_FILE)
-        .map_err(|e| NliError::Download(format!("failed to download {MODEL_FILE}: {e}")))?;
+        .get(model_file)
+        .map_err(|e| NliError::Download(format!("failed to download {model_file}: {e}")))?;
     let tokenizer_path = repo
-        .get(TOKENIZER_FILE)
-        .map_err(|e| NliError::Download(format!("failed to download {TOKENIZER_FILE}: {e}")))?;
+        .get(tokenizer_file)
+        .map_err(|e| NliError::Download(format!("failed to download {tokenizer_file}: {e}")))?;
 
     Ok((model_path, tokenizer_path))
 }
@@ -415,6 +485,31 @@ mod tests {
     #[test]
     fn should_report_cpu_provider_ort_name() {
         assert_eq!(ExecutionProvider::Cpu.ort_name(), "CPUExecutionProvider");
+    }
+
+    #[test]
+    fn should_default_nli_config_to_the_shipped_moritzlaurer_model() {
+        let NliConfig::HuggingFace {
+            repo,
+            model_file,
+            tokenizer_file,
+        } = NliConfig::default();
+        assert_eq!(repo, "MoritzLaurer/deberta-v3-xsmall-zeroshot-v1.1-all-33");
+        assert_eq!(model_file, "onnx/model_quantized.onnx");
+        assert_eq!(tokenizer_file, "tokenizer.json");
+    }
+
+    #[test]
+    fn should_build_nli_config_from_huggingface_constructor() {
+        let config = NliConfig::huggingface("org/model", "m.onnx", "tok.json");
+        assert_eq!(
+            config,
+            NliConfig::HuggingFace {
+                repo: "org/model".to_string(),
+                model_file: "m.onnx".to_string(),
+                tokenizer_file: "tok.json".to_string(),
+            }
+        );
     }
 
     #[cfg(feature = "cuda")]

@@ -164,6 +164,14 @@ impl BlendWeights {
 
 /// How [`Client::query`] orders the candidate set.
 ///
+/// Reach for [`Self::Hybrid`] when relevance and recency are the only signals
+/// that matter (it ignores confidence and category); reach for [`Self::Blended`]
+/// to also reward high-confidence facts and preferred categories — the typical
+/// choice once the categorize/confidence pipeline is populated. `Blended` is a
+/// strict superset, so `Hybrid` is just the `w_conf = 0`, no-category special
+/// case. For raw nearest-neighbor hits with no re-ranking at all, use
+/// [`Client::search`] instead of `query`.
+///
 /// Constructing a variant explicitly is the caller's opt-in to that
 /// specific behavior — those parameter values become part of the stability
 /// contract for the caller's code. The *default* behavior (when no strategy

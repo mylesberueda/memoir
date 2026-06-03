@@ -137,7 +137,7 @@ impl Client {
         #[builder(into)] collection: Option<String>,
         extraction_llm: Option<LlmConfig>,
         contradiction_llm: Option<LlmConfig>,
-        #[builder(default)] categorize: bool,
+        categorize_model: Option<crate::nli::NliConfig>,
     ) -> Result<Client, ClientError> {
         let schema = schema.unwrap_or_else(|| crate::migration::DEFAULT_SCHEMA.to_string());
 
@@ -170,14 +170,14 @@ impl Client {
             llms.install(LlmRole::Contradiction, config)?;
         }
 
-        // Build the NLI classifier only when categorization is opted in — it
+        // Build the NLI classifier only when a model is configured — it
         // downloads an ~87MB model on first construction, so consumers who
         // don't want categorization shouldn't pay for it. `new()` is
         // sync-blocking (HF download), so it runs on the blocking pool to
-        // avoid stalling the async runtime. Model configurability is ticket
-        // 0009; this is the on/off opt-in.
-        let nli = if categorize {
-            let classifier = tokio::task::spawn_blocking(crate::nli::NliClassifier::new)
+        // avoid stalling the async runtime. Pass `NliConfig::default()` for
+        // the model memoir ships with.
+        let nli = if let Some(config) = categorize_model {
+            let classifier = tokio::task::spawn_blocking(move || crate::nli::NliClassifier::new(config))
                 .await
                 .map_err(|join_err| ClientError::Nli(format!("classifier init task panicked: {join_err}")))?
                 .map_err(|nli_err| ClientError::Nli(nli_err.to_string()))?;

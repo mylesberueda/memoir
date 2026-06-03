@@ -37,6 +37,14 @@ impl Scope {
 }
 
 /// Kind of memory written to or read from storage.
+///
+/// The two kinds form memoir's source-and-projection model: episodic rows are
+/// the verbatim record a consumer writes; semantic rows are facts a worker
+/// derives from them. Semantic content is **never hand-written or edited** —
+/// it is always re-derived from its episodic source, so a wrong semantic fact
+/// is corrected by teaching ([`crate::client::Client::feedback`]) or by editing
+/// the source ([`crate::client::Client::edit`]), never by writing the fact
+/// directly. See the crate-root docs' "Correction" section.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
 #[strum(serialize_all = "lowercase")]
 pub enum MemoryKind {
@@ -44,6 +52,9 @@ pub enum MemoryKind {
     Episodic,
 
     /// Structured fact extracted from episodic memory by an LLM (epic 0006).
+    ///
+    /// Always derived, never authored directly: there is no API to set a
+    /// semantic row's content. Corrections flow through re-derivation.
     Semantic,
 }
 
@@ -311,7 +322,9 @@ pub struct Memory {
     ///
     /// Episodic memories are `100` by construction — the user said it.
     /// Semantic memories carry the extraction LLM's scaled per-fact score
-    /// (populated by the extract worker). See [`Confidence`].
+    /// (populated by the extract worker). See [`Confidence`]. Feeds the
+    /// selection blend as a signal (normalized to `[0, 1]`) and the
+    /// `min_confidence` hard filter — see [`crate::client::BlendWeights`].
     pub confidence: Confidence,
 
     /// Categorization label, or `None` until the categorize worker runs.
@@ -319,15 +332,21 @@ pub struct Memory {
     /// Populated asynchronously by the NLI categorize stage. A `None`
     /// category is unfiltered, not rejected — absence means "not yet
     /// classified," not "no category applies." The value set (taxonomy) is
-    /// owned by the categorize worker, so this stays an open `String` here.
+    /// owned by the categorize worker, so this stays an open `String` here;
+    /// the v1 labels are `preference`, `identity`, `workflow`, `factual`,
+    /// `transient` (see `crate::client::categorize`). Drives the
+    /// category-bonus term of the selection blend ([`crate::client::BlendWeights`])
+    /// and the `category` hard filter on search/query.
     pub category: Option<String>,
 
     /// Why this memory was retired, or `None` when active (epic 0011).
     ///
     /// Set by the correction model ([`crate::client::Client::reject`] /
     /// `mark_stale`). A `Some(_)` row is hidden from all reads and its vector
-    /// is evicted; the row is kept for the reprocess guard and metrics.
-    /// Distinct from [`Self::supersession`]. "Active" requires both this and
+    /// is evicted; the row is kept for the reprocess guard and the
+    /// extraction-accuracy metric ([`crate::client::Client::extraction_stats`]),
+    /// where only [`RetirementReason::Rejected`] counts as an error. Distinct
+    /// from [`Self::supersession`]. "Active" requires both this and
     /// `supersession` to be `None`.
     pub retirement: Option<RetirementReason>,
 }
