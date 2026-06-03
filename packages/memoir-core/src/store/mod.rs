@@ -15,7 +15,7 @@ use std::future::Future;
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope, SupersessionEvent};
+use crate::memory::{ExtractionStat, ForgetTarget, Memory, MemoryKind, Scope, StatsFilter, SupersessionEvent};
 
 /// Lifecycle state of a memory's vector index.
 ///
@@ -256,6 +256,25 @@ pub trait MemoryStore: Send + Sync + 'static {
         source_pid: &str,
     ) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
 
+    /// Tallies extraction accuracy per `(provider, model)` over a scope slice.
+    ///
+    /// Groups every semantic row matching `filter` by its producing provider
+    /// and model (read from the row's `metadata` blob), counting the total
+    /// produced and the subset retired as [`crate::memory::RetirementReason::Rejected`].
+    /// Rows retired as `Stale` and superseded rows count toward the total but
+    /// never the rejected tally — only a corrected wrong extraction is a model
+    /// error. An empty [`StatsFilter`] aggregates the whole store. A slice with
+    /// no semantic rows yields an empty vector, not an error. Results are
+    /// ordered by `(provider, model)` ascending for stable output.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Database`] for database failures.
+    fn extraction_stats(
+        &self,
+        filter: StatsFilter,
+    ) -> impl Future<Output = Result<Vec<ExtractionStat>, StoreError>> + Send;
+
     /// Deletes one memory or every memory in a scope, returning deleted pids.
     ///
     /// The returned pids let callers issue follow-up deletes against the
@@ -458,6 +477,7 @@ pub trait MemoryStore: Send + Sync + 'static {
 mod tests {
     use super::*;
     use chrono::Utc;
+    use std::collections::BTreeMap;
     use std::sync::Mutex;
 
     /// One row of the in-memory supersession event log used by `StubStore`.
@@ -562,6 +582,39 @@ mod tests {
                 .filter(|m| m.source_pid.as_deref() == Some(source_pid))
                 .filter(|m| m.supersession.is_none() && m.retirement.is_none())
                 .cloned()
+                .collect())
+        }
+
+        async fn extraction_stats(&self, filter: StatsFilter) -> Result<Vec<ExtractionStat>, StoreError> {
+            let memories = self.memories.lock().unwrap();
+            let mut tallies: BTreeMap<(String, String), (u64, u64)> = BTreeMap::new();
+            for m in memories.iter() {
+                if m.kind != MemoryKind::Semantic {
+                    continue;
+                }
+                if filter.agent_id.as_ref().is_some_and(|a| a != &m.scope.agent_id)
+                    || filter.org_id.as_ref().is_some_and(|o| o != &m.scope.org_id)
+                    || filter.user_id.as_ref().is_some_and(|u| u != &m.scope.user_id)
+                {
+                    continue;
+                }
+                let provider = m.metadata.get("provider").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let model = m.metadata.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let entry = tallies.entry((provider, model)).or_insert((0, 0));
+                entry.0 += 1;
+                if m.retirement == Some(crate::memory::RetirementReason::Rejected) {
+                    entry.1 += 1;
+                }
+            }
+
+            Ok(tallies
+                .into_iter()
+                .map(|((provider, model), (total, rejected))| ExtractionStat {
+                    provider,
+                    model,
+                    total,
+                    rejected,
+                })
                 .collect())
         }
 

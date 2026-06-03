@@ -40,16 +40,18 @@ use std::sync::Arc;
 
 use memoir_sdk::memoir::v1::admin_service_server::AdminService;
 use memoir_sdk::memoir::v1::{
-    DeleteFailedJobRequest, DeleteFailedJobResponse, ListFailedJobsRequest, ListFailedJobsResponse,
-    PendingJobsCountRequest, PendingJobsCountResponse, ReconcileRequest, ReconcileResponse, RetryFailedJobsRequest,
-    RetryFailedJobsResponse, RetryJobRequest, RetryJobResponse, UnsupersedeRequest, UnsupersedeResponse,
+    DeleteFailedJobRequest, DeleteFailedJobResponse, ExtractionStatsRequest, ExtractionStatsResponse,
+    ListFailedJobsRequest, ListFailedJobsResponse, PendingJobsCountRequest, PendingJobsCountResponse, ReconcileRequest,
+    ReconcileResponse, RetryFailedJobsRequest, RetryFailedJobsResponse, RetryJobRequest, RetryJobResponse,
+    UnsupersedeRequest, UnsupersedeResponse,
 };
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
-    WireFailedJob, WireReconcileResponse, job_kind_filter_from_proto, u64_count_to_proto,
+    WireExtractionStat, WireFailedJob, WireReconcileResponse, WireStatsFilter, job_kind_filter_from_proto,
+    u64_count_to_proto,
 };
 use crate::services::wire::WireError;
 
@@ -327,6 +329,48 @@ impl AdminService for Admin {
         let summary = builder.await.map_err(WireError::into_status)?;
 
         Ok(Response::new(WireReconcileResponse::from(summary).0))
+    }
+
+    /// Returns extraction accuracy per (provider, model) over a scope slice.
+    ///
+    /// Read-only aggregate, no LLM call. The request's optional scope fields
+    /// narrow the slice (AND-combined); all-unset aggregates the whole store.
+    async fn extraction_stats(
+        &self,
+        request: Request<ExtractionStatsRequest>,
+    ) -> Result<Response<ExtractionStatsResponse>, Status> {
+        let caller = self.auth().authenticate(&request).await?;
+        caller.require_admin()?;
+        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let filter = WireStatsFilter::from(request.into_inner()).0;
+
+        tracing::event!(
+            name: "memoir.service.admin.extraction_stats.invoked",
+            tracing::Level::INFO,
+            admin.pid = %admin_pid,
+            filter.agent_id = filter.agent_id.is_some(),
+            filter.org_id = filter.org_id.is_some(),
+            filter.user_id = filter.user_id.is_some(),
+            "AdminService.ExtractionStats invoked",
+        );
+
+        let mut builder = self.ctx.memoir.extraction_stats();
+        if let Some(agent_id) = filter.agent_id {
+            builder = builder.agent(agent_id);
+        }
+        if let Some(org_id) = filter.org_id {
+            builder = builder.org(org_id);
+        }
+        if let Some(user_id) = filter.user_id {
+            builder = builder.user(user_id);
+        }
+        let stats = builder.await.map_err(WireError::into_status)?;
+
+        let proto_stats = stats
+            .into_iter()
+            .map(|s| WireExtractionStat::try_from(s).map(|w| w.0))
+            .collect::<Result<Vec<_>, Status>>()?;
+        Ok(Response::new(ExtractionStatsResponse { stats: proto_stats }))
     }
 }
 

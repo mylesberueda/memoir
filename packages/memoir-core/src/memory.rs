@@ -70,6 +70,49 @@ pub enum RetirementReason {
     Stale,
 }
 
+/// Optional scope-subset filter for an aggregate read.
+///
+/// Each field narrows the aggregate to memories matching it; an unset field
+/// imposes no constraint. Distinct from [`Scope`], which requires all three
+/// fields — this is a partial filter, so a caller can aggregate org-wide
+/// (`org_id` only), per-agent, or across the whole store (all unset).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct StatsFilter {
+    pub agent_id: Option<String>,
+    pub org_id: Option<String>,
+    pub user_id: Option<String>,
+}
+
+/// Extraction-accuracy tally for one `(provider, model)` pair within a slice.
+///
+/// `total` counts every semantic row the pair produced (active or retired, any
+/// reason); `rejected` counts only those retired as [`RetirementReason::Rejected`]
+/// — a wrong extraction the user corrected. Rows retired as
+/// [`RetirementReason::Stale`] (the source changed) and superseded rows (a newer
+/// fact won) are in `total` but never in `rejected`: they are not model errors.
+/// See [`Self::accuracy`] for the derived ratio.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtractionStat {
+    pub provider: String,
+    pub model: String,
+    pub total: u64,
+    pub rejected: u64,
+}
+
+impl ExtractionStat {
+    /// Returns the extraction accuracy as `1 − rejected/total` in `[0.0, 1.0]`.
+    ///
+    /// A pair with zero extractions returns `1.0`: there is nothing to have
+    /// gotten wrong, so the identity value is "no errors."
+    #[must_use]
+    pub fn accuracy(&self) -> f64 {
+        if self.total == 0 {
+            return 1.0;
+        }
+        1.0 - (self.rejected as f64 / self.total as f64)
+    }
+}
+
 /// A memory's confidence as a 0-100 percentage.
 ///
 /// A newtype over `i8` whose only constructor clamps into `[0, 100]`, so an
@@ -439,6 +482,28 @@ mod tests {
         assert_eq!(RetirementReason::from_str("stale").unwrap(), RetirementReason::Stale);
         assert!(RetirementReason::from_str("superseded").is_err());
         assert!(RetirementReason::from_str("nonsense").is_err());
+    }
+
+    #[test]
+    fn should_compute_accuracy_as_one_minus_rejected_over_total() {
+        let stat = ExtractionStat {
+            provider: "ollama".to_string(),
+            model: "qwen3:14b".to_string(),
+            total: 100,
+            rejected: 3,
+        };
+        assert!((stat.accuracy() - 0.97).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn should_report_perfect_accuracy_when_no_extractions() {
+        let stat = ExtractionStat {
+            provider: String::new(),
+            model: String::new(),
+            total: 0,
+            rejected: 0,
+        };
+        assert_eq!(stat.accuracy(), 1.0, "zero extractions means nothing to get wrong");
     }
 
     #[test]

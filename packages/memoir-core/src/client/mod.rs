@@ -16,7 +16,7 @@ mod search;
 mod timeline;
 mod worker;
 
-pub use admin::RetryBuilder;
+pub use admin::{ExtractionStatsBuilder, RetryBuilder};
 pub use edit::EditBuilder;
 pub use error::ClientError;
 pub use feedback::FeedbackBuilder;
@@ -754,6 +754,17 @@ impl Client {
     /// Returns [`ClientError::Store`] wrapping a database failure.
     pub async fn list_agents(&self, org_id: &str, user_id: &str) -> Result<Vec<String>, ClientError> {
         Ok(self.inner.store.list_agent_ids(org_id, user_id).await?)
+    }
+
+    /// Computes extraction accuracy per `(provider, model)` over a scope slice.
+    ///
+    /// Returns an [`ExtractionStatsBuilder`]; its scope setters narrow the slice
+    /// before awaiting. A read-only aggregate proving extraction quality to a
+    /// consumer — `accuracy = 1 − rejected/total`, where `rejected` counts only
+    /// wrong extractions the user corrected (not `Stale` or superseded rows).
+    /// No LLM call. See [`ExtractionStatsBuilder`] for the builder methods.
+    pub fn extraction_stats(&self) -> ExtractionStatsBuilder<'_> {
+        ExtractionStatsBuilder::new(self)
     }
 }
 

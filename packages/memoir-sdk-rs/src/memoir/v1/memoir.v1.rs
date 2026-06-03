@@ -128,6 +128,49 @@ pub struct ReconcileResponse {
     #[prost(int64, tag="3")]
     pub orphans_deleted: i64,
 }
+// ─── ExtractionStats RPC ────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ExtractionStatsRequest {
+    /// Optional scope-subset filters. Each set field narrows the slice; unset
+    /// imposes no constraint. All three unset aggregates the whole store. These
+    /// map to memoir-core's `StatsFilter`, a partial scope (not the all-required
+    /// `Scope`), so `org_id` alone yields a per-tenant number.
+    #[prost(string, optional, tag="1")]
+    pub agent_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag="2")]
+    pub org_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag="3")]
+    pub user_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// One (provider, model) accuracy row. Mirrors `memoir_core::memory::ExtractionStat`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExtractionStat {
+    /// Producing LLM provider (e.g. "ollama").
+    #[prost(string, tag="1")]
+    pub provider: ::prost::alloc::string::String,
+    /// Producing model id (e.g. "qwen3:14b").
+    #[prost(string, tag="2")]
+    pub model: ::prost::alloc::string::String,
+    /// Semantic rows produced (active + retired, any reason).
+    #[prost(int64, tag="3")]
+    pub total: i64,
+    /// Subset retired as a corrected wrong extraction.
+    #[prost(int64, tag="4")]
+    pub rejected: i64,
+    /// Derived `1 − rejected/total` in \[0, 1\], computed library-side so wire
+    /// consumers need not reproduce the total = 0 → 1.0 identity. Echoed for
+    /// convenience; `total`/`rejected` remain authoritative.
+    #[prost(double, tag="5")]
+    pub accuracy: f64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExtractionStatsResponse {
+    /// Per-(provider, model) rows, ordered by provider then model. Empty when
+    /// the slice has no semantic rows.
+    #[prost(message, repeated, tag="1")]
+    pub stats: ::prost::alloc::vec::Vec<ExtractionStat>,
+}
 // ─── Core types ─────────────────────────────────────────────────────────────
 
 /// JobKind mirrors `memoir_core::jobs::JobKind`. The set is closed by the

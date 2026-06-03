@@ -28,8 +28,8 @@ use std::ops::Deref;
 use memoir_core::client::{DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, RankingStrategy, ReconcileSummary};
 use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind};
 use memoir_core::memory::{
-    ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory, Scope as LibScope,
-    SupersessionEvent as LibSupersessionEvent,
+    ExtractionStat as LibExtractionStat, ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory,
+    Scope as LibScope, StatsFilter, SupersessionEvent as LibSupersessionEvent,
 };
 use memoir_core::store::{AsOfParams, DEFAULT_TIMELINE_LIMIT, TimelineDirection, TimelineParams};
 use memoir_core::vector::{
@@ -38,13 +38,14 @@ use memoir_core::vector::{
 };
 use memoir_sdk::memoir::v1::{
     BlendWeights as ProtoBlendWeights, Blended as ProtoBlended, Decay as ProtoDecay, DecayBucket as ProtoDecayBucket,
-    EditRequest, ExponentialDecay, FailedJob as ProtoFailedJob, FeedbackRequest,
-    FilterCondition as ProtoFilterCondition, ForgetRequest, Hybrid as ProtoHybrid, JobKind as ProtoJobKind,
-    KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues,
-    MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit, QueryRequest, QueryResponse,
-    Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReciprocalDecay, ReconcileResponse,
-    Scope as ProtoScope, StepDecay, SupersessionEvent as ProtoSupersessionEvent, SupersessionHistoryRequest,
-    TimelineRequest, TimelineResponse, decay, filter_condition, forget_request, match_value, match_values, ranking,
+    EditRequest, ExponentialDecay, ExtractionStat as ProtoExtractionStat, ExtractionStatsRequest,
+    FailedJob as ProtoFailedJob, FeedbackRequest, FilterCondition as ProtoFilterCondition, ForgetRequest,
+    Hybrid as ProtoHybrid, JobKind as ProtoJobKind, KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue,
+    MatchValues as ProtoMatchValues, MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit,
+    QueryRequest, QueryResponse, Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReciprocalDecay,
+    ReconcileResponse, Scope as ProtoScope, StepDecay, SupersessionEvent as ProtoSupersessionEvent,
+    SupersessionHistoryRequest, TimelineRequest, TimelineResponse, decay, filter_condition, forget_request,
+    match_value, match_values, ranking,
 };
 use tonic::Status;
 
@@ -715,6 +716,50 @@ impl From<ReconcileSummary> for WireReconcileResponse {
             failed_recovered: usize_to_i64_saturating(summary.failed_recovered, "failed_recovered"),
             orphans_deleted: usize_to_i64_saturating(summary.orphans_deleted, "orphans_deleted"),
         })
+    }
+}
+
+/// Wire form of a [`StatsFilter`]. Build via `WireStatsFilter::from(request)`.
+///
+/// Each proto `optional string` maps one-to-one to an `Option<String>` filter
+/// dimension; there is nothing to reject (an all-unset request is the valid
+/// "aggregate the whole store" case), so the conversion is infallible. The
+/// newtype exists to satisfy coherence — both `ExtractionStatsRequest` and
+/// `StatsFilter` are foreign to this crate, so the `From` impl needs a local
+/// anchor (same pattern as [`WireExtractionStat`]).
+pub(crate) struct WireStatsFilter(pub StatsFilter);
+
+impl From<ExtractionStatsRequest> for WireStatsFilter {
+    fn from(request: ExtractionStatsRequest) -> Self {
+        Self(StatsFilter {
+            agent_id: request.agent_id,
+            org_id: request.org_id,
+            user_id: request.user_id,
+        })
+    }
+}
+
+/// Wire form of a [`LibExtractionStat`]. Build via `WireExtractionStat::try_from(stat)`.
+///
+/// `total` and `rejected` are `u64` in the library, `int64` on the wire — the
+/// fallible `u64_count_to_proto` guards the (physically impossible) overflow,
+/// so the conversion is `TryFrom`, not `From` (the infallible-`From` sibling
+/// newtypes like [`WireFailedJob`] have no such cast). `accuracy` is recomputed
+/// library-side and echoed for wire consumers.
+pub(crate) struct WireExtractionStat(pub ProtoExtractionStat);
+
+impl TryFrom<LibExtractionStat> for WireExtractionStat {
+    type Error = Status;
+
+    fn try_from(stat: LibExtractionStat) -> Result<Self, Status> {
+        let accuracy = stat.accuracy();
+        Ok(Self(ProtoExtractionStat {
+            provider: stat.provider,
+            model: stat.model,
+            total: u64_count_to_proto(stat.total, "extraction_stats.total")?,
+            rejected: u64_count_to_proto(stat.rejected, "extraction_stats.rejected")?,
+            accuracy,
+        }))
     }
 }
 

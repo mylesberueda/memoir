@@ -4,7 +4,7 @@ use chrono::{DateTime, FixedOffset};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, Value as SeaOrmValue};
 
 use super::{AsOfParams, EditPatch, IndexStatus, MemoryStore, StoreError, TimelineDirection, TimelineParams};
-use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope, SupersessionEvent};
+use crate::memory::{ExtractionStat, ForgetTarget, Memory, MemoryKind, Scope, StatsFilter, SupersessionEvent};
 
 const PID_LENGTH: usize = 21;
 
@@ -190,6 +190,55 @@ impl MemoryStore for PostgresStore {
             memories.push(Memory::try_from(row)?);
         }
         Ok(memories)
+    }
+
+    async fn extraction_stats(&self, filter: StatsFilter) -> Result<Vec<ExtractionStat>, StoreError> {
+        // Always-present constraint: only semantic rows are extractions. Optional
+        // scope-subset filters AND onto it with positional params. provider/model
+        // live in the metadata blob (epic 0006 left them there); group on the
+        // extracted JSON text. `rejected` is a FILTERed count so total and
+        // rejected come back in one pass — total includes Stale + superseded rows
+        // (they are not model errors, so they are not in the FILTER).
+        let mut where_clauses: Vec<String> = vec!["m.kind = 'semantic'".into()];
+        let mut values: Vec<SeaOrmValue> = Vec::new();
+
+        for (column, value) in [
+            ("agent_id", filter.agent_id),
+            ("org_id", filter.org_id),
+            ("user_id", filter.user_id),
+        ] {
+            if let Some(value) = value {
+                values.push(SeaOrmValue::String(Some(value)));
+                where_clauses.push(format!("m.{column} = ${}", values.len()));
+            }
+        }
+
+        let sql = format!(
+            "SELECT \
+               COALESCE(m.metadata ->> 'provider', '') AS provider, \
+               COALESCE(m.metadata ->> 'model', '') AS model, \
+               COUNT(*)::BIGINT AS total, \
+               COUNT(*) FILTER (WHERE m.retirement_reason = 'rejected')::BIGINT AS rejected \
+             FROM memories m \
+             WHERE {} \
+             GROUP BY provider, model \
+             ORDER BY provider ASC, model ASC",
+            where_clauses.join(" AND "),
+        );
+
+        let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, values);
+        let rows = self.db.query_all_raw(stmt).await?;
+
+        let mut stats = Vec::with_capacity(rows.len());
+        for row in &rows {
+            stats.push(ExtractionStat {
+                provider: row.try_get::<String>("", "provider")?,
+                model: row.try_get::<String>("", "model")?,
+                total: u64::try_from(row.try_get::<i64>("", "total")?).unwrap_or(0),
+                rejected: u64::try_from(row.try_get::<i64>("", "rejected")?).unwrap_or(0),
+            });
+        }
+        Ok(stats)
     }
 
     async fn timeline(&self, scope: Scope, params: TimelineParams) -> Result<Vec<Memory>, StoreError> {

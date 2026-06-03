@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file memoir/v1/admin.proto.
  */
 export const file_memoir_v1_admin: GenFile = /*@__PURE__*/
-  fileDesc("ChVtZW1vaXIvdjEvYWRtaW4ucHJvdG8SCW1lbW9pci52MSK/AQoJRmFpbGVkSm9iEgoKAmlkGAEgASgDEhIKCnNvdXJjZV9waWQYAiABKAkSIAoEa2luZBgDIAEoDjISLm1lbW9pci52MS5Kb2JLaW5kEhAKCGF0dGVtcHRzGAQgASgFEhsKDmZhaWx1cmVfcmVhc29uGAUgASgJSACIAQESLgoKdXBkYXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCEQoPX2ZhaWx1cmVfcmVhc29uIiYKFUxpc3RGYWlsZWRKb2JzUmVxdWVzdBINCgVsaW1pdBgBIAEoBSI8ChZMaXN0RmFpbGVkSm9ic1Jlc3BvbnNlEiIKBGpvYnMYASADKAsyFC5tZW1vaXIudjEuRmFpbGVkSm9iIhkKF1BlbmRpbmdKb2JzQ291bnRSZXF1ZXN0IikKGFBlbmRpbmdKb2JzQ291bnRSZXNwb25zZRINCgVjb3VudBgBIAEoAyIdCg9SZXRyeUpvYlJlcXVlc3QSCgoCaWQYASABKAMiEgoQUmV0cnlKb2JSZXNwb25zZSIkChZEZWxldGVGYWlsZWRKb2JSZXF1ZXN0EgoKAmlkGAEgASgDIhkKF0RlbGV0ZUZhaWxlZEpvYlJlc3BvbnNlIl8KFlJldHJ5RmFpbGVkSm9ic1JlcXVlc3QSKAoHb2Zfa2luZBgBIAEoDjISLm1lbW9pci52MS5Kb2JLaW5kSACIAQESDwoHZHJ5X3J1bhgCIAEoCEIKCghfb2Zfa2luZCI8ChdSZXRyeUZhaWxlZEpvYnNSZXNwb25zZRIQCghhZmZlY3RlZBgBIAEoAxIPCgdkcnlfcnVuGAIgASgIIiEKElVuc3VwZXJzZWRlUmVxdWVzdBILCgNwaWQYASABKAkiFQoTVW5zdXBlcnNlZGVSZXNwb25zZSJJChBSZWNvbmNpbGVSZXF1ZXN0EhkKEW9ubHlfcmV0cnlfZmFpbGVkGAEgASgIEhoKEm9ubHlfY2xlYW5fb3JwaGFucxgCIAEoCCJeChFSZWNvbmNpbGVSZXNwb25zZRIWCg5mYWlsZWRfcmV0cmllZBgBIAEoAxIYChBmYWlsZWRfcmVjb3ZlcmVkGAIgASgDEhcKD29ycGhhbnNfZGVsZXRlZBgDIAEoAyp+CgdKb2JLaW5kEhgKFEpPQl9LSU5EX1VOU1BFQ0lGSUVEEAASEgoOSk9CX0tJTkRfRU1CRUQQARIUChBKT0JfS0lORF9FWFRSQUNUEAISFwoTSk9CX0tJTkRfQ0FURUdPUklaRRADEhYKEkpPQl9LSU5EX1JFUFJPQ0VTUxAEMtEECgxBZG1pblNlcnZpY2USVQoOTGlzdEZhaWxlZEpvYnMSIC5tZW1vaXIudjEuTGlzdEZhaWxlZEpvYnNSZXF1ZXN0GiEubWVtb2lyLnYxLkxpc3RGYWlsZWRKb2JzUmVzcG9uc2USWwoQUGVuZGluZ0pvYnNDb3VudBIiLm1lbW9pci52MS5QZW5kaW5nSm9ic0NvdW50UmVxdWVzdBojLm1lbW9pci52MS5QZW5kaW5nSm9ic0NvdW50UmVzcG9uc2USQwoIUmV0cnlKb2ISGi5tZW1vaXIudjEuUmV0cnlKb2JSZXF1ZXN0GhsubWVtb2lyLnYxLlJldHJ5Sm9iUmVzcG9uc2USWAoPRGVsZXRlRmFpbGVkSm9iEiEubWVtb2lyLnYxLkRlbGV0ZUZhaWxlZEpvYlJlcXVlc3QaIi5tZW1vaXIudjEuRGVsZXRlRmFpbGVkSm9iUmVzcG9uc2USWAoPUmV0cnlGYWlsZWRKb2JzEiEubWVtb2lyLnYxLlJldHJ5RmFpbGVkSm9ic1JlcXVlc3QaIi5tZW1vaXIudjEuUmV0cnlGYWlsZWRKb2JzUmVzcG9uc2USTAoLVW5zdXBlcnNlZGUSHS5tZW1vaXIudjEuVW5zdXBlcnNlZGVSZXF1ZXN0Gh4ubWVtb2lyLnYxLlVuc3VwZXJzZWRlUmVzcG9uc2USRgoJUmVjb25jaWxlEhsubWVtb2lyLnYxLlJlY29uY2lsZVJlcXVlc3QaHC5tZW1vaXIudjEuUmVjb25jaWxlUmVzcG9uc2ViBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("ChVtZW1vaXIvdjEvYWRtaW4ucHJvdG8SCW1lbW9pci52MSK/AQoJRmFpbGVkSm9iEgoKAmlkGAEgASgDEhIKCnNvdXJjZV9waWQYAiABKAkSIAoEa2luZBgDIAEoDjISLm1lbW9pci52MS5Kb2JLaW5kEhAKCGF0dGVtcHRzGAQgASgFEhsKDmZhaWx1cmVfcmVhc29uGAUgASgJSACIAQESLgoKdXBkYXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCEQoPX2ZhaWx1cmVfcmVhc29uIiYKFUxpc3RGYWlsZWRKb2JzUmVxdWVzdBINCgVsaW1pdBgBIAEoBSI8ChZMaXN0RmFpbGVkSm9ic1Jlc3BvbnNlEiIKBGpvYnMYASADKAsyFC5tZW1vaXIudjEuRmFpbGVkSm9iIhkKF1BlbmRpbmdKb2JzQ291bnRSZXF1ZXN0IikKGFBlbmRpbmdKb2JzQ291bnRSZXNwb25zZRINCgVjb3VudBgBIAEoAyIdCg9SZXRyeUpvYlJlcXVlc3QSCgoCaWQYASABKAMiEgoQUmV0cnlKb2JSZXNwb25zZSIkChZEZWxldGVGYWlsZWRKb2JSZXF1ZXN0EgoKAmlkGAEgASgDIhkKF0RlbGV0ZUZhaWxlZEpvYlJlc3BvbnNlIl8KFlJldHJ5RmFpbGVkSm9ic1JlcXVlc3QSKAoHb2Zfa2luZBgBIAEoDjISLm1lbW9pci52MS5Kb2JLaW5kSACIAQESDwoHZHJ5X3J1bhgCIAEoCEIKCghfb2Zfa2luZCI8ChdSZXRyeUZhaWxlZEpvYnNSZXNwb25zZRIQCghhZmZlY3RlZBgBIAEoAxIPCgdkcnlfcnVuGAIgASgIIiEKElVuc3VwZXJzZWRlUmVxdWVzdBILCgNwaWQYASABKAkiFQoTVW5zdXBlcnNlZGVSZXNwb25zZSJJChBSZWNvbmNpbGVSZXF1ZXN0EhkKEW9ubHlfcmV0cnlfZmFpbGVkGAEgASgIEhoKEm9ubHlfY2xlYW5fb3JwaGFucxgCIAEoCCJeChFSZWNvbmNpbGVSZXNwb25zZRIWCg5mYWlsZWRfcmV0cmllZBgBIAEoAxIYChBmYWlsZWRfcmVjb3ZlcmVkGAIgASgDEhcKD29ycGhhbnNfZGVsZXRlZBgDIAEoAyJ+ChZFeHRyYWN0aW9uU3RhdHNSZXF1ZXN0EhUKCGFnZW50X2lkGAEgASgJSACIAQESEwoGb3JnX2lkGAIgASgJSAGIAQESFAoHdXNlcl9pZBgDIAEoCUgCiAEBQgsKCV9hZ2VudF9pZEIJCgdfb3JnX2lkQgoKCF91c2VyX2lkImQKDkV4dHJhY3Rpb25TdGF0EhAKCHByb3ZpZGVyGAEgASgJEg0KBW1vZGVsGAIgASgJEg0KBXRvdGFsGAMgASgDEhAKCHJlamVjdGVkGAQgASgDEhAKCGFjY3VyYWN5GAUgASgBIkMKF0V4dHJhY3Rpb25TdGF0c1Jlc3BvbnNlEigKBXN0YXRzGAEgAygLMhkubWVtb2lyLnYxLkV4dHJhY3Rpb25TdGF0Kn4KB0pvYktpbmQSGAoUSk9CX0tJTkRfVU5TUEVDSUZJRUQQABISCg5KT0JfS0lORF9FTUJFRBABEhQKEEpPQl9LSU5EX0VYVFJBQ1QQAhIXChNKT0JfS0lORF9DQVRFR09SSVpFEAMSFgoSSk9CX0tJTkRfUkVQUk9DRVNTEAQyqwUKDEFkbWluU2VydmljZRJVCg5MaXN0RmFpbGVkSm9icxIgLm1lbW9pci52MS5MaXN0RmFpbGVkSm9ic1JlcXVlc3QaIS5tZW1vaXIudjEuTGlzdEZhaWxlZEpvYnNSZXNwb25zZRJbChBQZW5kaW5nSm9ic0NvdW50EiIubWVtb2lyLnYxLlBlbmRpbmdKb2JzQ291bnRSZXF1ZXN0GiMubWVtb2lyLnYxLlBlbmRpbmdKb2JzQ291bnRSZXNwb25zZRJDCghSZXRyeUpvYhIaLm1lbW9pci52MS5SZXRyeUpvYlJlcXVlc3QaGy5tZW1vaXIudjEuUmV0cnlKb2JSZXNwb25zZRJYCg9EZWxldGVGYWlsZWRKb2ISIS5tZW1vaXIudjEuRGVsZXRlRmFpbGVkSm9iUmVxdWVzdBoiLm1lbW9pci52MS5EZWxldGVGYWlsZWRKb2JSZXNwb25zZRJYCg9SZXRyeUZhaWxlZEpvYnMSIS5tZW1vaXIudjEuUmV0cnlGYWlsZWRKb2JzUmVxdWVzdBoiLm1lbW9pci52MS5SZXRyeUZhaWxlZEpvYnNSZXNwb25zZRJMCgtVbnN1cGVyc2VkZRIdLm1lbW9pci52MS5VbnN1cGVyc2VkZVJlcXVlc3QaHi5tZW1vaXIudjEuVW5zdXBlcnNlZGVSZXNwb25zZRJGCglSZWNvbmNpbGUSGy5tZW1vaXIudjEuUmVjb25jaWxlUmVxdWVzdBocLm1lbW9pci52MS5SZWNvbmNpbGVSZXNwb25zZRJYCg9FeHRyYWN0aW9uU3RhdHMSIS5tZW1vaXIudjEuRXh0cmFjdGlvblN0YXRzUmVxdWVzdBoiLm1lbW9pci52MS5FeHRyYWN0aW9uU3RhdHNSZXNwb25zZWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * FailedJob mirrors `memoir_core::jobs::FailedJob` exactly. Deliberately
@@ -345,6 +345,109 @@ export const ReconcileResponseSchema: GenMessage<ReconcileResponse> = /*@__PURE_
   messageDesc(file_memoir_v1_admin, 14);
 
 /**
+ * @generated from message memoir.v1.ExtractionStatsRequest
+ */
+export type ExtractionStatsRequest = Message<"memoir.v1.ExtractionStatsRequest"> & {
+  /**
+   * Optional scope-subset filters. Each set field narrows the slice; unset
+   * imposes no constraint. All three unset aggregates the whole store. These
+   * map to memoir-core's `StatsFilter`, a partial scope (not the all-required
+   * `Scope`), so `org_id` alone yields a per-tenant number.
+   *
+   * @generated from field: optional string agent_id = 1;
+   */
+  agentId?: string;
+
+  /**
+   * @generated from field: optional string org_id = 2;
+   */
+  orgId?: string;
+
+  /**
+   * @generated from field: optional string user_id = 3;
+   */
+  userId?: string;
+};
+
+/**
+ * Describes the message memoir.v1.ExtractionStatsRequest.
+ * Use `create(ExtractionStatsRequestSchema)` to create a new message.
+ */
+export const ExtractionStatsRequestSchema: GenMessage<ExtractionStatsRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_admin, 15);
+
+/**
+ * One (provider, model) accuracy row. Mirrors `memoir_core::memory::ExtractionStat`.
+ *
+ * @generated from message memoir.v1.ExtractionStat
+ */
+export type ExtractionStat = Message<"memoir.v1.ExtractionStat"> & {
+  /**
+   * Producing LLM provider (e.g. "ollama").
+   *
+   * @generated from field: string provider = 1;
+   */
+  provider: string;
+
+  /**
+   * Producing model id (e.g. "qwen3:14b").
+   *
+   * @generated from field: string model = 2;
+   */
+  model: string;
+
+  /**
+   * Semantic rows produced (active + retired, any reason).
+   *
+   * @generated from field: int64 total = 3;
+   */
+  total: bigint;
+
+  /**
+   * Subset retired as a corrected wrong extraction.
+   *
+   * @generated from field: int64 rejected = 4;
+   */
+  rejected: bigint;
+
+  /**
+   * Derived `1 − rejected/total` in [0, 1], computed library-side so wire
+   * consumers need not reproduce the total = 0 → 1.0 identity. Echoed for
+   * convenience; `total`/`rejected` remain authoritative.
+   *
+   * @generated from field: double accuracy = 5;
+   */
+  accuracy: number;
+};
+
+/**
+ * Describes the message memoir.v1.ExtractionStat.
+ * Use `create(ExtractionStatSchema)` to create a new message.
+ */
+export const ExtractionStatSchema: GenMessage<ExtractionStat> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_admin, 16);
+
+/**
+ * @generated from message memoir.v1.ExtractionStatsResponse
+ */
+export type ExtractionStatsResponse = Message<"memoir.v1.ExtractionStatsResponse"> & {
+  /**
+   * Per-(provider, model) rows, ordered by provider then model. Empty when
+   * the slice has no semantic rows.
+   *
+   * @generated from field: repeated memoir.v1.ExtractionStat stats = 1;
+   */
+  stats: ExtractionStat[];
+};
+
+/**
+ * Describes the message memoir.v1.ExtractionStatsResponse.
+ * Use `create(ExtractionStatsResponseSchema)` to create a new message.
+ */
+export const ExtractionStatsResponseSchema: GenMessage<ExtractionStatsResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_admin, 17);
+
+/**
  * JobKind mirrors `memoir_core::jobs::JobKind`. The set is closed by the
  * CHECK constraint on `memory_jobs.kind`; extending it requires a
  * follow-up library migration first, then a proto bump.
@@ -501,6 +604,21 @@ export const AdminService: GenService<{
     methodKind: "unary";
     input: typeof ReconcileRequestSchema;
     output: typeof ReconcileResponseSchema;
+  },
+  /**
+   * Extraction accuracy per (provider, model) over a scope slice — the
+   * read-only aggregate that proves extraction quality to a consumer
+   * (`accuracy = 1 − rejected/total`, rejected = corrected wrong extractions
+   * only). No LLM call. Scope fields on the request narrow the slice and are
+   * AND-combined; all-unset aggregates the whole store. Wraps memoir-core's
+   * `Client::extraction_stats`.
+   *
+   * @generated from rpc memoir.v1.AdminService.ExtractionStats
+   */
+  extractionStats: {
+    methodKind: "unary";
+    input: typeof ExtractionStatsRequestSchema;
+    output: typeof ExtractionStatsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_memoir_v1_admin, 0);
