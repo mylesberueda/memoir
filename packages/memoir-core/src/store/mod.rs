@@ -259,7 +259,10 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Deletes one memory or every memory in a scope, returning deleted pids.
     ///
     /// The returned pids let callers issue follow-up deletes against the
-    /// vector index or graph store.
+    /// vector index or graph store. A single-pid target returns the named pid
+    /// *and* the pids of its derived semantic rows (cascade-deleted via the
+    /// `source_pid` foreign key) — callers must evict every returned pid's
+    /// vector, or the cascade leaves orphaned points behind.
     ///
     /// # Errors
     ///
@@ -633,8 +636,10 @@ mod tests {
             let mut deleted = Vec::new();
             match target {
                 ForgetTarget::Pid(pid) => {
+                    // Mirror the Postgres `source_pid` ON DELETE CASCADE: remove
+                    // the named row and its derived semantic rows, returning all.
                     memories.retain(|m| {
-                        if m.pid == pid {
+                        if m.pid == pid || m.source_pid.as_deref() == Some(pid.as_str()) {
                             deleted.push(m.pid.clone());
                             false
                         } else {

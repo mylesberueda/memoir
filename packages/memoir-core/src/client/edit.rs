@@ -6,7 +6,7 @@ use std::pin::Pin;
 use chrono::{DateTime, FixedOffset};
 
 use crate::jobs::MemoryJobsStore;
-use crate::memory::Memory;
+use crate::memory::{Memory, RetirementReason};
 use crate::store::{EditPatch, IndexStatus, MemoryStore};
 
 use super::{Client, ClientError};
@@ -19,6 +19,13 @@ use super::{Client, ClientError};
 /// are written; untouched fields keep their existing values. The patch is
 /// no-op when nothing was set — awaiting the builder still works and
 /// returns the current row unchanged.
+///
+/// Editing an episodic source's content or event-time also cascades: the
+/// semantic memories derived from it are stale, so a reprocess is enqueued
+/// that retires them (reason `stale`) and re-derives from the edited source.
+/// A metadata-only edit does not cascade — it cannot change extraction output.
+/// Like the re-embed, the cascade rides the worker queue; re-`recall` later to
+/// see the corrected semantics.
 ///
 /// # Examples
 ///
@@ -117,6 +124,7 @@ async fn execute(builder: EditBuilder<'_>) -> Result<Memory, ClientError> {
     }
 
     let content_changed = content.is_some();
+    let event_at_changed = event_at.is_some();
     let patch = EditPatch {
         content,
         metadata,
@@ -134,6 +142,25 @@ async fn execute(builder: EditBuilder<'_>) -> Result<Memory, ClientError> {
                 crate::jobs::JobKind::Embed,
                 pid.clone(),
                 serde_json::json!({ "origin": "edit" }),
+            )
+            .await?;
+    }
+
+    // An edit to the source's content or event-time makes its derived semantics
+    // stale: they assert facts derived from the old source. Cascade a reprocess
+    // (epic 0011 ticket 0012) that retires those rows as `stale` and re-derives
+    // from the edited source. Reason `stale` (not `rejected`) — the extraction
+    // was right for the old content; the source changed. No `feedback` text: the
+    // edited content itself is the correction (the engine embeds it for the
+    // neighborhood). A metadata-only edit cannot change extraction output, so it
+    // does not cascade.
+    if content_changed || event_at_changed {
+        inner
+            .jobs
+            .enqueue(
+                crate::jobs::JobKind::Reprocess,
+                pid.clone(),
+                serde_json::json!({ "reason": RetirementReason::Stale.as_ref() }),
             )
             .await?;
     }

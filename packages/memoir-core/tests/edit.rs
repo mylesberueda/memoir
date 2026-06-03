@@ -9,6 +9,31 @@ use sea_orm::{ConnectionTrait, Statement, Value};
 
 mod common;
 
+/// Counts `reprocess` jobs with `payload.reason = 'stale'` anchored on `pid`.
+///
+/// The edit cascade (epic 0011 ticket 0012) enqueues exactly one such job when
+/// an episodic source's content or event_at changes; metadata-only edits
+/// enqueue none. Asserting the queued job — not the drained end state —
+/// decouples this trigger's test from worker + LLM timing.
+async fn count_stale_reprocess_jobs(client: &common::TestClient, pid: &str) -> anyhow::Result<i64> {
+    let db = client.raw_db().await?;
+    let row = db
+        .query_one_raw(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT COUNT(*) AS n
+            FROM memory_jobs
+            WHERE source_pid = $1
+              AND kind = 'reprocess'
+              AND payload ->> 'reason' = 'stale'
+            "#,
+            [Value::from(pid)],
+        ))
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("count returned no row"))?;
+    Ok(row.try_get("", "n")?)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_overwrite_content_on_edit() -> anyhow::Result<()> {
     let client = common::fresh_client().await?;
@@ -230,6 +255,68 @@ async fn should_not_enqueue_embed_job_when_only_metadata_changes() -> anyhow::Re
     assert_eq!(
         n, 0,
         "metadata-only edits must not enqueue re-embed jobs; embedding vector is still representative of content",
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_enqueue_stale_reprocess_after_content_edit() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+
+    let written = client.remember("my favorite color is green", scope.clone()).await?;
+    let count = count_stale_reprocess_jobs(&client, &written.pid).await?;
+
+    let _ = client.edit(&written.pid).content("my favorite color is blue").await?;
+
+    let after = count_stale_reprocess_jobs(&client, &written.pid).await?;
+    assert_eq!(
+        after - count,
+        1,
+        "a content edit must cascade exactly one stale Reprocess job to re-derive the source's semantics",
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_enqueue_stale_reprocess_after_event_at_edit() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+
+    let written = client.remember("the deploy happened", scope.clone()).await?;
+    let count = count_stale_reprocess_jobs(&client, &written.pid).await?;
+
+    let when = chrono::DateTime::parse_from_rfc3339("2026-05-27T00:00:00Z")?;
+    let _ = client.edit(&written.pid).event_at(when).await?;
+
+    let after = count_stale_reprocess_jobs(&client, &written.pid).await?;
+    assert_eq!(
+        after - count,
+        1,
+        "an event_at edit must cascade a stale Reprocess: the source's event-time feeds derived event-times",
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_not_enqueue_reprocess_when_only_metadata_changes() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+
+    let written = client.remember("a remembered thing", scope.clone()).await?;
+
+    let _ = client
+        .edit(&written.pid)
+        .metadata(serde_json::json!({ "note": "reclassified" }))
+        .await?;
+
+    let after = count_stale_reprocess_jobs(&client, &written.pid).await?;
+    assert_eq!(
+        after, 0,
+        "a metadata-only edit cannot change extraction output, so it must not cascade a reprocess",
     );
 
     Ok(())

@@ -629,9 +629,26 @@ impl MemoryStore for PostgresStore {
 
 impl PostgresStore {
     async fn forget_pid(&self, pid: &str) -> Result<Vec<String>, StoreError> {
+        // Delete the derived semantic rows (`source_pid = $1`) and the named row
+        // in one statement, returning every removed pid. The `source_pid` FK is
+        // `ON DELETE CASCADE`, but a plain `DELETE ... WHERE pid = $1 RETURNING`
+        // sees only the named pid — the cascade-removed children never reach
+        // RETURNING, so their vectors would orphan in Qdrant. Deleting the
+        // children explicitly in a CTE puts them in the result set. Depth is
+        // always 1: only semantic rows carry `source_pid`, and they are never
+        // themselves a source (migration 000002), so no recursion is needed.
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            "DELETE FROM memories WHERE pid = $1 RETURNING pid",
+            r#"
+            WITH derived AS (
+                DELETE FROM memories WHERE source_pid = $1 RETURNING pid
+            ), root AS (
+                DELETE FROM memories WHERE pid = $1 RETURNING pid
+            )
+            SELECT pid FROM derived
+            UNION ALL
+            SELECT pid FROM root
+            "#,
             [SeaOrmValue::String(Some(pid.to_string()))],
         );
         let rows = self.db.query_all_raw(stmt).await?;

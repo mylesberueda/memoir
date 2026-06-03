@@ -130,9 +130,13 @@ impl ClientInner {
             return Ok(());
         };
 
-        // Step 3: LLM call.
+        // Step 3: LLM call. Date relative facts ("last Friday") off the source's
+        // event-time when it has one, falling back to write-time — so an
+        // event_at edit (epic 0011 ticket 0012) actually shifts the derived
+        // event-times rather than re-deriving the same dates.
         let content_len = source.content.len();
-        let extraction_content = build_extraction_content(source.created_at, &source.content, correction);
+        let reference = source.event_at.unwrap_or(source.created_at);
+        let extraction_content = build_extraction_content(reference, &source.content, correction);
         let raw = match provider.extract(DEFAULT_EXTRACTION_PROMPT, &extraction_content).await {
             Ok(raw) => raw,
             Err(err) => {
@@ -192,7 +196,7 @@ impl ClientInner {
 
             let event_at = fact
                 .event_at
-                .and_then(|candidate| validator.validate(source.created_at, candidate));
+                .and_then(|candidate| validator.validate(reference, candidate));
 
             // Confidence is now a first-class column, sourced from the LLM's
             // per-fact score (scaled f32[0,1] → i8[0,100], clamped). It is no
