@@ -18,6 +18,8 @@ use std::pin::Pin;
 use tracing::{Level, event};
 
 use crate::jobs::{JobKind, MemoryJobsStore};
+use crate::memory::{ExtractionStat, StatsFilter};
+use crate::store::MemoryStore;
 
 use super::{Client, ClientError};
 
@@ -103,4 +105,76 @@ async fn execute(builder: RetryBuilder<'_>) -> Result<u64, ClientError> {
     );
 
     Ok(affected)
+}
+
+/// Per-call builder returned by [`Client::extraction_stats`].
+///
+/// Awaiting the builder computes extraction accuracy per `(provider, model)`
+/// over the requested scope slice — a read-only Postgres aggregate, no LLM
+/// call. Each [`ExtractionStat`] row carries the total semantic rows produced
+/// and the subset retired as `rejected` (a wrong extraction the user
+/// corrected); [`ExtractionStat::accuracy`] is the derived ratio.
+///
+/// The scope setters narrow the slice and are AND-combined; an unset dimension
+/// imposes no constraint, so the default (no setters) aggregates the whole
+/// store. Use `.org(..)` for a per-tenant number, add `.agent(..)` / `.user(..)`
+/// to narrow further.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use memoir_core::client::Client;
+/// # async fn example(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
+/// // Per-model accuracy for one org.
+/// for stat in client.extraction_stats().org("acme").await? {
+///     println!("{}/{}: {:.1}% over {} rows", stat.provider, stat.model, stat.accuracy() * 100.0, stat.total);
+/// }
+/// # Ok(())
+/// # }
+/// ```
+#[must_use = "extraction_stats() returns a builder that must be awaited"]
+pub struct ExtractionStatsBuilder<'a> {
+    client: &'a Client,
+    filter: StatsFilter,
+}
+
+impl<'a> ExtractionStatsBuilder<'a> {
+    pub(super) fn new(client: &'a Client) -> Self {
+        Self {
+            client,
+            filter: StatsFilter::default(),
+        }
+    }
+
+    /// Narrows the slice to one agent id. Default: all agents.
+    pub fn agent(mut self, agent_id: impl Into<String>) -> Self {
+        self.filter.agent_id = Some(agent_id.into());
+        self
+    }
+
+    /// Narrows the slice to one org id. Default: all orgs.
+    pub fn org(mut self, org_id: impl Into<String>) -> Self {
+        self.filter.org_id = Some(org_id.into());
+        self
+    }
+
+    /// Narrows the slice to one user id. Default: all users.
+    pub fn user(mut self, user_id: impl Into<String>) -> Self {
+        self.filter.user_id = Some(user_id.into());
+        self
+    }
+}
+
+impl<'a> IntoFuture for ExtractionStatsBuilder<'a> {
+    type Output = Result<Vec<ExtractionStat>, ClientError>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'a>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(execute_stats(self))
+    }
+}
+
+async fn execute_stats(builder: ExtractionStatsBuilder<'_>) -> Result<Vec<ExtractionStat>, ClientError> {
+    let ExtractionStatsBuilder { client, filter } = builder;
+    Ok(client.inner.store.extraction_stats(filter).await?)
 }

@@ -4,7 +4,7 @@ use chrono::{DateTime, FixedOffset};
 use sea_orm::{ConnectionTrait, DatabaseConnection, Statement, Value as SeaOrmValue};
 
 use super::{AsOfParams, EditPatch, IndexStatus, MemoryStore, StoreError, TimelineDirection, TimelineParams};
-use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope, SupersessionEvent};
+use crate::memory::{ExtractionStat, ForgetTarget, Memory, MemoryKind, Scope, StatsFilter, SupersessionEvent};
 
 const PID_LENGTH: usize = 21;
 
@@ -29,6 +29,9 @@ const MEMORY_SELECT_COLUMNS: &str = "
     m.created_at,
     m.updated_at,
     m.event_at,
+    m.confidence,
+    m.category,
+    m.retirement_reason,
     CASE
         WHEN m.superseded_by IS NULL THEN NULL
         ELSE (
@@ -62,15 +65,16 @@ impl PostgresStore {
 }
 
 impl MemoryStore for PostgresStore {
-    async fn remember(
-        &self,
-        scope: Scope,
-        content: String,
-        metadata: serde_json::Value,
-        kind: MemoryKind,
-        source_pid: Option<String>,
-        event_at: Option<DateTime<FixedOffset>>,
-    ) -> Result<Memory, StoreError> {
+    async fn remember(&self, new: crate::store::NewMemory) -> Result<Memory, StoreError> {
+        let crate::store::NewMemory {
+            scope,
+            content,
+            metadata,
+            kind,
+            source_pid,
+            event_at,
+            confidence,
+        } = new;
         scope.validate()?;
 
         let pid = nanoid::nanoid!(PID_LENGTH);
@@ -78,11 +82,12 @@ impl MemoryStore for PostgresStore {
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             r#"
-            INSERT INTO memories (pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, event_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO memories (pid, agent_id, org_id, user_id, content, metadata, kind, source_pid, event_at, confidence)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING
                 pid, agent_id, org_id, user_id, content, metadata, kind,
                 qdrant_status, source_pid, superseded_by, created_at, updated_at, event_at,
+                confidence, category, retirement_reason,
                 NULL::TIMESTAMPTZ AS supersession_at
             "#,
             [
@@ -95,6 +100,8 @@ impl MemoryStore for PostgresStore {
                 SeaOrmValue::String(Some(kind.to_string())),
                 SeaOrmValue::String(source_pid),
                 SeaOrmValue::ChronoDateTimeWithTimeZone(event_at),
+                // The column is SMALLINT; Confidence's invariant guarantees 0-100.
+                SeaOrmValue::SmallInt(Some(i16::from(confidence.get()))),
             ],
         );
 
@@ -139,7 +146,8 @@ impl MemoryStore for PostgresStore {
         let owned_pids: Vec<String> = pids.iter().map(|p| (*p).to_string()).collect();
         let select_sql = format!(
             "SELECT {MEMORY_SELECT_COLUMNS} FROM memories m \
-             WHERE m.pid = ANY($1) AND m.qdrant_status = 'indexed' AND m.superseded_by IS NULL"
+             WHERE m.pid = ANY($1) AND m.qdrant_status = 'indexed' \
+               AND m.superseded_by IS NULL AND m.retirement_reason IS NULL"
         );
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
@@ -158,6 +166,79 @@ impl MemoryStore for PostgresStore {
             memories.push(Memory::try_from(row)?);
         }
         Ok(memories)
+    }
+
+    async fn active_semantics_for_source(&self, source_pid: &str) -> Result<Vec<Memory>, StoreError> {
+        if source_pid.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let select_sql = format!(
+            "SELECT {MEMORY_SELECT_COLUMNS} FROM memories m \
+             WHERE m.source_pid = $1 AND m.kind = 'semantic' \
+               AND m.superseded_by IS NULL AND m.retirement_reason IS NULL"
+        );
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            select_sql,
+            [SeaOrmValue::String(Some(source_pid.to_string()))],
+        );
+
+        let rows = self.db.query_all_raw(stmt).await?;
+        let mut memories = Vec::with_capacity(rows.len());
+        for row in &rows {
+            memories.push(Memory::try_from(row)?);
+        }
+        Ok(memories)
+    }
+
+    async fn extraction_stats(&self, filter: StatsFilter) -> Result<Vec<ExtractionStat>, StoreError> {
+        // Always-present constraint: only semantic rows are extractions. Optional
+        // scope-subset filters AND onto it with positional params. provider/model
+        // live in the metadata blob (epic 0006 left them there); group on the
+        // extracted JSON text. `rejected` is a FILTERed count so total and
+        // rejected come back in one pass — total includes Stale + superseded rows
+        // (they are not model errors, so they are not in the FILTER).
+        let mut where_clauses: Vec<String> = vec!["m.kind = 'semantic'".into()];
+        let mut values: Vec<SeaOrmValue> = Vec::new();
+
+        for (column, value) in [
+            ("agent_id", filter.agent_id),
+            ("org_id", filter.org_id),
+            ("user_id", filter.user_id),
+        ] {
+            if let Some(value) = value {
+                values.push(SeaOrmValue::String(Some(value)));
+                where_clauses.push(format!("m.{column} = ${}", values.len()));
+            }
+        }
+
+        let sql = format!(
+            "SELECT \
+               COALESCE(m.metadata ->> 'provider', '') AS provider, \
+               COALESCE(m.metadata ->> 'model', '') AS model, \
+               COUNT(*)::BIGINT AS total, \
+               COUNT(*) FILTER (WHERE m.retirement_reason = 'rejected')::BIGINT AS rejected \
+             FROM memories m \
+             WHERE {} \
+             GROUP BY provider, model \
+             ORDER BY provider ASC, model ASC",
+            where_clauses.join(" AND "),
+        );
+
+        let stmt = Statement::from_sql_and_values(sea_orm::DatabaseBackend::Postgres, sql, values);
+        let rows = self.db.query_all_raw(stmt).await?;
+
+        let mut stats = Vec::with_capacity(rows.len());
+        for row in &rows {
+            stats.push(ExtractionStat {
+                provider: row.try_get::<String>("", "provider")?,
+                model: row.try_get::<String>("", "model")?,
+                total: u64::try_from(row.try_get::<i64>("", "total")?).unwrap_or(0),
+                rejected: u64::try_from(row.try_get::<i64>("", "rejected")?).unwrap_or(0),
+            });
+        }
+        Ok(stats)
     }
 
     async fn timeline(&self, scope: Scope, params: TimelineParams) -> Result<Vec<Memory>, StoreError> {
@@ -208,6 +289,10 @@ impl MemoryStore for PostgresStore {
         if !params.include_superseded {
             where_clauses.push("m.superseded_by IS NULL".into());
         }
+        // Retired rows (rejected/stale) are scrubbed from all reads,
+        // unconditionally — unlike supersession, retirement has no
+        // "include" escape hatch (a rejected extraction was never true).
+        where_clauses.push("m.retirement_reason IS NULL".into());
 
         let order = match params.direction {
             TimelineDirection::Descending => "DESC",
@@ -248,6 +333,10 @@ impl MemoryStore for PostgresStore {
             "m.user_id = $3".into(),
             "m.created_at <= $4".into(),
             "latest_event.winner_pid IS NULL".into(),
+            // Retirement is current-state (no decided_at history), so it is
+            // applied uniformly even to this point-in-time read: a
+            // rejected/stale row is scrubbed from every view (epic 0011).
+            "m.retirement_reason IS NULL".into(),
         ];
         let mut values: Vec<SeaOrmValue> = vec![
             SeaOrmValue::String(Some(scope.agent_id)),
@@ -448,6 +537,38 @@ impl MemoryStore for PostgresStore {
         self.recall(pid).await
     }
 
+    async fn set_category(&self, pid: &str, category: &str) -> Result<(), StoreError> {
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "UPDATE memories SET category = $1 WHERE pid = $2",
+            [
+                SeaOrmValue::String(Some(category.to_string())),
+                SeaOrmValue::String(Some(pid.to_string())),
+            ],
+        );
+        let result = self.db.execute_raw(stmt).await?;
+        if result.rows_affected() == 0 {
+            return Err(StoreError::NotFound(pid.to_string()));
+        }
+        Ok(())
+    }
+
+    async fn retire(&self, pid: &str, reason: crate::memory::RetirementReason) -> Result<(), StoreError> {
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "UPDATE memories SET retirement_reason = $1 WHERE pid = $2",
+            [
+                SeaOrmValue::String(Some(reason.to_string())),
+                SeaOrmValue::String(Some(pid.to_string())),
+            ],
+        );
+        let result = self.db.execute_raw(stmt).await?;
+        if result.rows_affected() == 0 {
+            return Err(StoreError::NotFound(pid.to_string()));
+        }
+        Ok(())
+    }
+
     async fn supersede(&self, pid: &str, by_pid: &str) -> Result<(), StoreError> {
         // `INSERT ... SELECT ... WHERE EXISTS` keeps the contract identical
         // to the old UPDATE-based path: if the loser pid does not exist,
@@ -557,9 +678,26 @@ impl MemoryStore for PostgresStore {
 
 impl PostgresStore {
     async fn forget_pid(&self, pid: &str) -> Result<Vec<String>, StoreError> {
+        // Delete the derived semantic rows (`source_pid = $1`) and the named row
+        // in one statement, returning every removed pid. The `source_pid` FK is
+        // `ON DELETE CASCADE`, but a plain `DELETE ... WHERE pid = $1 RETURNING`
+        // sees only the named pid — the cascade-removed children never reach
+        // RETURNING, so their vectors would orphan in Qdrant. Deleting the
+        // children explicitly in a CTE puts them in the result set. Depth is
+        // always 1: only semantic rows carry `source_pid`, and they are never
+        // themselves a source (migration 000002), so no recursion is needed.
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
-            "DELETE FROM memories WHERE pid = $1 RETURNING pid",
+            r#"
+            WITH derived AS (
+                DELETE FROM memories WHERE source_pid = $1 RETURNING pid
+            ), root AS (
+                DELETE FROM memories WHERE pid = $1 RETURNING pid
+            )
+            SELECT pid FROM derived
+            UNION ALL
+            SELECT pid FROM root
+            "#,
             [SeaOrmValue::String(Some(pid.to_string()))],
         );
         let rows = self.db.query_all_raw(stmt).await?;
@@ -608,6 +746,9 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
         let created_at: DateTime<FixedOffset> = row.try_get("", "created_at")?;
         let updated_at: DateTime<FixedOffset> = row.try_get("", "updated_at")?;
         let event_at: Option<DateTime<FixedOffset>> = row.try_get("", "event_at")?;
+        let confidence_raw: i16 = row.try_get("", "confidence")?;
+        let category: Option<String> = row.try_get("", "category")?;
+        let retirement_str: Option<String> = row.try_get("", "retirement_reason")?;
         let supersession_at: Option<DateTime<FixedOffset>> = row.try_get("", "supersession_at")?;
 
         let kind: MemoryKind = kind_str
@@ -617,6 +758,18 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
         let status: IndexStatus = status_str
             .parse()
             .map_err(|_| StoreError::CacheInvariant(format!("unknown qdrant status: {status_str}")))?;
+
+        let retirement = retirement_str
+            .map(|s| {
+                s.parse::<crate::memory::RetirementReason>()
+                    .map_err(|_| StoreError::CacheInvariant(format!("unknown retirement reason: {s}")))
+            })
+            .transpose()?;
+
+        // The `memories.confidence` CHECK constrains the column to 0-100, so an
+        // `i16` from the DB always fits `i8`. `Confidence::new` clamps as
+        // defense-in-depth against a corrupted row rather than erroring.
+        let confidence = crate::memory::Confidence::new(confidence_raw.clamp(0, 100) as i8);
 
         let supersession = match (superseded_by, supersession_at) {
             (Some(winner_pid), Some(at)) => Some(crate::memory::SupersessionInfo { winner_pid, at }),
@@ -650,6 +803,9 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
             event_at,
             score: None,
             status,
+            confidence,
+            category,
+            retirement,
         })
     }
 }

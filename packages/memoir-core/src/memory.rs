@@ -37,6 +37,14 @@ impl Scope {
 }
 
 /// Kind of memory written to or read from storage.
+///
+/// The two kinds form memoir's source-and-projection model: episodic rows are
+/// the verbatim record a consumer writes; semantic rows are facts a worker
+/// derives from them. Semantic content is **never hand-written or edited** —
+/// it is always re-derived from its episodic source, so a wrong semantic fact
+/// is corrected by teaching ([`crate::client::Client::feedback`]) or by editing
+/// the source ([`crate::client::Client::edit`]), never by writing the fact
+/// directly. See the crate-root docs' "Correction" section.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
 #[strum(serialize_all = "lowercase")]
 pub enum MemoryKind {
@@ -44,7 +52,150 @@ pub enum MemoryKind {
     Episodic,
 
     /// Structured fact extracted from episodic memory by an LLM (epic 0006).
+    ///
+    /// Always derived, never authored directly: there is no API to set a
+    /// semantic row's content. Corrections flow through re-derivation.
     Semantic,
+}
+
+/// Why a memory was retired by the correction model (epic 0011 Track B).
+///
+/// A retired memory is hidden from every read and its vector is evicted, so
+/// it can no longer surface or pollute reprocessing — but the row is kept (it
+/// is the reprocess "don't re-derive this" guard and the accuracy-metric
+/// record). The reason distinguishes an extraction error from a non-error:
+/// only [`Self::Rejected`] counts against extraction accuracy.
+///
+/// Distinct from supersession (the `superseded_by` column + events table),
+/// which models "a newer fact won" — a normal lifecycle event, not a
+/// correction. "Active" means neither superseded nor retired.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "lowercase")]
+pub enum RetirementReason {
+    /// The extraction was wrong; the user corrected it via feedback. This is
+    /// an extraction error — the numerator of the accuracy metric.
+    Rejected,
+
+    /// The episodic source was edited or deleted, so this derived semantic no
+    /// longer reflects it. The model did not err; the source changed.
+    Stale,
+}
+
+/// Optional scope-subset filter for an aggregate read.
+///
+/// Each field narrows the aggregate to memories matching it; an unset field
+/// imposes no constraint. Distinct from [`Scope`], which requires all three
+/// fields — this is a partial filter, so a caller can aggregate org-wide
+/// (`org_id` only), per-agent, or across the whole store (all unset).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct StatsFilter {
+    pub agent_id: Option<String>,
+    pub org_id: Option<String>,
+    pub user_id: Option<String>,
+}
+
+/// Extraction-accuracy tally for one `(provider, model)` pair within a slice.
+///
+/// `total` counts every semantic row the pair produced (active or retired, any
+/// reason); `rejected` counts only those retired as [`RetirementReason::Rejected`]
+/// — a wrong extraction the user corrected. Rows retired as
+/// [`RetirementReason::Stale`] (the source changed) and superseded rows (a newer
+/// fact won) are in `total` but never in `rejected`: they are not model errors.
+/// See [`Self::accuracy`] for the derived ratio.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtractionStat {
+    pub provider: String,
+    pub model: String,
+    pub total: u64,
+    pub rejected: u64,
+}
+
+impl ExtractionStat {
+    /// Returns the extraction accuracy as `1 − rejected/total` in `[0.0, 1.0]`.
+    ///
+    /// A pair with zero extractions returns `1.0`: there is nothing to have
+    /// gotten wrong, so the identity value is "no errors."
+    #[must_use]
+    pub fn accuracy(&self) -> f64 {
+        if self.total == 0 {
+            return 1.0;
+        }
+        1.0 - (self.rejected as f64 / self.total as f64)
+    }
+}
+
+/// A memory's confidence as a 0-100 percentage.
+///
+/// A newtype over `i8` whose only constructor clamps into `[0, 100]`, so an
+/// out-of-range value is unrepresentable. This is the single home for the
+/// scale-and-clamp logic: the extraction LLM emits an `f32` (occasionally
+/// `> 1.0`), which [`Confidence::from_unit_scale`] scales by 100 and clamps.
+///
+/// # Examples
+///
+/// ```
+/// use memoir_core::memory::Confidence;
+///
+/// assert_eq!(Confidence::new(73).get(), 73);
+/// assert_eq!(Confidence::new(120).get(), 100); // clamped
+/// assert_eq!(Confidence::from_unit_scale(0.42).get(), 42);
+/// assert_eq!(Confidence::from_unit_scale(1.7).get(), 100); // clamped
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Confidence(i8);
+
+impl Confidence {
+    /// Largest valid confidence: fully certain.
+    pub const MAX: Confidence = Confidence(100);
+
+    /// Smallest valid confidence: no certainty.
+    pub const MIN: Confidence = Confidence(0);
+
+    /// Creates a confidence from a percentage, clamping into `[0, 100]`.
+    ///
+    /// Clamping is the defined behavior, not an error: callers (and the
+    /// extraction LLM) occasionally produce out-of-range values, and the
+    /// intent is always "as confident as possible / not at all," never a
+    /// failure. Hence this is infallible.
+    #[must_use]
+    pub fn new(percent: i8) -> Self {
+        Self(percent.clamp(0, 100))
+    }
+
+    /// Creates a confidence from a unit-scale score, scaling ×100 and clamping.
+    ///
+    /// The extraction LLM emits a per-fact score in `[0.0, 1.0]` (but may
+    /// exceed `1.0`). This scales to a percentage and clamps into `[0, 100]`.
+    /// `NaN` maps to [`Confidence::MIN`].
+    #[must_use]
+    pub fn from_unit_scale(score: f32) -> Self {
+        if score.is_nan() {
+            return Self::MIN;
+        }
+        // Round before clamping so e.g. 0.005 -> 1, not 0.
+        let percent = (score * 100.0).round();
+        Self(percent.clamp(0.0, 100.0) as i8)
+    }
+
+    /// Returns the percentage value in `[0, 100]`.
+    #[must_use]
+    pub fn get(self) -> i8 {
+        self.0
+    }
+}
+
+impl Default for Confidence {
+    /// Defaults to fully certain (`100`), matching the `memories.confidence`
+    /// column default — episodic writes are certain by construction.
+    fn default() -> Self {
+        Self::MAX
+    }
+}
+
+impl std::fmt::Display for Confidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 /// Selects which memory kinds a read includes.
@@ -166,6 +317,38 @@ pub struct Memory {
     /// Mirrors the `memories.qdrant_status` column. Consumers use this as the
     /// canonical "is this memory fully processed yet" signal.
     pub status: crate::store::IndexStatus,
+
+    /// How sure memoir is that this memory is true, as a 0-100 percentage.
+    ///
+    /// Episodic memories are `100` by construction — the user said it.
+    /// Semantic memories carry the extraction LLM's scaled per-fact score
+    /// (populated by the extract worker). See [`Confidence`]. Feeds the
+    /// selection blend as a signal (normalized to `[0, 1]`) and the
+    /// `min_confidence` hard filter — see [`crate::client::BlendWeights`].
+    pub confidence: Confidence,
+
+    /// Categorization label, or `None` until the categorize worker runs.
+    ///
+    /// Populated asynchronously by the NLI categorize stage. A `None`
+    /// category is unfiltered, not rejected — absence means "not yet
+    /// classified," not "no category applies." The value set (taxonomy) is
+    /// owned by the categorize worker, so this stays an open `String` here;
+    /// the v1 labels are `preference`, `identity`, `workflow`, `factual`,
+    /// `transient` (see `crate::client::categorize`). Drives the
+    /// category-bonus term of the selection blend ([`crate::client::BlendWeights`])
+    /// and the `category` hard filter on search/query.
+    pub category: Option<String>,
+
+    /// Why this memory was retired, or `None` when active (epic 0011).
+    ///
+    /// Set by the correction model ([`crate::client::Client::reject`] /
+    /// `mark_stale`). A `Some(_)` row is hidden from all reads and its vector
+    /// is evicted; the row is kept for the reprocess guard and the
+    /// extraction-accuracy metric ([`crate::client::Client::extraction_stats`]),
+    /// where only [`RetirementReason::Rejected`] counts as an error. Distinct
+    /// from [`Self::supersession`]. "Active" requires both this and
+    /// `supersession` to be `None`.
+    pub retirement: Option<RetirementReason>,
 }
 
 /// Latest supersession state for a [`Memory`] — winner pid and decision time.
@@ -287,6 +470,9 @@ mod tests {
             event_at: None,
             score: None,
             status: crate::store::IndexStatus::Pending,
+            confidence: Confidence::default(),
+            category: None,
+            retirement: None,
         }
     }
 
@@ -303,11 +489,87 @@ mod tests {
     }
 
     #[test]
+    fn should_render_retirement_reason_as_lowercase_string() {
+        assert_eq!(RetirementReason::Rejected.as_ref(), "rejected");
+        assert_eq!(RetirementReason::Stale.as_ref(), "stale");
+    }
+
+    #[test]
+    fn should_round_trip_retirement_reason_through_str() {
+        use std::str::FromStr as _;
+        assert_eq!(RetirementReason::from_str("rejected").unwrap(), RetirementReason::Rejected);
+        assert_eq!(RetirementReason::from_str("stale").unwrap(), RetirementReason::Stale);
+        assert!(RetirementReason::from_str("superseded").is_err());
+        assert!(RetirementReason::from_str("nonsense").is_err());
+    }
+
+    #[test]
+    fn should_compute_accuracy_as_one_minus_rejected_over_total() {
+        let stat = ExtractionStat {
+            provider: "ollama".to_string(),
+            model: "qwen3:14b".to_string(),
+            total: 100,
+            rejected: 3,
+        };
+        assert!((stat.accuracy() - 0.97).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn should_report_perfect_accuracy_when_no_extractions() {
+        let stat = ExtractionStat {
+            provider: String::new(),
+            model: String::new(),
+            total: 0,
+            rejected: 0,
+        };
+        assert_eq!(stat.accuracy(), 1.0, "zero extractions means nothing to get wrong");
+    }
+
+    #[test]
     fn should_parse_memory_kind_from_str() {
         use std::str::FromStr as _;
         assert_eq!(MemoryKind::from_str("episodic").unwrap(), MemoryKind::Episodic);
         assert_eq!(MemoryKind::from_str("semantic").unwrap(), MemoryKind::Semantic);
         assert!(MemoryKind::from_str("nonsense").is_err());
+    }
+
+    #[test]
+    fn should_keep_in_range_confidence_unchanged() {
+        assert_eq!(Confidence::new(0).get(), 0);
+        assert_eq!(Confidence::new(73).get(), 73);
+        assert_eq!(Confidence::new(100).get(), 100);
+    }
+
+    #[test]
+    fn should_clamp_out_of_range_confidence() {
+        assert_eq!(Confidence::new(127).get(), 100);
+        assert_eq!(Confidence::new(-1).get(), 0);
+        assert_eq!(Confidence::new(-128).get(), 0);
+    }
+
+    #[test]
+    fn should_scale_unit_confidence_to_percentage() {
+        assert_eq!(Confidence::from_unit_scale(0.0).get(), 0);
+        assert_eq!(Confidence::from_unit_scale(0.42).get(), 42);
+        assert_eq!(Confidence::from_unit_scale(1.0).get(), 100);
+    }
+
+    #[test]
+    fn should_clamp_unit_confidence_above_one() {
+        // The extraction LLM occasionally emits scores > 1.0.
+        assert_eq!(Confidence::from_unit_scale(1.7).get(), 100);
+        assert_eq!(Confidence::from_unit_scale(-0.5).get(), 0);
+    }
+
+    #[test]
+    fn should_map_nan_confidence_to_min() {
+        assert_eq!(Confidence::from_unit_scale(f32::NAN), Confidence::MIN);
+    }
+
+    #[test]
+    fn should_default_confidence_to_max() {
+        assert_eq!(Confidence::default(), Confidence::MAX);
+        assert_eq!(Confidence::default().get(), 100);
     }
 
     #[test]

@@ -5,10 +5,27 @@
 use std::time::Duration;
 
 use memoir_core::client::ClientError;
-use memoir_core::memory::{ForgetTarget, Scope};
-use memoir_core::store::StoreError;
+use memoir_core::memory::{Confidence, ForgetTarget, MemoryKind, Scope};
+use memoir_core::store::{MemoryStore, NewMemory, StoreError};
+use memoir_core::vector::VectorIndex;
+use qdrant_client::qdrant::{Condition, Filter, ScrollPointsBuilder};
 
 mod common;
+
+/// Returns whether the test collection holds a Qdrant point for `pid`.
+async fn qdrant_has_point(qdrant: &qdrant_client::Qdrant, collection: &str, pid: &str) -> anyhow::Result<bool> {
+    let response = qdrant
+        .scroll(
+            ScrollPointsBuilder::new(collection)
+                .filter(Filter {
+                    must: vec![Condition::matches("pid", pid.to_string())],
+                    ..Default::default()
+                })
+                .limit(1u32),
+        )
+        .await?;
+    Ok(!response.result.is_empty())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_forget_pid_remove_row_and_make_recall_fail() -> anyhow::Result<()> {
@@ -19,7 +36,11 @@ async fn should_forget_pid_remove_row_and_make_recall_fail() -> anyhow::Result<(
     let pid = wait_for_first_pid(&client, &scope, "forget me by pid", Duration::from_secs(15)).await?;
 
     let deleted = client.forget(ForgetTarget::Pid(pid.clone())).await?;
-    assert_eq!(deleted, vec![pid.clone()], "forget(Pid) returns exactly the deleted pid");
+    assert_eq!(
+        deleted,
+        vec![pid.clone()],
+        "forget(Pid) returns exactly the deleted pid"
+    );
 
     // Recall must now report NotFound — the row is gone from the source of truth.
     let result = client.recall(&pid).await;
@@ -47,7 +68,7 @@ async fn should_forget_scope_bulk_delete_all_matching_memories() -> anyhow::Resu
 
     let deleted = client.forget(ForgetTarget::Scope(scope.clone())).await?;
     assert!(
-        deleted.len() >= 1,
+        !deleted.is_empty(),
         "forget(Scope) deletes at least the rows we wrote; got {} deleted",
         deleted.len()
     );
@@ -89,6 +110,65 @@ async fn should_forget_reject_empty_scope_fields() -> anyhow::Result<()> {
     assert!(
         matches!(result, Err(ClientError::Store(StoreError::InvalidScope(_)))),
         "empty scope must be rejected as InvalidScope; got {result:?}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_evict_derived_semantic_vectors_when_episodic_source_is_forgotten() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+    let qdrant = client.raw_qdrant()?;
+
+    // An indexed episodic source plus a derived semantic row, both with vectors
+    // in Qdrant. The semantic row's `source_pid` ties it to the source via the
+    // ON DELETE CASCADE foreign key.
+    let source = client.remember("my favorite color is green", scope.clone()).await?;
+    common::wait_until_indexed(
+        &client,
+        &source.pid,
+        &scope,
+        "my favorite color is green",
+        Duration::from_secs(15),
+    )
+    .await?;
+
+    let derived = client
+        .store()
+        .remember(NewMemory {
+            scope: scope.clone(),
+            content: "the user's favorite color is green".to_string(),
+            metadata: serde_json::json!({ "origin": "test" }),
+            kind: MemoryKind::Semantic,
+            source_pid: Some(source.pid.clone()),
+            event_at: None,
+            confidence: Confidence::new(80),
+        })
+        .await?;
+    // Index the derived row directly: a fixed 384-dim vector is enough to prove
+    // a point exists then gets evicted — eviction, not search quality, is under
+    // test, so the vector's content is irrelevant.
+    client.index().upsert(&derived, vec![0.1_f32; 384]).await?;
+
+    assert!(
+        qdrant_has_point(&qdrant, &client.collection, &derived.pid).await?,
+        "precondition: derived semantic point must be indexed before forget",
+    );
+
+    let deleted = client.forget(ForgetTarget::Pid(source.pid.clone())).await?;
+    assert!(
+        deleted.contains(&source.pid) && deleted.contains(&derived.pid),
+        "forget(Pid) must return both the source and its cascade-deleted derived pid; got {deleted:?}",
+    );
+
+    assert!(
+        !qdrant_has_point(&qdrant, &client.collection, &derived.pid).await?,
+        "the derived semantic row's vector must be evicted — the cascade must not leave an orphaned point",
+    );
+    assert!(
+        !qdrant_has_point(&qdrant, &client.collection, &source.pid).await?,
+        "the source's own vector must also be evicted",
     );
 
     Ok(())

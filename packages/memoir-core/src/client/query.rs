@@ -77,7 +77,100 @@ impl DecayFn {
     }
 }
 
+/// Weights for [`RankingStrategy::Blended`]'s linear score.
+///
+/// The three signal weights (`cosine`, `confidence`, `recency`) are blended
+/// additively; they need not sum to `1.0` but doing so keeps the score in
+/// `[0, 1]` for interpretability. `category_bonus` is added on top when a
+/// memory's category is in `preferred_categories` — a soft nudge, not a
+/// filter (for a hard category filter, see [`crate::client::SearchBuilder`]).
+/// When `preferred_categories` is empty the bonus never applies, so the
+/// category term is inert by default.
+///
+/// Use a named preset ([`Self::relevance_first`], [`Self::trust_first`],
+/// [`Self::balanced`]) or construct directly for custom weights. Presets are
+/// v1 starting points and **may be retuned pre-1.0**; pin a `Blended` with
+/// explicit weights for frozen behavior.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlendWeights {
+    /// Weight on cosine similarity (the `[0, 1]`-ish vector match).
+    pub cosine: f32,
+    /// Weight on confidence (the memory's `0-100` certainty, normalized to `[0, 1]`).
+    pub confidence: f32,
+    /// Weight on recency (the decay-of-age term in `[0, 1]`).
+    pub recency: f32,
+    /// Additive bonus when a memory's category is preferred.
+    pub category_bonus: f32,
+    /// Categories that earn `category_bonus`. Empty disables the bonus.
+    pub preferred_categories: Vec<String>,
+}
+
+impl BlendWeights {
+    /// Favors vector relevance; closest to pure-cosine behavior.
+    ///
+    /// Cosine dominates, with confidence and recency as light tiebreakers.
+    /// Use when the query is a specific information need and the best answer
+    /// is whatever matches the wording most closely.
+    #[must_use]
+    pub fn relevance_first() -> Self {
+        Self {
+            cosine: 0.7,
+            confidence: 0.15,
+            recency: 0.15,
+            category_bonus: 0.05,
+            preferred_categories: Vec::new(),
+        }
+    }
+
+    /// Favors durable, high-confidence facts over raw relevance.
+    ///
+    /// Confidence carries the most weight, so a corrected/asserted fact
+    /// outranks a slightly-closer transient match. Use when building a
+    /// system-prompt persona where being *right* matters more than being
+    /// lexically closest.
+    #[must_use]
+    pub fn trust_first() -> Self {
+        Self {
+            cosine: 0.4,
+            confidence: 0.45,
+            recency: 0.15,
+            category_bonus: 0.05,
+            preferred_categories: Vec::new(),
+        }
+    }
+
+    /// Even-handed blend of relevance, confidence, and recency.
+    #[must_use]
+    pub fn balanced() -> Self {
+        Self {
+            cosine: 0.4,
+            confidence: 0.3,
+            recency: 0.3,
+            category_bonus: 0.05,
+            preferred_categories: Vec::new(),
+        }
+    }
+
+    /// Returns a copy with `categories` set as the preferred set.
+    ///
+    /// Memories whose `category` is in this set earn `category_bonus` at
+    /// ranking time. With an empty set the bonus is inert.
+    #[must_use]
+    pub fn prefer_categories(mut self, categories: impl IntoIterator<Item = String>) -> Self {
+        self.preferred_categories = categories.into_iter().collect();
+        self
+    }
+}
+
 /// How [`Client::query`] orders the candidate set.
+///
+/// Reach for [`Self::Hybrid`] when relevance and recency are the only signals
+/// that matter (it ignores confidence and category); reach for [`Self::Blended`]
+/// to also reward high-confidence facts and preferred categories — the typical
+/// choice once the categorize/confidence pipeline is populated. `Blended` is a
+/// strict superset, so `Hybrid` is just the `w_conf = 0`, no-category special
+/// case. For raw nearest-neighbor hits with no re-ranking at all, use
+/// [`Client::search`] instead of `query`.
 ///
 /// Constructing a variant explicitly is the caller's opt-in to that
 /// specific behavior — those parameter values become part of the stability
@@ -98,6 +191,21 @@ pub enum RankingStrategy {
         /// Decay shape applied to the memory's age.
         decay: DecayFn,
     },
+
+    /// Linear blend of cosine, confidence, recency, and a category bonus.
+    ///
+    /// `score = w_cos·cosine + w_conf·(confidence/100) + w_rec·decay(age)`,
+    /// plus `category_bonus` when the memory's category is preferred. The
+    /// superset of [`Self::Hybrid`] (which is the `w_conf = 0`, no-category
+    /// case). Confidence is normalized from `0-100` to `[0, 1]` before
+    /// weighting so no single signal dominates by scale. Pure math + indexed
+    /// lookups — no inference in the read path.
+    Blended {
+        /// Signal weights and the optional category preference.
+        weights: BlendWeights,
+        /// Decay shape applied to the memory's age.
+        decay: DecayFn,
+    },
 }
 
 impl RankingStrategy {
@@ -106,6 +214,22 @@ impl RankingStrategy {
     pub fn default_hybrid() -> Self {
         Self::Hybrid {
             alpha: DEFAULT_HYBRID_ALPHA,
+            decay: DecayFn::Exponential {
+                half_life: chrono::Duration::days(DEFAULT_HYBRID_HALF_LIFE_DAYS as i64),
+            },
+        }
+    }
+
+    /// A [`Self::Blended`] strategy with the given weight preset and the
+    /// default exponential recency decay.
+    ///
+    /// Convenience over constructing `Blended { weights, decay }` by hand
+    /// when the default half-life is fine:
+    /// `RankingStrategy::blended(BlendWeights::trust_first())`.
+    #[must_use]
+    pub fn blended(weights: BlendWeights) -> Self {
+        Self::Blended {
+            weights,
             decay: DecayFn::Exponential {
                 half_life: chrono::Duration::days(DEFAULT_HYBRID_HALF_LIFE_DAYS as i64),
             },
@@ -398,6 +522,24 @@ fn rank_score(strategy: &RankingStrategy, cosine: f32, memory: &Memory, now: Dat
             let recency = decay.evaluate(age);
             alpha * cosine + (1.0 - alpha) * recency
         }
+        RankingStrategy::Blended { weights, decay } => {
+            let anchor = memory.event_at.unwrap_or(memory.created_at);
+            let recency = decay.evaluate(now - anchor);
+            // Normalize confidence 0-100 → [0, 1] so it blends on the same
+            // scale as cosine and recency; otherwise its magnitude would
+            // dominate regardless of weight.
+            let confidence = f32::from(memory.confidence.get()) / 100.0;
+            let category_bonus = match &memory.category {
+                Some(category) if weights.preferred_categories.iter().any(|c| c == category) => {
+                    weights.category_bonus
+                }
+                _ => 0.0,
+            };
+            weights.cosine * cosine
+                + weights.confidence * confidence
+                + weights.recency * recency
+                + category_bonus
+        }
     }
 }
 
@@ -474,17 +616,16 @@ mod tests {
     #[test]
     fn should_default_hybrid_use_documented_alpha_and_decay() {
         let strategy = RankingStrategy::default_hybrid();
-        match strategy {
-            RankingStrategy::Hybrid { alpha, decay } => {
-                assert!((alpha - DEFAULT_HYBRID_ALPHA).abs() < f32::EPSILON);
-                assert_eq!(
-                    decay,
-                    DecayFn::Exponential {
-                        half_life: chrono::Duration::days(DEFAULT_HYBRID_HALF_LIFE_DAYS as i64)
-                    }
-                );
+        let RankingStrategy::Hybrid { alpha, decay } = strategy else {
+            panic!("default_hybrid must return the Hybrid variant; got {strategy:?}");
+        };
+        assert!((alpha - DEFAULT_HYBRID_ALPHA).abs() < f32::EPSILON);
+        assert_eq!(
+            decay,
+            DecayFn::Exponential {
+                half_life: chrono::Duration::days(DEFAULT_HYBRID_HALF_LIFE_DAYS as i64)
             }
-        }
+        );
     }
 
     #[test]
@@ -527,5 +668,92 @@ mod tests {
         assert_eq!(relative_label(chrono::Duration::minutes(1)), "1 minute ago");
         assert_eq!(relative_label(chrono::Duration::hours(3)), "3 hours ago");
         assert_eq!(relative_label(chrono::Duration::days(2)), "2 days ago");
+    }
+
+    /// A memory at `now` (zero age) with the given confidence and category.
+    fn scored_fixture(now: DateTime<FixedOffset>, confidence: i8, category: Option<&str>) -> Memory {
+        Memory {
+            pid: "p".into(),
+            scope: Scope {
+                agent_id: "a".into(),
+                org_id: "o".into(),
+                user_id: "u".into(),
+            },
+            content: "c".into(),
+            metadata: serde_json::json!({}),
+            kind: crate::memory::MemoryKind::Semantic,
+            source_pid: None,
+            supersession: None,
+            created_at: now,
+            updated_at: now,
+            event_at: None,
+            score: None,
+            status: crate::store::IndexStatus::Indexed,
+            confidence: crate::memory::Confidence::new(confidence),
+            category: category.map(str::to_string),
+            retirement: None,
+        }
+    }
+
+    fn balanced_blend() -> RankingStrategy {
+        RankingStrategy::blended(BlendWeights::balanced())
+    }
+
+    #[test]
+    fn should_rank_high_confidence_above_low_at_equal_cosine() {
+        // Ticket 0008 verification: a high-confidence row outranks a
+        // low-confidence row of equal cosine + equal (zero) age.
+        let now = Utc::now().into();
+        let strategy = balanced_blend();
+        let high = rank_score(&strategy, 0.8, &scored_fixture(now, 95, None), now);
+        let low = rank_score(&strategy, 0.8, &scored_fixture(now, 10, None), now);
+        assert!(high > low, "high confidence ({high}) must outrank low ({low}) at equal cosine");
+    }
+
+    #[test]
+    fn should_keep_recency_moving_ranking_at_equal_cosine_and_confidence() {
+        // A recent row outranks an old row of equal cosine + confidence.
+        let now: DateTime<FixedOffset> = Utc::now().into();
+        let strategy = balanced_blend();
+        let mut old = scored_fixture(now, 80, None);
+        old.created_at = now - chrono::Duration::days(60);
+        let recent = scored_fixture(now, 80, None);
+        let recent_score = rank_score(&strategy, 0.8, &recent, now);
+        let old_score = rank_score(&strategy, 0.8, &old, now);
+        assert!(
+            recent_score > old_score,
+            "recent ({recent_score}) must outrank old ({old_score}) at equal cosine+confidence"
+        );
+    }
+
+    #[test]
+    fn should_apply_category_bonus_only_to_preferred_categories() {
+        let now: DateTime<FixedOffset> = Utc::now().into();
+        let strategy = RankingStrategy::blended(BlendWeights::balanced().prefer_categories(["preference".to_string()]));
+        let preferred = rank_score(&strategy, 0.8, &scored_fixture(now, 80, Some("preference")), now);
+        let other = rank_score(&strategy, 0.8, &scored_fixture(now, 80, Some("transient")), now);
+        let uncategorized = rank_score(&strategy, 0.8, &scored_fixture(now, 80, None), now);
+        assert!(preferred > other, "preferred category must earn the bonus");
+        assert!(
+            (other - uncategorized).abs() < f32::EPSILON,
+            "non-preferred and uncategorized rows must score identically (no bonus)"
+        );
+    }
+
+    #[test]
+    fn should_blend_be_inert_on_category_when_no_preference_set() {
+        // With an empty preferred set, category never moves the score.
+        let now: DateTime<FixedOffset> = Utc::now().into();
+        let strategy = balanced_blend();
+        let with_cat = rank_score(&strategy, 0.8, &scored_fixture(now, 80, Some("preference")), now);
+        let without = rank_score(&strategy, 0.8, &scored_fixture(now, 80, None), now);
+        assert!((with_cat - without).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn should_preset_weights_differ_in_confidence_emphasis() {
+        // trust_first weights confidence more heavily than relevance_first.
+        assert!(BlendWeights::trust_first().confidence > BlendWeights::relevance_first().confidence);
+        assert!(BlendWeights::relevance_first().cosine > BlendWeights::trust_first().cosine);
     }
 }

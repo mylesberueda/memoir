@@ -14,6 +14,9 @@ mod m20000000_000002_create_memory_jobs;
 mod m20000000_000003_add_superseded_by;
 mod m20000000_000004_add_event_at;
 mod m20000000_000005_create_supersession_events;
+mod m20000000_000006_add_confidence_category_retirement;
+mod m20000000_000007_add_categorize_job_kind;
+mod m20000000_000008_add_reprocess_job_kind;
 
 /// Default Postgres schema for memoir-core's tables.
 pub const DEFAULT_SCHEMA: &str = "memoir";
@@ -35,6 +38,17 @@ pub struct Migrator;
 
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
+    /// Ledger table for memoir-core's migration history.
+    ///
+    /// Distinct from sea-orm's default `seaql_migrations` so memoir-core and
+    /// memoir-service can share one Postgres schema (both default to `public`
+    /// for schema-less entity codegen) without their ledgers colliding. Each
+    /// migrator reads only its own rows; sharing one table makes each reject
+    /// the other's applied migrations as "missing files".
+    fn migration_table_name() -> DynIden {
+        Alias::new("memoir_core_migrations").into_iden()
+    }
+
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
             Box::new(m20000000_000001_create_memories::Migration),
@@ -42,6 +56,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20000000_000003_add_superseded_by::Migration),
             Box::new(m20000000_000004_add_event_at::Migration),
             Box::new(m20000000_000005_create_supersession_events::Migration),
+            Box::new(m20000000_000006_add_confidence_category_retirement::Migration),
+            Box::new(m20000000_000007_add_categorize_job_kind::Migration),
+            Box::new(m20000000_000008_add_reprocess_job_kind::Migration),
         ]
     }
 }

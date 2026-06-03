@@ -16,8 +16,7 @@ mod openai;
 mod role;
 
 pub use config::{
-    DEFAULT_ANTHROPIC_MODEL, DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, DEFAULT_OPENAI_MODEL,
-    LlmConfig, LlmKind,
+    DEFAULT_ANTHROPIC_MODEL, DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, DEFAULT_OPENAI_MODEL, LlmConfig, LlmKind,
 };
 pub use error::LlmError;
 pub use extraction::{
@@ -30,11 +29,11 @@ use std::future::Future;
 use std::sync::Arc;
 
 use futures::{Stream, StreamExt};
-use rig::agent::MultiTurnStreamItem;
-use rig::client::CompletionClient;
-use rig::completion::Prompt;
-use rig::message::Message;
-use rig::streaming::{StreamedAssistantContent, StreamingChat};
+use rig_core::agent::MultiTurnStreamItem;
+use rig_core::client::CompletionClient;
+use rig_core::completion::Prompt;
+use rig_core::message::Message;
+use rig_core::streaming::{StreamedAssistantContent, StreamingChat};
 
 use inner::InnerLlm;
 
@@ -79,11 +78,7 @@ pub trait LlmProvider: Send + Sync + 'static {
     /// Returns [`LlmError::Connection`] when the backend is unreachable and
     /// [`LlmError::Provider`] for provider-side errors (rate limits, model
     /// not found, invalid request shape).
-    fn extract(
-        &self,
-        preamble: &str,
-        content: &str,
-    ) -> impl Future<Output = Result<String, LlmError>> + Send;
+    fn extract(&self, preamble: &str, content: &str) -> impl Future<Output = Result<String, LlmError>> + Send;
 }
 
 /// Default [`LlmProvider`] backed by `rig-core`'s per-provider clients.
@@ -288,8 +283,7 @@ mod tests {
 
     #[test]
     fn should_construct_rig_provider_from_ollama_config() {
-        let provider =
-            RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "llama3.2")).unwrap();
+        let provider = RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "llama3.2")).unwrap();
         assert_eq!(provider.kind(), LlmKind::Ollama);
         assert_eq!(provider.model(), "llama3.2");
     }
@@ -303,8 +297,7 @@ mod tests {
 
     #[test]
     fn should_construct_rig_provider_from_anthropic_config() {
-        let provider =
-            RigLlmProvider::new(LlmConfig::anthropic("sk-ant-test", "claude-haiku-4-5")).unwrap();
+        let provider = RigLlmProvider::new(LlmConfig::anthropic("sk-ant-test", "claude-haiku-4-5")).unwrap();
         assert_eq!(provider.kind(), LlmKind::Anthropic);
         assert_eq!(provider.model(), "claude-haiku-4-5");
     }
@@ -312,28 +305,33 @@ mod tests {
     #[test]
     fn should_redact_credentials_in_debug_output() {
         // Ollama URL
-        let provider =
-            RigLlmProvider::new(LlmConfig::ollama("http://internal-host:11434", "llama3.2"))
-                .unwrap();
+        let provider = RigLlmProvider::new(LlmConfig::ollama("http://internal-host:11434", "llama3.2")).unwrap();
         let debug = format!("{provider:?}");
-        assert!(!debug.contains("internal-host"), "Debug must NOT leak the URL; got {debug}");
+        assert!(
+            !debug.contains("internal-host"),
+            "Debug must NOT leak the URL; got {debug}"
+        );
 
         // OpenAI api_key
         let provider = RigLlmProvider::new(LlmConfig::openai("sk-secret-key", "gpt-4o")).unwrap();
         let debug = format!("{provider:?}");
-        assert!(!debug.contains("sk-secret-key"), "Debug must NOT leak api_key; got {debug}");
+        assert!(
+            !debug.contains("sk-secret-key"),
+            "Debug must NOT leak api_key; got {debug}"
+        );
 
         // Anthropic api_key
-        let provider =
-            RigLlmProvider::new(LlmConfig::anthropic("sk-ant-secret", "claude-haiku-4-5")).unwrap();
+        let provider = RigLlmProvider::new(LlmConfig::anthropic("sk-ant-secret", "claude-haiku-4-5")).unwrap();
         let debug = format!("{provider:?}");
-        assert!(!debug.contains("sk-ant-secret"), "Debug must NOT leak api_key; got {debug}");
+        assert!(
+            !debug.contains("sk-ant-secret"),
+            "Debug must NOT leak api_key; got {debug}"
+        );
     }
 
     #[test]
     fn should_debug_show_kind_and_model() {
-        let provider =
-            RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "llama3.2")).unwrap();
+        let provider = RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "llama3.2")).unwrap();
         let debug = format!("{provider:?}");
         // Debug renders the LlmKind enum variant verbatim (e.g. `Ollama`),
         // while Display lowercases it. Either is fine for operators; the
@@ -357,8 +355,7 @@ mod tests {
     #[test]
     fn should_registry_get_return_inserted_provider() {
         let mut registry = LlmRegistry::default();
-        let provider =
-            RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "llama3.2")).unwrap();
+        let provider = RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "llama3.2")).unwrap();
         registry.insert(LlmRole::Extraction, provider);
 
         let fetched = registry.get(LlmRole::Extraction).expect("should be present");
@@ -371,13 +368,11 @@ mod tests {
         let mut registry = LlmRegistry::default();
         registry.insert(
             LlmRole::Extraction,
-            RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "extraction-model"))
-                .unwrap(),
+            RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "extraction-model")).unwrap(),
         );
         registry.insert(
             LlmRole::Contradiction,
-            RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "contradiction-model"))
-                .unwrap(),
+            RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "contradiction-model")).unwrap(),
         );
 
         let chosen = registry
@@ -391,8 +386,7 @@ mod tests {
         let mut registry = LlmRegistry::default();
         registry.insert(
             LlmRole::Extraction,
-            RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "extraction-model"))
-                .unwrap(),
+            RigLlmProvider::new(LlmConfig::ollama("http://localhost:11434", "extraction-model")).unwrap(),
         );
 
         let chosen = registry

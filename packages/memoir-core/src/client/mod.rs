@@ -1,24 +1,28 @@
 //! High-level facade composing the embedder, store, and vector index.
 
 mod admin;
+mod categorize;
 mod edit;
 mod embed;
 mod error;
+mod feedback;
 mod extract;
 mod query;
 mod recall_as_of;
 mod reconcile;
 mod remember;
+mod reprocess;
 mod search;
 mod timeline;
 mod worker;
 
-pub use admin::RetryBuilder;
+pub use admin::{ExtractionStatsBuilder, RetryBuilder};
 pub use edit::EditBuilder;
 pub use error::ClientError;
+pub use feedback::FeedbackBuilder;
 pub use query::{
-    DEFAULT_HYBRID_ALPHA, DEFAULT_HYBRID_HALF_LIFE_DAYS, DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, QueryBuilder,
-    RankingStrategy,
+    BlendWeights, DEFAULT_HYBRID_ALPHA, DEFAULT_HYBRID_HALF_LIFE_DAYS, DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext,
+    QueryBuilder, RankingStrategy,
 };
 pub use recall_as_of::RecallAsOfBuilder;
 pub use reconcile::{ReconcileBuilder, ReconcileSummary};
@@ -50,6 +54,13 @@ pub(crate) struct ClientInner {
     pub(crate) index: QdrantIndex,
     pub(crate) jobs: PostgresJobsStore,
     pub(crate) llms: LlmRegistry,
+    /// Optional NLI classifier for the categorize stage (epic 0011).
+    ///
+    /// `None` when no classifier is configured — categorization is then a
+    /// no-op and the extract stage skips enqueuing categorize jobs. Behind
+    /// `Arc` because the classifier is `Send + Sync` and shared into the
+    /// `spawn_blocking` inference task.
+    pub(crate) nli: Option<Arc<crate::nli::NliClassifier>>,
     pub(crate) schema: String,
     pub(crate) system_prompt: Option<String>,
 }
@@ -126,6 +137,7 @@ impl Client {
         #[builder(into)] collection: Option<String>,
         extraction_llm: Option<LlmConfig>,
         contradiction_llm: Option<LlmConfig>,
+        categorize_model: Option<crate::nli::NliConfig>,
     ) -> Result<Client, ClientError> {
         let schema = schema.unwrap_or_else(|| crate::migration::DEFAULT_SCHEMA.to_string());
 
@@ -158,6 +170,22 @@ impl Client {
             llms.install(LlmRole::Contradiction, config)?;
         }
 
+        // Build the NLI classifier only when a model is configured — it
+        // downloads an ~87MB model on first construction, so consumers who
+        // don't want categorization shouldn't pay for it. `new()` is
+        // sync-blocking (HF download), so it runs on the blocking pool to
+        // avoid stalling the async runtime. Pass `NliConfig::default()` for
+        // the model memoir ships with.
+        let nli = if let Some(config) = categorize_model {
+            let classifier = tokio::task::spawn_blocking(move || crate::nli::NliClassifier::new(config))
+                .await
+                .map_err(|join_err| ClientError::Nli(format!("classifier init task panicked: {join_err}")))?
+                .map_err(|nli_err| ClientError::Nli(nli_err.to_string()))?;
+            Some(Arc::new(classifier))
+        } else {
+            None
+        };
+
         Ok(Client {
             inner: Arc::new(ClientInner {
                 embedder: Arc::new(embedder),
@@ -165,6 +193,7 @@ impl Client {
                 index,
                 jobs,
                 llms,
+                nli,
                 schema,
                 system_prompt,
             }),
@@ -483,6 +512,75 @@ impl Client {
         Ok(deleted)
     }
 
+    /// Rejects a memory: a wrong extraction the user corrected (epic 0011).
+    ///
+    /// Marks the row `retirement_reason = 'rejected'` and evicts its vector,
+    /// so it disappears from every read and can no longer pollute search or
+    /// reprocessing. The row is kept (not deleted) — it is the reprocess
+    /// "don't re-derive this" guard and counts toward the extraction-accuracy
+    /// metric. Rejection is the extraction-error case; for a source that
+    /// merely changed, use [`Self::mark_stale`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::NotFound`] when no memory matches `pid`,
+    /// or [`crate::store::StoreError::Database`] for database failures. A
+    /// vector-eviction failure is logged at WARN (reconciliation cleans the
+    /// orphan) and does not fail the call once the row is marked.
+    pub async fn reject(&self, pid: &str) -> Result<(), ClientError> {
+        self.retire(pid, crate::memory::RetirementReason::Rejected).await
+    }
+
+    /// Marks a memory stale: its episodic source changed (epic 0011).
+    ///
+    /// Marks the row `retirement_reason = 'stale'` and evicts its vector. Like
+    /// [`Self::reject`] the row is hidden everywhere and kept, but stale is
+    /// NOT an extraction error (the model was right; the source moved), so it
+    /// does not count against the accuracy metric.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::reject`].
+    pub async fn mark_stale(&self, pid: &str) -> Result<(), ClientError> {
+        self.retire(pid, crate::memory::RetirementReason::Stale).await
+    }
+
+    /// Corrects a wrong extraction by teaching, not editing (epic 0011).
+    ///
+    /// `pid` is the wrong *semantic* memory the user saw in recall. Awaiting
+    /// the returned builder enqueues a reprocess of that fact's episodic
+    /// source: the derived rows are retired as `rejected` and re-derived with
+    /// the correction in context, so a corrected fact replaces the wrong one.
+    /// The user never hand-writes a semantic row — semantic memory stays
+    /// always-derived. Fire-and-forget: returns once the job is enqueued.
+    ///
+    /// To correct the episodic record itself, use [`Self::edit`]; that is a
+    /// different correction (the source changed, not a wrong extraction). See
+    /// [`FeedbackBuilder`] for the builder methods.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ClientError::Store`] wrapping
+    /// [`crate::store::StoreError::NotFound`] when no memory matches `pid`,
+    /// [`ClientError::NotCorrectable`] when the target is not a semantic row
+    /// or has no episodic source, and [`ClientError::Jobs`] when the reprocess
+    /// job cannot be enqueued.
+    pub fn feedback(&self, pid: impl Into<String>) -> FeedbackBuilder<'_> {
+        FeedbackBuilder::new(self, pid.into())
+    }
+
+    /// Retires `pid` with `reason`: marks the column, then evicts the vector.
+    ///
+    /// Shared by [`Self::reject`] and [`Self::mark_stale`]. Mirrors
+    /// [`Self::forget`]'s store-then-index ordering and its
+    /// WARN-on-evict-failure resilience: the Postgres mark is the source of
+    /// truth, and a transient Qdrant failure leaves a searchable orphan that
+    /// reconciliation removes — it does not roll back the retirement.
+    async fn retire(&self, pid: &str, reason: crate::memory::RetirementReason) -> Result<(), ClientError> {
+        self.inner.retire_and_evict(pid, reason).await
+    }
+
     /// Runs reconciliation: retries `failed` rows and cleans Qdrant orphans.
     ///
     /// Returns a per-call builder. Awaiting it runs the configured passes
@@ -656,6 +754,17 @@ impl Client {
     /// Returns [`ClientError::Store`] wrapping a database failure.
     pub async fn list_agents(&self, org_id: &str, user_id: &str) -> Result<Vec<String>, ClientError> {
         Ok(self.inner.store.list_agent_ids(org_id, user_id).await?)
+    }
+
+    /// Computes extraction accuracy per `(provider, model)` over a scope slice.
+    ///
+    /// Returns an [`ExtractionStatsBuilder`]; its scope setters narrow the slice
+    /// before awaiting. A read-only aggregate proving extraction quality to a
+    /// consumer — `accuracy = 1 − rejected/total`, where `rejected` counts only
+    /// wrong extractions the user corrected (not `Stale` or superseded rows).
+    /// No LLM call. See [`ExtractionStatsBuilder`] for the builder methods.
+    pub fn extraction_stats(&self) -> ExtractionStatsBuilder<'_> {
+        ExtractionStatsBuilder::new(self)
     }
 }
 

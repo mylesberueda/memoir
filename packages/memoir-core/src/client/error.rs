@@ -32,4 +32,17 @@ pub enum ClientError {
         "metadata uses reserved key '{key}'; reserved keys are owned by memoir-core's payload schema and cannot be set via metadata"
     )]
     ReservedMetadataKey { key: String },
+
+    /// NLI classifier initialization failed (epic 0011).
+    #[error("nli classifier failed: {0}")]
+    Nli(String),
+
+    /// Feedback targeted a memory that cannot be corrected (epic 0011).
+    ///
+    /// Feedback corrects a wrong *extraction*, so its target must be a
+    /// semantic row derived from an episodic source. An episodic target
+    /// (correct it via [`crate::client::Client::edit`] instead) or a semantic
+    /// row with no `source_pid` cannot be reprocessed.
+    #[error("memory {pid} is not correctable via feedback: {reason}")]
+    NotCorrectable { pid: String, reason: String },
 }

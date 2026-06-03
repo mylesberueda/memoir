@@ -68,6 +68,16 @@ service AdminService {
   // Unary, not streaming. memoir-ui should not poll this RPC; it's a
   // human-initiated maintenance action.
   rpc Reconcile(ReconcileRequest) returns (ReconcileResponse);
+
+  // ── Quality metrics ──────────────────────────────────────────────────────
+
+  // Extraction accuracy per (provider, model) over a scope slice — the
+  // read-only aggregate that proves extraction quality to a consumer
+  // (`accuracy = 1 − rejected/total`, rejected = corrected wrong extractions
+  // only). No LLM call. Scope fields on the request narrow the slice and are
+  // AND-combined; all-unset aggregates the whole store. Wraps memoir-core's
+  // `Client::extraction_stats`.
+  rpc ExtractionStats(ExtractionStatsRequest) returns (ExtractionStatsResponse);
 }
 
 // ─── Core types ─────────────────────────────────────────────────────────────
@@ -77,8 +87,10 @@ service AdminService {
 // follow-up library migration first, then a proto bump.
 enum JobKind {
   JOB_KIND_UNSPECIFIED = 0;
-  JOB_KIND_EMBED = 1;     // Embed a memory's content + upsert its vector.
-  JOB_KIND_EXTRACT = 2;   // Run LLM extraction against an episodic memory.
+  JOB_KIND_EMBED = 1; // Embed a memory's content + upsert its vector.
+  JOB_KIND_EXTRACT = 2; // Run LLM extraction against an episodic memory.
+  JOB_KIND_CATEGORIZE = 3; // Run NLI categorization against a semantic memory.
+  JOB_KIND_REPROCESS = 4; // Re-derive semantic rows from a corrected episodic source.
 }
 
 // FailedJob mirrors `memoir_core::jobs::FailedJob` exactly. Deliberately
@@ -87,7 +99,7 @@ enum JobKind {
 // comment.
 message FailedJob {
   int64 id = 1;
-  string source_pid = 2;            // The memory pid this job processes.
+  string source_pid = 2; // The memory pid this job processes.
   JobKind kind = 3;
   int32 attempts = 4;
   optional string failure_reason = 5;
@@ -177,7 +189,38 @@ message ReconcileRequest {
 message ReconcileResponse {
   // Mirrors `memoir_core::client::ReconcileSummary`. Counts reflect work
   // performed, not work attempted — see the library docs.
-  int64 failed_retried = 1;    // Rows the retry pass attempted to re-embed.
-  int64 failed_recovered = 2;  // Rows the retry pass moved into `indexed`.
-  int64 orphans_deleted = 3;   // Orphan vectors deleted from the index.
+  int64 failed_retried = 1; // Rows the retry pass attempted to re-embed.
+  int64 failed_recovered = 2; // Rows the retry pass moved into `indexed`.
+  int64 orphans_deleted = 3; // Orphan vectors deleted from the index.
+}
+
+// ─── ExtractionStats RPC ────────────────────────────────────────────────────
+
+message ExtractionStatsRequest {
+  // Optional scope-subset filters. Each set field narrows the slice; unset
+  // imposes no constraint. All three unset aggregates the whole store. These
+  // map to memoir-core's `StatsFilter`, a partial scope (not the all-required
+  // `Scope`), so `org_id` alone yields a per-tenant number.
+  optional string agent_id = 1;
+  optional string org_id = 2;
+  optional string user_id = 3;
+}
+
+// One (provider, model) accuracy row. Mirrors `memoir_core::memory::ExtractionStat`.
+message ExtractionStat {
+  string provider = 1; // Producing LLM provider (e.g. "ollama").
+  string model = 2; // Producing model id (e.g. "qwen3:14b").
+  int64 total = 3; // Semantic rows produced (active + retired, any reason).
+  int64 rejected = 4; // Subset retired as a corrected wrong extraction.
+
+  // Derived `1 − rejected/total` in [0, 1], computed library-side so wire
+  // consumers need not reproduce the total = 0 → 1.0 identity. Echoed for
+  // convenience; `total`/`rejected` remain authoritative.
+  double accuracy = 5;
+}
+
+message ExtractionStatsResponse {
+  // Per-(provider, model) rows, ordered by provider then model. Empty when
+  // the slice has no semantic rows.
+  repeated ExtractionStat stats = 1;
 }

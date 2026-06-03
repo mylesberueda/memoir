@@ -146,9 +146,20 @@ async fn execute(builder: RememberBuilder<'_>) -> Result<Memory, ClientError> {
         }
     }
 
+    // Episodic confidence is pinned to MAX: the user said it, so what they
+    // said is by definition true. Semantic rows carry the scaled extraction
+    // score instead (set on the extract path).
     let written = inner
         .store
-        .remember(scope, prompt, metadata, MemoryKind::Episodic, None, event_at)
+        .remember(crate::store::NewMemory {
+            scope,
+            content: prompt,
+            metadata,
+            kind: MemoryKind::Episodic,
+            source_pid: None,
+            event_at,
+            confidence: crate::memory::Confidence::MAX,
+        })
         .await?;
 
     // Persistent write-behind: enqueue an embed job rather than running

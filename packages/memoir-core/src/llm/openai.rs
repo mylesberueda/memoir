@@ -1,6 +1,6 @@
 //! Factory for `rig::providers::openai::Client`.
 
-use rig::providers::openai;
+use rig_core::providers::openai;
 
 use super::LlmError;
 
@@ -14,7 +14,5 @@ pub(super) fn build_client(api_key: &str, base_url: Option<&str>) -> Result<open
     if let Some(url) = base_url {
         builder = builder.base_url(url);
     }
-    builder
-        .build()
-        .map_err(|err| LlmError::Connection(err.to_string()))
+    builder.build().map_err(|err| LlmError::Connection(err.to_string()))
 }

@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use rig::providers::{anthropic, ollama, openai};
+use rig_core::providers::{anthropic, ollama, openai};
 
 use super::LlmKind;
 

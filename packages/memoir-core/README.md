@@ -70,11 +70,47 @@ for the full lifecycle — remember, search, recall, forget, reconcile.
 
 - **`Client::remember(content, scope)`** — write-only, returns the persisted row at `PENDING`.
 - **`Client::search(query, scope)`** — vector similarity search with `.limit()`, `.episodic()`, `.semantic()`, `.metadata_filter()`, `.min_similarity()` builders.
+- **`Client::query(query, scope)`** — ranked, prompt-shaped retrieval: re-ranks candidates by a blend of cosine, confidence, recency, and category. See **Selection** below.
 - **`Client::recall(pid)`** — direct lookup by memoir pid.
+- **`Client::feedback(pid)`** / **`Client::edit(pid)`** — the correction surface. See **Correction** below.
 - **`Client::forget(target)`** — delete by pid or by scope.
 - **`Client::reconcile()`** — retry failed jobs and clean orphan vectors.
 - **`Client::spawn_worker()`** — background queue drain.
-- Admin: `Client::failed_jobs`, `retry_job`, `delete_failed_job`, `pending_jobs_count`, `unsupersede`, `retry_failed_jobs`.
+- Admin: `Client::failed_jobs`, `retry_job`, `delete_failed_job`, `pending_jobs_count`, `unsupersede`, `retry_failed_jobs`, `extraction_stats`.
+
+## Selection
+
+`search` returns raw nearest-neighbor hits by cosine similarity. `query`
+re-ranks candidates by a blend of signals — cosine, the memory's confidence,
+recency, and a bonus for preferred categories — and returns prompt-shaped
+context. Pass a `RankingStrategy` to tune it: `Hybrid` (cosine + recency) when
+those are the only signals that matter, or `Blended` (with `BlendWeights`) to
+also reward high-confidence, preferred-category facts. `min_confidence` and
+`category` on `search`/`query` are *hard filters* (they exclude rows); the
+blend *weights* the same signals softly — distinct mechanisms.
+
+## Correction
+
+Semantic memories (the facts memoir extracts) are always derived, never
+hand-edited. To fix a wrong fact, teach memoir rather than overwrite it:
+
+- **`Client::feedback(wrong_pid).correction(text)`** — the extraction was wrong.
+  memoir retires the derived row as `Rejected` and re-derives from the episodic
+  source with the correction in context.
+- **`Client::edit(episodic_pid)`** — the source itself changed. Editing the
+  content (or event-time) cascades: derived facts are retired as `Stale` and
+  re-extracted.
+
+`Rejected` counts against extraction accuracy; `Stale` does not (the model
+didn't err — the source changed). Retired rows are kept, not deleted, so
+**`Client::extraction_stats()`** can report accuracy per provider/model.
+
+## Categorization
+
+`query`'s category signal is populated by an opt-in zero-shot NLI classifier.
+Enable it on the builder with `.categorize_model(NliConfig::default())` (or a
+custom `NliConfig` for a different HuggingFace model). Without it,
+categorization is skipped and the category-bonus blend term is inert.
 
 ## Companion crates
 

@@ -128,6 +128,49 @@ pub struct ReconcileResponse {
     #[prost(int64, tag="3")]
     pub orphans_deleted: i64,
 }
+// ─── ExtractionStats RPC ────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ExtractionStatsRequest {
+    /// Optional scope-subset filters. Each set field narrows the slice; unset
+    /// imposes no constraint. All three unset aggregates the whole store. These
+    /// map to memoir-core's `StatsFilter`, a partial scope (not the all-required
+    /// `Scope`), so `org_id` alone yields a per-tenant number.
+    #[prost(string, optional, tag="1")]
+    pub agent_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag="2")]
+    pub org_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag="3")]
+    pub user_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// One (provider, model) accuracy row. Mirrors `memoir_core::memory::ExtractionStat`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExtractionStat {
+    /// Producing LLM provider (e.g. "ollama").
+    #[prost(string, tag="1")]
+    pub provider: ::prost::alloc::string::String,
+    /// Producing model id (e.g. "qwen3:14b").
+    #[prost(string, tag="2")]
+    pub model: ::prost::alloc::string::String,
+    /// Semantic rows produced (active + retired, any reason).
+    #[prost(int64, tag="3")]
+    pub total: i64,
+    /// Subset retired as a corrected wrong extraction.
+    #[prost(int64, tag="4")]
+    pub rejected: i64,
+    /// Derived `1 − rejected/total` in \[0, 1\], computed library-side so wire
+    /// consumers need not reproduce the total = 0 → 1.0 identity. Echoed for
+    /// convenience; `total`/`rejected` remain authoritative.
+    #[prost(double, tag="5")]
+    pub accuracy: f64,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExtractionStatsResponse {
+    /// Per-(provider, model) rows, ordered by provider then model. Empty when
+    /// the slice has no semantic rows.
+    #[prost(message, repeated, tag="1")]
+    pub stats: ::prost::alloc::vec::Vec<ExtractionStat>,
+}
 // ─── Core types ─────────────────────────────────────────────────────────────
 
 /// JobKind mirrors `memoir_core::jobs::JobKind`. The set is closed by the
@@ -141,6 +184,10 @@ pub enum JobKind {
     Embed = 1,
     /// Run LLM extraction against an episodic memory.
     Extract = 2,
+    /// Run NLI categorization against a semantic memory.
+    Categorize = 3,
+    /// Re-derive semantic rows from a corrected episodic source.
+    Reprocess = 4,
 }
 impl JobKind {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -152,6 +199,8 @@ impl JobKind {
             Self::Unspecified => "JOB_KIND_UNSPECIFIED",
             Self::Embed => "JOB_KIND_EMBED",
             Self::Extract => "JOB_KIND_EXTRACT",
+            Self::Categorize => "JOB_KIND_CATEGORIZE",
+            Self::Reprocess => "JOB_KIND_REPROCESS",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -160,6 +209,8 @@ impl JobKind {
             "JOB_KIND_UNSPECIFIED" => Some(Self::Unspecified),
             "JOB_KIND_EMBED" => Some(Self::Embed),
             "JOB_KIND_EXTRACT" => Some(Self::Extract),
+            "JOB_KIND_CATEGORIZE" => Some(Self::Categorize),
+            "JOB_KIND_REPROCESS" => Some(Self::Reprocess),
             _ => None,
         }
     }
@@ -787,7 +838,7 @@ pub struct RecallAsOfResponse {
 /// posture. An unset oneof means "use the library default" (hybrid).
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Ranking {
-    #[prost(oneof="ranking::Strategy", tags="1")]
+    #[prost(oneof="ranking::Strategy", tags="1, 2")]
     pub strategy: ::core::option::Option<ranking::Strategy>,
 }
 /// Nested message and enum types in `Ranking`.
@@ -796,6 +847,8 @@ pub mod ranking {
     pub enum Strategy {
         #[prost(message, tag="1")]
         Hybrid(super::Hybrid),
+        #[prost(message, tag="2")]
+        Blended(super::Blended),
     }
 }
 /// Blend of cosine similarity and recency. Mirrors `RankingStrategy::Hybrid`.
@@ -808,6 +861,37 @@ pub struct Hybrid {
     /// Recency-decay function applied to the memory's age.
     #[prost(message, optional, tag="2")]
     pub decay: ::core::option::Option<Decay>,
+}
+/// Linear blend of cosine, confidence, recency, and a category bonus.
+/// Mirrors `RankingStrategy::Blended`. score =
+///    w_cos*cosine + w_conf*(confidence/100) + w_rec*decay(age)
+///    + category_bonus (when the memory's category is preferred).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Blended {
+    #[prost(message, optional, tag="1")]
+    pub weights: ::core::option::Option<BlendWeights>,
+    /// Recency-decay function applied to the memory's age.
+    #[prost(message, optional, tag="2")]
+    pub decay: ::core::option::Option<Decay>,
+}
+/// Signal weights for `Blended`. Mirrors memoir-core's `BlendWeights`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BlendWeights {
+    /// Weight on cosine similarity.
+    #[prost(float, tag="1")]
+    pub cosine: f32,
+    /// Weight on confidence (0-100 normalized to \[0, 1\]).
+    #[prost(float, tag="2")]
+    pub confidence: f32,
+    /// Weight on the recency-decay term.
+    #[prost(float, tag="3")]
+    pub recency: f32,
+    /// Additive bonus when a memory's category is in preferred_categories.
+    #[prost(float, tag="4")]
+    pub category_bonus: f32,
+    /// Categories that earn the bonus. Empty disables it.
+    #[prost(string, repeated, tag="5")]
+    pub preferred_categories: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Recency-decay function. Mirrors memoir-core's `DecayFn`. Message-with-oneof
 /// for the same additive-forward-compat reason as `Ranking`.
@@ -935,6 +1019,26 @@ pub struct EditResponse {
     /// same lifecycle as a fresh Remember.
     #[prost(message, optional, tag="1")]
     pub memory: ::core::option::Option<Memory>,
+}
+// ─── Feedback ──────────────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FeedbackRequest {
+    /// The wrong *semantic* memory the user is correcting (the fact they saw in
+    /// recall). Must be a semantic row with an episodic source; an episodic pid
+    /// is rejected (correct those via Edit).
+    #[prost(string, tag="1")]
+    pub pid: ::prost::alloc::string::String,
+    /// The user's correction, woven into the re-extraction prompt so the model
+    /// fixes its reasoning. Optional, but supplying it is the point — without it
+    /// the source is re-extracted blind.
+    #[prost(string, optional, tag="2")]
+    pub correction: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Empty: feedback is fire-and-forget. The correction completes behind the
+/// worker queue; re-Recall later to observe the corrected rows.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FeedbackResponse {
 }
 // ─── SupersessionHistory ───────────────────────────────────────────────────
 

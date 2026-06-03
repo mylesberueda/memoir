@@ -21,7 +21,7 @@ use memoir_sdk::memoir::v1::{
 };
 use tonic::Status;
 
-use super::conversions::{metadata_to_proto, scope_to_proto, timestamp_from_chrono};
+use super::conversions::{scope_to_proto, timestamp_from_chrono};
 
 /// Wire form of a [`LibMemory`]. Build via `WireMemory::from(memory)`.
 pub(crate) struct WireMemory(pub ProtoMemory);
@@ -40,7 +40,7 @@ impl From<LibMemory> for WireMemory {
             pid: memory.pid,
             scope: Some(scope_to_proto(memory.scope)),
             content: memory.content,
-            metadata: Some(metadata_to_proto(memory.metadata)),
+            metadata: Some(serde_json::from_value(memory.metadata).unwrap_or_default()),
             created_at: Some(timestamp_from_chrono(memory.created_at)),
             processed_at: None,
             status: match memory.status {
@@ -124,10 +124,16 @@ impl From<WireError> for Status {
             ClientError::Embedding(_) => (Code::Internal, "embedding", "internal error".into()),
             ClientError::Llm(_) => (Code::Internal, "llm", "internal error".into()),
             ClientError::Migration(_) => (Code::Internal, "migration", "internal error".into()),
+            ClientError::Nli(_) => (Code::Internal, "nli", "internal error".into()),
             ClientError::ReservedMetadataKey { key } => (
                 Code::InvalidArgument,
                 "client.reserved_metadata_key",
                 format!("metadata key '{key}' is reserved by memoir-core's payload schema"),
+            ),
+            ClientError::NotCorrectable { pid, reason } => (
+                Code::FailedPrecondition,
+                "client.not_correctable",
+                format!("memory {pid} is not correctable via feedback: {reason}"),
             ),
         };
 

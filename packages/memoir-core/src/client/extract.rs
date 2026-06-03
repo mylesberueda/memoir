@@ -59,9 +59,7 @@ impl ClientInner {
     /// `failed`.
     pub(super) async fn run_extract(self: &Arc<Self>, job: Job) -> Result<(), ExtractError> {
         let span = info_span!("memoir.extraction", source_pid = %job.source_pid);
-        async move { self.run_extract_inner(job).await }
-            .instrument(span)
-            .await
+        async move { self.run_extract_inner(job).await }.instrument(span).await
     }
 
     async fn run_extract_inner(self: &Arc<Self>, job: Job) -> Result<(), ExtractError> {
@@ -90,6 +88,35 @@ impl ClientInner {
             Err(err) => return Err(ExtractError::SourceLookup(err)),
         };
 
+        // First-pass extraction carries no correction.
+        self.re_extract_source(&source, None).await
+    }
+
+    /// Re-runs extraction over an already-loaded source, optionally corrected.
+    ///
+    /// The post-recall half of the extraction pipeline, shared by first-pass
+    /// extraction ([`Self::run_extract_inner`], `correction = None`) and the
+    /// reprocess engine ([`Self::run_reprocess`], `correction = Some(text)`).
+    /// Picks the extraction LLM, runs it over the source content (with the
+    /// correction woven into the prompt when present), parses the reply, and
+    /// persists one semantic row per fact plus its follow-on embed and
+    /// categorize jobs.
+    ///
+    /// A missing extraction LLM is a no-op success, mirroring the dispatch-time
+    /// skip. The caller owns retiring any prior derived rows before calling.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ExtractError::LlmCall`] / [`ExtractError::Parse`] on LLM
+    /// failures and [`ExtractError::Persist`] when a row or follow-on job
+    /// cannot be written.
+    pub(super) async fn re_extract_source(
+        self: &Arc<Self>,
+        source: &crate::memory::Memory,
+        correction: Option<&str>,
+    ) -> Result<(), ExtractError> {
+        let source_pid = source.pid.clone();
+
         // Step 2: pick the configured extraction LLM. If none is wired up,
         // skip rather than fail — the worker has already filtered at dispatch
         // time, but defending in depth catches misconfiguration.
@@ -103,9 +130,13 @@ impl ClientInner {
             return Ok(());
         };
 
-        // Step 3: LLM call.
+        // Step 3: LLM call. Date relative facts ("last Friday") off the source's
+        // event-time when it has one, falling back to write-time — so an
+        // event_at edit (epic 0011 ticket 0012) actually shifts the derived
+        // event-times rather than re-deriving the same dates.
         let content_len = source.content.len();
-        let extraction_content = build_extraction_content(source.created_at, &source.content);
+        let reference = source.event_at.unwrap_or(source.created_at);
+        let extraction_content = build_extraction_content(reference, &source.content, correction);
         let raw = match provider.extract(DEFAULT_EXTRACTION_PROMPT, &extraction_content).await {
             Ok(raw) => raw,
             Err(err) => {
@@ -161,22 +192,28 @@ impl ClientInner {
                 continue;
             }
 
-            let metadata = build_semantic_metadata(provider_kind, &provider_model, fact.confidence);
+            let metadata = build_semantic_metadata(provider_kind, &provider_model);
 
             let event_at = fact
                 .event_at
-                .and_then(|candidate| validator.validate(source.created_at, candidate));
+                .and_then(|candidate| validator.validate(reference, candidate));
+
+            // Confidence is now a first-class column, sourced from the LLM's
+            // per-fact score (scaled f32[0,1] → i8[0,100], clamped). It is no
+            // longer stuffed into the metadata blob.
+            let confidence = crate::memory::Confidence::from_unit_scale(fact.confidence);
 
             let written = self
                 .store
-                .remember(
-                    source.scope.clone(),
-                    fact.content,
+                .remember(crate::store::NewMemory {
+                    scope: source.scope.clone(),
+                    content: fact.content,
                     metadata,
-                    MemoryKind::Semantic,
-                    Some(source_pid.clone()),
+                    kind: MemoryKind::Semantic,
+                    source_pid: Some(source_pid.clone()),
                     event_at,
-                )
+                    confidence,
+                })
                 .await
                 .map_err(|err| ExtractError::Persist(err.to_string()))?;
 
@@ -188,6 +225,22 @@ impl ClientInner {
                 )
                 .await
                 .map_err(|err: JobsError| ExtractError::Persist(err.to_string()))?;
+
+            // Enqueue categorize only when a classifier is configured —
+            // otherwise the job would sit unclaimable (mirrors how remember
+            // only enqueues Extract when an extraction LLM is present). The
+            // semantic row provably exists at this line, so this is a data
+            // dependency satisfied by construction, not a scheduling one.
+            if self.nli.is_some() {
+                self.jobs
+                    .enqueue(
+                        crate::jobs::JobKind::Categorize,
+                        written.pid.clone(),
+                        serde_json::json!({ "origin": "extraction" }),
+                    )
+                    .await
+                    .map_err(|err: JobsError| ExtractError::Persist(err.to_string()))?;
+            }
 
             persisted_pids.push(written.pid);
         }
@@ -209,16 +262,11 @@ impl ClientInner {
 /// Includes the provider identifier, model identifier, fact confidence, and
 /// a marker that this row was machine-generated. Operators inspecting a
 /// semantic row can see which LLM produced it without joining other tables.
-fn build_semantic_metadata(
-    provider: LlmKind,
-    model: &str,
-    confidence: f32,
-) -> serde_json::Value {
+fn build_semantic_metadata(provider: LlmKind, model: &str) -> serde_json::Value {
     serde_json::json!({
         "origin": "extraction",
         "provider": provider.as_ref(),
         "model": model,
-        "confidence": confidence,
     })
 }
 
@@ -228,13 +276,18 @@ mod tests {
 
     #[test]
     fn should_build_semantic_metadata_with_expected_shape() {
-        let meta = build_semantic_metadata(LlmKind::Ollama, "llama3.2", 0.87);
+        let meta = build_semantic_metadata(LlmKind::Ollama, "llama3.2");
         assert_eq!(meta["origin"], "extraction");
         assert_eq!(meta["provider"], "ollama");
         assert_eq!(meta["model"], "llama3.2");
-        // f32 → f64 → serde_json::Value::Number; compare via approx.
-        let confidence = meta["confidence"].as_f64().unwrap();
-        assert!((confidence - 0.87).abs() < 1e-5);
+    }
+
+    #[test]
+    fn should_not_record_confidence_in_metadata() {
+        // Confidence moved to a first-class column (ticket 0006); the metadata
+        // blob must no longer carry it, so the two cannot drift.
+        let meta = build_semantic_metadata(LlmKind::Ollama, "llama3.2");
+        assert!(meta.get("confidence").is_none());
     }
 
     #[test]

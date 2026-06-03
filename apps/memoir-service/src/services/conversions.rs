@@ -16,16 +16,20 @@
 //!   safe-to-wire message; never the inner error's `Display`.
 //! - **Conversions from library → proto are infallible** (`From` impls) —
 //!   library values are already validated.
-//! - **Metadata round-trips through serde.** `pbjson_types::Struct` and
-//!   `serde_json::Value` both implement `Serialize`/`Deserialize`; the
-//!   `serde_json::to_value` / `serde_json::from_value` pair is the
-//!   canonical conversion path per the pbjson-types maintainer.
+//! - **Metadata bridges serde and the wire `Struct`.** `pbjson_types::Struct`
+//!   and `serde_json::Value` both implement `Serialize`/`Deserialize`; the
+//!   `serde_json::to_value` / `serde_json::from_value` pair is the canonical
+//!   conversion path per the pbjson-types maintainer. Inbound metadata flows
+//!   through [`Metadata`], which additionally narrows the integers proto3
+//!   widens to `f64`; outbound is a direct `from_value` at the wire layer.
+
+use std::ops::Deref;
 
 use memoir_core::client::{DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, RankingStrategy, ReconcileSummary};
 use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind};
 use memoir_core::memory::{
-    ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory, Scope as LibScope,
-    SupersessionEvent as LibSupersessionEvent,
+    ExtractionStat as LibExtractionStat, ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory,
+    Scope as LibScope, StatsFilter, SupersessionEvent as LibSupersessionEvent,
 };
 use memoir_core::store::{AsOfParams, DEFAULT_TIMELINE_LIMIT, TimelineDirection, TimelineParams};
 use memoir_core::vector::{
@@ -33,13 +37,15 @@ use memoir_core::vector::{
     MemoryFilter as LibMemoryFilter, NumericRange as LibNumericRange,
 };
 use memoir_sdk::memoir::v1::{
-    Decay as ProtoDecay, DecayBucket as ProtoDecayBucket, EditRequest, ExponentialDecay, FailedJob as ProtoFailedJob,
-    FilterCondition as ProtoFilterCondition, ForgetRequest, Hybrid as ProtoHybrid, JobKind as ProtoJobKind,
-    KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue, MatchValues as ProtoMatchValues,
-    MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit, QueryRequest, QueryResponse,
-    Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReciprocalDecay, ReconcileResponse,
-    Scope as ProtoScope, StepDecay, SupersessionEvent as ProtoSupersessionEvent, SupersessionHistoryRequest,
-    TimelineRequest, TimelineResponse, decay, filter_condition, forget_request, match_value, match_values, ranking,
+    BlendWeights as ProtoBlendWeights, Blended as ProtoBlended, Decay as ProtoDecay, DecayBucket as ProtoDecayBucket,
+    EditRequest, ExponentialDecay, ExtractionStat as ProtoExtractionStat, ExtractionStatsRequest,
+    FailedJob as ProtoFailedJob, FeedbackRequest, FilterCondition as ProtoFilterCondition, ForgetRequest,
+    Hybrid as ProtoHybrid, JobKind as ProtoJobKind, KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue,
+    MatchValues as ProtoMatchValues, MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit,
+    QueryRequest, QueryResponse, Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReciprocalDecay,
+    ReconcileResponse, Scope as ProtoScope, StepDecay, SupersessionEvent as ProtoSupersessionEvent,
+    SupersessionHistoryRequest, TimelineRequest, TimelineResponse, decay, filter_condition, forget_request,
+    match_value, match_values, ranking,
 };
 use tonic::Status;
 
@@ -78,36 +84,76 @@ pub(crate) fn scope_to_proto(scope: LibScope) -> ProtoScope {
     }
 }
 
-/// Converts a wire metadata `Struct` into the library's `serde_json::Value`.
+/// Consumer-supplied memory metadata at the gRPC boundary.
 ///
-/// `None` (proto3 unset) maps to `serde_json::json!({})` to match the
-/// library's column default. Non-object payloads (arrays, scalars) are
-/// accepted — JSONB doesn't constrain shape — but malformed inputs
-/// (`NaN`, infinity) fail at serde and surface as `InvalidArgument`.
-///
-/// # Errors
-///
-/// Returns [`Status::invalid_argument`] when the struct cannot be
-/// represented as JSON (e.g., contains `NaN`).
-pub(crate) fn metadata_from_proto(meta: Option<pbjson_types::Struct>) -> Result<serde_json::Value, Status> {
-    let Some(struct_value) = meta else {
-        return Ok(serde_json::json!({}));
-    };
-    serde_json::to_value(struct_value).map_err(|err| {
-        tracing::warn!(error.message = %err, "rejected RememberRequest with malformed metadata");
-        Status::invalid_argument("metadata: not representable as JSON")
-    })
+/// A thin wrapper over `serde_json::Value` — metadata is opaque, consumer-owned
+/// JSON, so this newtype carries no schema. It exists solely to own the one
+/// invariant the wire boundary needs: `google.protobuf.Struct` encodes every
+/// number as an IEEE-754 double, so an inbound integer (`conversation_id: 1`)
+/// arrives as `1.0`. Stored that way, an integer payload filter would never
+/// match it. [`Metadata::try_from`] normalizes whole-number doubles back to
+/// integers so consumer filters behave as written. `Deref`s to the inner
+/// value so call sites treat it as a plain `serde_json::Value`.
+#[derive(Debug)]
+pub(crate) struct Metadata(serde_json::Value);
+
+impl Deref for Metadata {
+    type Target = serde_json::Value;
+
+    fn deref(&self) -> &serde_json::Value {
+        &self.0
+    }
 }
 
-/// Converts library `serde_json::Value` metadata back to the wire `Struct`.
+impl Metadata {
+    /// Consumes the wrapper, yielding the inner value for the library call.
+    pub(crate) fn into_inner(self) -> serde_json::Value {
+        self.0
+    }
+}
+
+impl TryFrom<Option<pbjson_types::Struct>> for Metadata {
+    type Error = Status;
+
+    /// Converts inbound wire metadata, normalizing widened integers.
+    ///
+    /// `None` (proto3 unset) maps to `{}` to match the library's column
+    /// default. Non-object payloads (arrays, scalars) are accepted — JSONB
+    /// doesn't constrain shape.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Status::invalid_argument`] when the struct cannot be
+    /// represented as JSON (e.g., contains `NaN`).
+    fn try_from(meta: Option<pbjson_types::Struct>) -> Result<Self, Status> {
+        let Some(struct_value) = meta else {
+            return Ok(Self(serde_json::json!({})));
+        };
+        let mut value = serde_json::to_value(struct_value).map_err(|err| {
+            tracing::warn!(error.message = %err, "rejected metadata that is not representable as JSON");
+            Status::invalid_argument("metadata: not representable as JSON")
+        })?;
+        narrow_whole_number_doubles(&mut value);
+        Ok(Self(value))
+    }
+}
+
+/// Rewrites every top-level whole-number `f64` in a JSON object to an `i64`.
 ///
-/// Falls back to an empty `Struct` if the value is not a JSON object —
-/// the proto field's `Struct` type can only encode objects, so a scalar
-/// or array metadata value is mapped to `{}` on the way out. This case
-/// should not occur in practice (the library writes JSON objects) but
-/// is handled defensively.
-pub(crate) fn metadata_to_proto(value: serde_json::Value) -> pbjson_types::Struct {
-    serde_json::from_value::<pbjson_types::Struct>(value).unwrap_or_default()
+/// Only top-level keys are flattened into the Qdrant payload and become
+/// filterable (see `qdrant::QdrantIndex::upsert`), so only they need to match
+/// the integer type a consumer filters with. Nested numbers are left as serde
+/// parsed them. A non-object value (array/scalar) is a no-op.
+fn narrow_whole_number_doubles(value: &mut serde_json::Value) {
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    for field in object.values_mut() {
+        let Some(float) = field.as_f64() else { continue };
+        if field.is_f64() && float.fract() == 0.0 && i64::try_from(float as i128).is_ok() {
+            *field = serde_json::Value::from(float as i64);
+        }
+    }
 }
 
 /// Converts `ForgetRequest.target` (oneof) into the library `ForgetTarget`.
@@ -303,39 +349,64 @@ fn ranking_from_proto(proto: Option<ProtoRanking>) -> Result<RankingStrategy, St
     };
     match ranking {
         ranking::Strategy::Hybrid(h) => {
-            let decay = h
-                .decay
-                .and_then(|d| d.function)
-                .ok_or_else(|| Status::invalid_argument("ranking.hybrid.decay: required"))?;
-            let decay = match decay {
-                decay::Function::Exponential(e) => DecayFn::Exponential {
-                    half_life: duration_to_chrono(
-                        e.half_life
-                            .ok_or_else(|| Status::invalid_argument("decay.exponential.half_life: required"))?,
-                    )?,
-                },
-                decay::Function::Reciprocal(r) => DecayFn::Reciprocal {
-                    scale: duration_to_chrono(
-                        r.scale
-                            .ok_or_else(|| Status::invalid_argument("decay.reciprocal.scale: required"))?,
-                    )?,
-                },
-                decay::Function::Step(s) => {
-                    let mut thresholds = Vec::with_capacity(s.buckets.len());
-                    for bucket in s.buckets {
-                        let boundary = duration_to_chrono(
-                            bucket
-                                .boundary
-                                .ok_or_else(|| Status::invalid_argument("decay.step.bucket.boundary: required"))?,
-                        )?;
-                        thresholds.push((boundary, bucket.value));
-                    }
-                    DecayFn::Step { thresholds }
-                }
-            };
+            let decay = decay_from_proto(h.decay, "ranking.hybrid.decay")?;
             Ok(RankingStrategy::Hybrid { alpha: h.alpha, decay })
         }
+        ranking::Strategy::Blended(b) => {
+            let decay = decay_from_proto(b.decay, "ranking.blended.decay")?;
+            let w = b
+                .weights
+                .ok_or_else(|| Status::invalid_argument("ranking.blended.weights: required"))?;
+            let weights = memoir_core::client::BlendWeights {
+                cosine: w.cosine,
+                confidence: w.confidence,
+                recency: w.recency,
+                category_bonus: w.category_bonus,
+                preferred_categories: w.preferred_categories,
+            };
+            Ok(RankingStrategy::Blended { weights, decay })
+        }
     }
+}
+
+/// Parses a wire `Decay` (required) into a library [`DecayFn`].
+///
+/// `field` names the parent for error messages (e.g. `ranking.hybrid.decay`).
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when the decay or its function is
+/// unset, a duration field is missing, or a duration is out of range.
+fn decay_from_proto(decay: Option<ProtoDecay>, field: &str) -> Result<DecayFn, Status> {
+    let function = decay
+        .and_then(|d| d.function)
+        .ok_or_else(|| Status::invalid_argument(format!("{field}: required")))?;
+    Ok(match function {
+        decay::Function::Exponential(e) => DecayFn::Exponential {
+            half_life: duration_to_chrono(
+                e.half_life
+                    .ok_or_else(|| Status::invalid_argument("decay.exponential.half_life: required"))?,
+            )?,
+        },
+        decay::Function::Reciprocal(r) => DecayFn::Reciprocal {
+            scale: duration_to_chrono(
+                r.scale
+                    .ok_or_else(|| Status::invalid_argument("decay.reciprocal.scale: required"))?,
+            )?,
+        },
+        decay::Function::Step(s) => {
+            let mut thresholds = Vec::with_capacity(s.buckets.len());
+            for bucket in s.buckets {
+                let boundary = duration_to_chrono(
+                    bucket
+                        .boundary
+                        .ok_or_else(|| Status::invalid_argument("decay.step.bucket.boundary: required"))?,
+                )?;
+                thresholds.push((boundary, bucket.value));
+            }
+            DecayFn::Step { thresholds }
+        }
+    })
 }
 
 /// Converts a library [`RankingStrategy`] back to the wire `Ranking`.
@@ -343,6 +414,18 @@ fn ranking_to_proto(strategy: &RankingStrategy) -> ProtoRanking {
     let strategy = match strategy {
         RankingStrategy::Hybrid { alpha, decay } => ranking::Strategy::Hybrid(ProtoHybrid {
             alpha: *alpha,
+            decay: Some(ProtoDecay {
+                function: Some(decay_fn_to_proto(decay)),
+            }),
+        }),
+        RankingStrategy::Blended { weights, decay } => ranking::Strategy::Blended(ProtoBlended {
+            weights: Some(ProtoBlendWeights {
+                cosine: weights.cosine,
+                confidence: weights.confidence,
+                recency: weights.recency,
+                category_bonus: weights.category_bonus,
+                preferred_categories: weights.preferred_categories.clone(),
+            }),
             decay: Some(ProtoDecay {
                 function: Some(decay_fn_to_proto(decay)),
             }),
@@ -475,10 +558,15 @@ impl TryFrom<EditRequest> for EditArgs {
         if request.pid.is_empty() {
             return Err(Status::invalid_argument("pid: required"));
         }
-        let metadata = request.metadata.map(serde_json::to_value).transpose().map_err(|err| {
-            tracing::warn!(error.message = %err, "rejected EditRequest with malformed metadata");
-            Status::invalid_argument("metadata: not representable as JSON")
-        })?;
+        // `metadata` is proto-`optional`: `None` leaves the row's metadata
+        // untouched, `Some` replaces it. Route the present case through
+        // `Metadata` for the same integer-narrowing the remember path gets,
+        // while preserving the outer `Option` so absence still means "no
+        // change".
+        let metadata = request
+            .metadata
+            .map(|struct_value| Metadata::try_from(Some(struct_value)).map(Metadata::into_inner))
+            .transpose()?;
         Ok(Self {
             pid: request.pid,
             content: request.content,
@@ -490,6 +578,31 @@ impl TryFrom<EditRequest> for EditArgs {
 
 // `ClientError → Status` is owned by `services/wire::WireError`.
 // Call sites use `.map_err(WireError::into_status)?`.
+
+/// A validated `Feedback` request: the wrong semantic pid + optional correction.
+///
+/// Target-kind validation (must be a semantic row with an episodic source)
+/// runs library-side in `Client::feedback`; the handler maps the resulting
+/// `NotCorrectable` error.
+#[derive(Debug)]
+pub(crate) struct FeedbackArgs {
+    pub pid: String,
+    pub correction: Option<String>,
+}
+
+impl TryFrom<FeedbackRequest> for FeedbackArgs {
+    type Error = Status;
+
+    fn try_from(request: FeedbackRequest) -> Result<Self, Status> {
+        if request.pid.is_empty() {
+            return Err(Status::invalid_argument("pid: required"));
+        }
+        Ok(Self {
+            pid: request.pid,
+            correction: request.correction,
+        })
+    }
+}
 
 /// A validated `SupersessionHistory` request: just the target pid.
 #[derive(Debug)]
@@ -530,6 +643,8 @@ impl From<LibJobKind> for WireJobKind {
         Self(match kind {
             LibJobKind::Embed => ProtoJobKind::Embed,
             LibJobKind::Extract => ProtoJobKind::Extract,
+            LibJobKind::Categorize => ProtoJobKind::Categorize,
+            LibJobKind::Reprocess => ProtoJobKind::Reprocess,
         })
     }
 }
@@ -558,6 +673,8 @@ pub(crate) fn job_kind_filter_from_proto(value: Option<i32>) -> Result<Option<Li
         ProtoJobKind::Unspecified => Ok(None),
         ProtoJobKind::Embed => Ok(Some(LibJobKind::Embed)),
         ProtoJobKind::Extract => Ok(Some(LibJobKind::Extract)),
+        ProtoJobKind::Categorize => Ok(Some(LibJobKind::Categorize)),
+        ProtoJobKind::Reprocess => Ok(Some(LibJobKind::Reprocess)),
     }
 }
 
@@ -599,6 +716,50 @@ impl From<ReconcileSummary> for WireReconcileResponse {
             failed_recovered: usize_to_i64_saturating(summary.failed_recovered, "failed_recovered"),
             orphans_deleted: usize_to_i64_saturating(summary.orphans_deleted, "orphans_deleted"),
         })
+    }
+}
+
+/// Wire form of a [`StatsFilter`]. Build via `WireStatsFilter::from(request)`.
+///
+/// Each proto `optional string` maps one-to-one to an `Option<String>` filter
+/// dimension; there is nothing to reject (an all-unset request is the valid
+/// "aggregate the whole store" case), so the conversion is infallible. The
+/// newtype exists to satisfy coherence — both `ExtractionStatsRequest` and
+/// `StatsFilter` are foreign to this crate, so the `From` impl needs a local
+/// anchor (same pattern as [`WireExtractionStat`]).
+pub(crate) struct WireStatsFilter(pub StatsFilter);
+
+impl From<ExtractionStatsRequest> for WireStatsFilter {
+    fn from(request: ExtractionStatsRequest) -> Self {
+        Self(StatsFilter {
+            agent_id: request.agent_id,
+            org_id: request.org_id,
+            user_id: request.user_id,
+        })
+    }
+}
+
+/// Wire form of a [`LibExtractionStat`]. Build via `WireExtractionStat::try_from(stat)`.
+///
+/// `total` and `rejected` are `u64` in the library, `int64` on the wire — the
+/// fallible `u64_count_to_proto` guards the (physically impossible) overflow,
+/// so the conversion is `TryFrom`, not `From` (the infallible-`From` sibling
+/// newtypes like [`WireFailedJob`] have no such cast). `accuracy` is recomputed
+/// library-side and echoed for wire consumers.
+pub(crate) struct WireExtractionStat(pub ProtoExtractionStat);
+
+impl TryFrom<LibExtractionStat> for WireExtractionStat {
+    type Error = Status;
+
+    fn try_from(stat: LibExtractionStat) -> Result<Self, Status> {
+        let accuracy = stat.accuracy();
+        Ok(Self(ProtoExtractionStat {
+            provider: stat.provider,
+            model: stat.model,
+            total: u64_count_to_proto(stat.total, "extraction_stats.total")?,
+            rejected: u64_count_to_proto(stat.rejected, "extraction_stats.rejected")?,
+            accuracy,
+        }))
     }
 }
 
@@ -759,45 +920,73 @@ mod tests {
         assert_eq!(back, original);
     }
 
+    /// Builds a wire `Struct` from a JSON value the way the proto layer
+    /// delivers one — proto3 widens every number to `f64` in the process.
+    fn proto_struct(value: serde_json::Value) -> pbjson_types::Struct {
+        serde_json::from_value(value).expect("value encodes as a Struct")
+    }
+
     #[test]
     fn should_default_unset_metadata_to_empty_object() {
-        let result = metadata_from_proto(None).unwrap();
-        assert_eq!(result, serde_json::json!({}));
+        let result = Metadata::try_from(None).unwrap();
+        assert_eq!(*result, serde_json::json!({}));
     }
 
     #[test]
-    fn should_round_trip_metadata_string_values_unchanged() {
-        // Strings round-trip exactly through pbjson_types::Struct.
-        let original = serde_json::json!({ "source": "test", "tag": "rust" });
-        let proto = metadata_to_proto(original.clone());
-        let back = metadata_from_proto(Some(proto)).unwrap();
-        assert_eq!(back, original);
+    fn should_preserve_string_values_when_converting_metadata() {
+        let proto = proto_struct(serde_json::json!({ "source": "test", "tag": "rust" }));
+        let result = Metadata::try_from(Some(proto)).unwrap();
+        assert_eq!(*result, serde_json::json!({ "source": "test", "tag": "rust" }));
     }
 
     #[test]
-    fn should_round_trip_metadata_integers_as_floats() {
-        // Proto3 `google.protobuf.Value.number_value` is `double` per spec.
-        // Integers round-trip through `f64`, so `42` (integer) comes back as
-        // `42.0` (float). This is a wire-level behavior — consumers needing
-        // integer fidelity must encode them as strings.
-        let original = serde_json::json!({ "count": 42 });
-        let proto = metadata_to_proto(original);
-        let back = metadata_from_proto(Some(proto)).unwrap();
-        assert_eq!(back, serde_json::json!({ "count": 42.0 }));
+    fn should_narrow_whole_number_doubles_to_integers() {
+        // The wire delivers `42` as the double `42.0` (proto3
+        // `google.protobuf.Value.number_value` is `double`). The boundary
+        // narrows whole numbers back to integers so a consumer's integer
+        // payload filter matches what was stored.
+        let proto = proto_struct(serde_json::json!({ "conversation_id": 42 }));
+        let result = Metadata::try_from(Some(proto)).unwrap();
+        assert_eq!(*result, serde_json::json!({ "conversation_id": 42 }));
+        assert!(
+            result["conversation_id"].is_i64(),
+            "whole number must land as an integer"
+        );
     }
 
     #[test]
-    fn should_preserve_nested_object_structure_through_metadata_round_trip() {
-        // Deeply-nested objects retain their shape; only the leaf number
-        // representation is affected (per the previous test).
-        let original = serde_json::json!({
+    fn should_keep_fractional_doubles_as_floats() {
+        let proto = proto_struct(serde_json::json!({ "score": 0.5 }));
+        let result = Metadata::try_from(Some(proto)).unwrap();
+        assert_eq!(*result, serde_json::json!({ "score": 0.5 }));
+        assert!(result["score"].is_f64(), "fractional number must stay a float");
+    }
+
+    #[test]
+    fn should_leave_nested_numbers_unnarrowed() {
+        // Only top-level keys flatten into the Qdrant payload and become
+        // filterable, so only they are narrowed. A nested `1.0` stays a float.
+        let proto = proto_struct(serde_json::json!({ "nested": { "count": 1 } }));
+        let result = Metadata::try_from(Some(proto)).unwrap();
+        assert!(result["nested"]["count"].is_f64(), "nested numbers are not narrowed",);
+    }
+
+    #[test]
+    fn should_preserve_nested_object_structure_when_converting_metadata() {
+        let proto = proto_struct(serde_json::json!({
             "source": "test",
             "tags": ["one", "two"],
             "flags": { "enabled": true },
-        });
-        let proto = metadata_to_proto(original.clone());
-        let back = metadata_from_proto(Some(proto)).unwrap();
-        assert_eq!(back, original);
+        }));
+        let result = Metadata::try_from(Some(proto)).unwrap();
+        assert_eq!(
+            *result,
+            serde_json::json!({
+                "source": "test",
+                "tags": ["one", "two"],
+                "flags": { "enabled": true },
+            })
+        );
     }
 
     #[test]
@@ -1192,6 +1381,41 @@ mod tests {
         let proto = ranking_to_proto(&original);
         let back = ranking_from_proto(Some(proto)).unwrap();
         assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_round_trip_blended_ranking_with_preferred_categories() {
+        let original = RankingStrategy::Blended {
+            weights: memoir_core::client::BlendWeights {
+                cosine: 0.4,
+                confidence: 0.3,
+                recency: 0.3,
+                category_bonus: 0.05,
+                preferred_categories: vec!["preference".to_string(), "identity".to_string()],
+            },
+            decay: DecayFn::Exponential {
+                half_life: chrono::Duration::days(7),
+            },
+        };
+        let proto = ranking_to_proto(&original);
+        let back = ranking_from_proto(Some(proto)).unwrap();
+        assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_reject_blended_ranking_missing_weights() {
+        let proto = ProtoRanking {
+            strategy: Some(ranking::Strategy::Blended(ProtoBlended {
+                weights: None,
+                decay: Some(ProtoDecay {
+                    function: Some(decay::Function::Exponential(ExponentialDecay {
+                        half_life: Some(duration_to_proto(chrono::Duration::days(7))),
+                    })),
+                }),
+            })),
+        };
+        let err = ranking_from_proto(Some(proto)).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::InvalidArgument);
     }
 
     #[test]

@@ -15,7 +15,7 @@ use std::future::Future;
 
 use chrono::{DateTime, FixedOffset};
 
-use crate::memory::{ForgetTarget, Memory, MemoryKind, Scope, SupersessionEvent};
+use crate::memory::{ExtractionStat, ForgetTarget, Memory, MemoryKind, Scope, StatsFilter, SupersessionEvent};
 
 /// Lifecycle state of a memory's vector index.
 ///
@@ -33,6 +33,38 @@ pub enum IndexStatus {
 
     /// Embedding or vector upsert failed; reconciliation will retry.
     Failed,
+}
+
+/// The attributes of a new memory row for [`MemoryStore::remember`].
+///
+/// Groups the row's write-time attributes into one value so the insert path
+/// has a single self-documenting parameter rather than a long positional list
+/// (M-INIT-CASCADED). Every field is stated explicitly by the caller — there
+/// are no silent defaults at this layer; the episodic and extract write paths
+/// each supply their own `kind`, `confidence`, etc.
+#[derive(Debug, Clone)]
+pub struct NewMemory {
+    /// Tenant + agent + user partition.
+    pub scope: Scope,
+
+    /// Raw text of the memory.
+    pub content: String,
+
+    /// Arbitrary JSON attached at write time; round-trips unchanged.
+    pub metadata: serde_json::Value,
+
+    /// Episodic (raw utterance) or semantic (extracted fact).
+    pub kind: MemoryKind,
+
+    /// Originating episodic pid for semantic rows; `None` for episodic.
+    pub source_pid: Option<String>,
+
+    /// Event-time of the remembered thing; `None` when unknown.
+    pub event_at: Option<DateTime<FixedOffset>>,
+
+    /// How sure memoir is of this memory: `MAX` for episodic, the scaled
+    /// extraction score for semantic.
+    pub confidence: crate::memory::Confidence,
 }
 
 /// Field-level patch for [`MemoryStore::edit`].
@@ -140,25 +172,17 @@ pub trait MemoryStore: Send + Sync + 'static {
     ///
     /// The returned [`Memory`] carries the server-generated `pid`,
     /// `created_at`, `updated_at` (equal to `created_at` on insert), and a
-    /// `score` of `None`. `source_pid` is `None` for episodic rows and
-    /// `Some(pid)` for semantic rows extracted from an episodic memory (the
-    /// extract worker stage passes this through). `event_at` carries the
-    /// caller-supplied event time and is `None` for memories with no known
-    /// event-time.
+    /// `score` of `None`. See [`NewMemory`] for the write-time attributes;
+    /// `source_pid` is `None` for episodic rows and `Some(pid)` for semantic
+    /// rows, and `confidence` is [`crate::memory::Confidence::MAX`] for
+    /// episodic rows (the user said it) or the scaled extraction score for
+    /// semantic rows.
     ///
     /// # Errors
     ///
     /// Returns [`StoreError::InvalidScope`] if any scope field is empty,
     /// [`StoreError::Database`] for database failures.
-    fn remember(
-        &self,
-        scope: Scope,
-        content: String,
-        metadata: serde_json::Value,
-        kind: MemoryKind,
-        source_pid: Option<String>,
-        event_at: Option<DateTime<FixedOffset>>,
-    ) -> impl Future<Output = Result<Memory, StoreError>> + Send;
+    fn remember(&self, new: NewMemory) -> impl Future<Output = Result<Memory, StoreError>> + Send;
 
     /// Looks up a single memory by pid, returning all lifecycle states.
     ///
@@ -215,10 +239,49 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Returns [`StoreError::Database`] for database failures.
     fn find_by_pids(&self, pids: &[&str]) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
 
+    /// Returns the active semantic rows derived from `source_pid` (epic 0011 Track B).
+    ///
+    /// "Active" means not yet superseded and not yet retired: the rows the
+    /// reprocess engine must retire before re-deriving fresh ones. Episodic
+    /// sources own zero or more semantic rows via `source_pid`; this is that
+    /// set, filtered to the live ones. An unknown or episodic-only source
+    /// yields an empty vector, not an error. Index lifecycle is ignored —
+    /// a still-`pending` derived row is just as much in need of retirement.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Database`] for database failures.
+    fn active_semantics_for_source(
+        &self,
+        source_pid: &str,
+    ) -> impl Future<Output = Result<Vec<Memory>, StoreError>> + Send;
+
+    /// Tallies extraction accuracy per `(provider, model)` over a scope slice.
+    ///
+    /// Groups every semantic row matching `filter` by its producing provider
+    /// and model (read from the row's `metadata` blob), counting the total
+    /// produced and the subset retired as [`crate::memory::RetirementReason::Rejected`].
+    /// Rows retired as `Stale` and superseded rows count toward the total but
+    /// never the rejected tally — only a corrected wrong extraction is a model
+    /// error. An empty [`StatsFilter`] aggregates the whole store. A slice with
+    /// no semantic rows yields an empty vector, not an error. Results are
+    /// ordered by `(provider, model)` ascending for stable output.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::Database`] for database failures.
+    fn extraction_stats(
+        &self,
+        filter: StatsFilter,
+    ) -> impl Future<Output = Result<Vec<ExtractionStat>, StoreError>> + Send;
+
     /// Deletes one memory or every memory in a scope, returning deleted pids.
     ///
     /// The returned pids let callers issue follow-up deletes against the
-    /// vector index or graph store.
+    /// vector index or graph store. A single-pid target returns the named pid
+    /// *and* the pids of its derived semantic rows (cascade-deleted via the
+    /// `source_pid` foreign key) — callers must evict every returned pid's
+    /// vector, or the cascade leaves orphaned points behind.
     ///
     /// # Errors
     ///
@@ -236,6 +299,37 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
     /// [`StoreError::Database`] for database failures.
     fn set_index_status(&self, pid: &str, status: IndexStatus) -> impl Future<Output = Result<(), StoreError>> + Send;
+
+    /// Sets a memory's category label (epic 0011 ticket 0005).
+    ///
+    /// Called by the categorize worker after NLI classification. Overwrites
+    /// any prior category. The value set is the caller's responsibility; the
+    /// column is unconstrained `TEXT` (the taxonomy lives in the worker).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
+    /// [`StoreError::Database`] for database failures.
+    fn set_category(&self, pid: &str, category: &str) -> impl Future<Output = Result<(), StoreError>> + Send;
+
+    /// Retires a memory with the given reason (epic 0011 Track B).
+    ///
+    /// Sets `retirement_reason`, hiding the row from all active-row reads.
+    /// The row is NOT deleted — it stays recall-reachable by pid for audit
+    /// and is the reprocess "don't re-derive this" guard + accuracy-metric
+    /// record. The caller is responsible for evicting the row's vector (the
+    /// store has no vector index); see [`crate::client::Client::reject`] /
+    /// `mark_stale`, which orchestrate both.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::NotFound`] when no memory matches `pid`,
+    /// [`StoreError::Database`] for database failures.
+    fn retire(
+        &self,
+        pid: &str,
+        reason: crate::memory::RetirementReason,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
 
     /// Returns up to `limit` memories whose index lifecycle is `failed`.
     ///
@@ -383,6 +477,7 @@ pub trait MemoryStore: Send + Sync + 'static {
 mod tests {
     use super::*;
     use chrono::Utc;
+    use std::collections::BTreeMap;
     use std::sync::Mutex;
 
     /// One row of the in-memory supersession event log used by `StubStore`.
@@ -429,15 +524,16 @@ mod tests {
     }
 
     impl MemoryStore for StubStore {
-        async fn remember(
-            &self,
-            scope: Scope,
-            content: String,
-            metadata: serde_json::Value,
-            kind: MemoryKind,
-            source_pid: Option<String>,
-            event_at: Option<DateTime<FixedOffset>>,
-        ) -> Result<Memory, StoreError> {
+        async fn remember(&self, new: NewMemory) -> Result<Memory, StoreError> {
+            let NewMemory {
+                scope,
+                content,
+                metadata,
+                kind,
+                source_pid,
+                event_at,
+                confidence,
+            } = new;
             let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
             let memory = Memory {
                 pid: format!("test-{}", self.memories.lock().unwrap().len()),
@@ -452,6 +548,9 @@ mod tests {
                 event_at,
                 score: None,
                 status: IndexStatus::Pending,
+                confidence,
+                category: None,
+                retirement: None,
             };
             self.memories.lock().unwrap().push(memory.clone());
             Ok(memory)
@@ -472,6 +571,50 @@ mod tests {
             Ok(pids
                 .iter()
                 .filter_map(|pid| memories.iter().find(|m| m.pid == *pid).cloned())
+                .collect())
+        }
+
+        async fn active_semantics_for_source(&self, source_pid: &str) -> Result<Vec<Memory>, StoreError> {
+            let memories = self.memories.lock().unwrap();
+            Ok(memories
+                .iter()
+                .filter(|m| m.kind == MemoryKind::Semantic)
+                .filter(|m| m.source_pid.as_deref() == Some(source_pid))
+                .filter(|m| m.supersession.is_none() && m.retirement.is_none())
+                .cloned()
+                .collect())
+        }
+
+        async fn extraction_stats(&self, filter: StatsFilter) -> Result<Vec<ExtractionStat>, StoreError> {
+            let memories = self.memories.lock().unwrap();
+            let mut tallies: BTreeMap<(String, String), (u64, u64)> = BTreeMap::new();
+            for m in memories.iter() {
+                if m.kind != MemoryKind::Semantic {
+                    continue;
+                }
+                if filter.agent_id.as_ref().is_some_and(|a| a != &m.scope.agent_id)
+                    || filter.org_id.as_ref().is_some_and(|o| o != &m.scope.org_id)
+                    || filter.user_id.as_ref().is_some_and(|u| u != &m.scope.user_id)
+                {
+                    continue;
+                }
+                let provider = m.metadata.get("provider").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let model = m.metadata.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let entry = tallies.entry((provider, model)).or_insert((0, 0));
+                entry.0 += 1;
+                if m.retirement == Some(crate::memory::RetirementReason::Rejected) {
+                    entry.1 += 1;
+                }
+            }
+
+            Ok(tallies
+                .into_iter()
+                .map(|((provider, model), (total, rejected))| ExtractionStat {
+                    provider,
+                    model,
+                    total,
+                    rejected,
+                })
                 .collect())
         }
 
@@ -546,8 +689,10 @@ mod tests {
             let mut deleted = Vec::new();
             match target {
                 ForgetTarget::Pid(pid) => {
+                    // Mirror the Postgres `source_pid` ON DELETE CASCADE: remove
+                    // the named row and its derived semantic rows, returning all.
                     memories.retain(|m| {
-                        if m.pid == pid {
+                        if m.pid == pid || m.source_pid.as_deref() == Some(pid.as_str()) {
                             deleted.push(m.pid.clone());
                             false
                         } else {
@@ -570,6 +715,26 @@ mod tests {
         }
 
         async fn set_index_status(&self, _pid: &str, _status: IndexStatus) -> Result<(), StoreError> {
+            Ok(())
+        }
+
+        async fn set_category(&self, pid: &str, category: &str) -> Result<(), StoreError> {
+            let mut memories = self.memories.lock().unwrap();
+            let memory = memories
+                .iter_mut()
+                .find(|m| m.pid == pid)
+                .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
+            memory.category = Some(category.to_string());
+            Ok(())
+        }
+
+        async fn retire(&self, pid: &str, reason: crate::memory::RetirementReason) -> Result<(), StoreError> {
+            let mut memories = self.memories.lock().unwrap();
+            let memory = memories
+                .iter_mut()
+                .find(|m| m.pid == pid)
+                .ok_or_else(|| StoreError::NotFound(pid.to_string()))?;
+            memory.retirement = Some(reason);
             Ok(())
         }
 
@@ -700,14 +865,15 @@ mod tests {
         };
 
         let memory = store
-            .remember(
-                scope.clone(),
-                "content".to_string(),
-                serde_json::json!({}),
-                MemoryKind::Episodic,
-                None,
-                None,
-            )
+            .remember(NewMemory {
+                scope: scope.clone(),
+                content: "content".to_string(),
+                metadata: serde_json::json!({}),
+                kind: MemoryKind::Episodic,
+                source_pid: None,
+                event_at: None,
+                confidence: crate::memory::Confidence::MAX,
+            })
             .await
             .unwrap();
         assert_eq!(memory.content, "content");
@@ -727,18 +893,19 @@ mod tests {
         let store = StubStore::default();
         let remember = async |agent: &str, org: &str, user: &str| {
             store
-                .remember(
-                    Scope {
+                .remember(NewMemory {
+                    scope: Scope {
                         agent_id: agent.to_string(),
                         org_id: org.to_string(),
                         user_id: user.to_string(),
                     },
-                    "c".to_string(),
-                    serde_json::json!({}),
-                    MemoryKind::Episodic,
-                    None,
-                    None,
-                )
+                    content: "c".to_string(),
+                    metadata: serde_json::json!({}),
+                    kind: MemoryKind::Episodic,
+                    source_pid: None,
+                    event_at: None,
+                    confidence: crate::memory::Confidence::MAX,
+                })
                 .await
                 .unwrap();
         };
@@ -761,6 +928,105 @@ mod tests {
         assert!(agents.is_empty());
     }
 
+    /// Writes a semantic row tagged with `provider`/`model` and returns its pid.
+    async fn write_semantic(store: &StubStore, scope: Scope, provider: &str, model: &str) -> String {
+        store
+            .remember(NewMemory {
+                scope,
+                content: "a derived fact".to_string(),
+                metadata: serde_json::json!({ "provider": provider, "model": model }),
+                kind: MemoryKind::Semantic,
+                source_pid: Some("src".to_string()),
+                event_at: None,
+                confidence: crate::memory::Confidence::new(80),
+            })
+            .await
+            .unwrap()
+            .pid
+    }
+
+    #[tokio::test]
+    async fn should_count_only_rejected_rows_in_extraction_numerator() {
+        let store = StubStore::default();
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "o".to_string(),
+            user_id: "u".to_string(),
+        };
+
+        // Four extractions from one model: one rejected, one stale, one
+        // superseded, one untouched. Only the rejected one is a model error.
+        let rejected = write_semantic(&store, scope.clone(), "ollama", "qwen3:14b").await;
+        let stale = write_semantic(&store, scope.clone(), "ollama", "qwen3:14b").await;
+        let superseded = write_semantic(&store, scope.clone(), "ollama", "qwen3:14b").await;
+        let winner = write_semantic(&store, scope.clone(), "ollama", "qwen3:14b").await;
+
+        store.retire(&rejected, crate::memory::RetirementReason::Rejected).await.unwrap();
+        store.retire(&stale, crate::memory::RetirementReason::Stale).await.unwrap();
+        store.supersede(&superseded, &winner).await.unwrap();
+
+        let stats = store.extraction_stats(StatsFilter::default()).await.unwrap();
+
+        assert_eq!(stats.len(), 1, "one (provider, model) pair");
+        let stat = &stats[0];
+        assert_eq!(stat.total, 4, "every semantic row counts in the denominator, regardless of retirement");
+        assert_eq!(
+            stat.rejected, 1,
+            "only Rejected counts; Stale (source changed) and Superseded (newer fact won) are not model errors",
+        );
+    }
+
+    #[tokio::test]
+    async fn should_break_extraction_stats_down_per_provider_and_model() {
+        let store = StubStore::default();
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "o".to_string(),
+            user_id: "u".to_string(),
+        };
+
+        let weak = write_semantic(&store, scope.clone(), "ollama", "llama3.2:1b").await;
+        write_semantic(&store, scope.clone(), "ollama", "llama3.2:1b").await;
+        write_semantic(&store, scope.clone(), "ollama", "qwen3:14b").await;
+        store.retire(&weak, crate::memory::RetirementReason::Rejected).await.unwrap();
+
+        let stats = store.extraction_stats(StatsFilter::default()).await.unwrap();
+
+        // Ordered by (provider, model) ascending: llama before qwen.
+        assert_eq!(stats.len(), 2, "one row per distinct (provider, model)");
+        assert_eq!(stats[0].model, "llama3.2:1b");
+        assert_eq!((stats[0].total, stats[0].rejected), (2, 1));
+        assert_eq!(stats[1].model, "qwen3:14b");
+        assert_eq!((stats[1].total, stats[1].rejected), (1, 0), "rejecting one model must not touch the other");
+    }
+
+    #[tokio::test]
+    async fn should_scope_extraction_stats_to_the_filtered_subset() {
+        let store = StubStore::default();
+        let mine = Scope {
+            agent_id: "a".to_string(),
+            org_id: "acme".to_string(),
+            user_id: "u".to_string(),
+        };
+        let theirs = Scope {
+            agent_id: "a".to_string(),
+            org_id: "other".to_string(),
+            user_id: "u".to_string(),
+        };
+
+        write_semantic(&store, mine.clone(), "ollama", "m").await;
+        write_semantic(&store, theirs.clone(), "ollama", "m").await;
+
+        let filter = StatsFilter {
+            org_id: Some("acme".to_string()),
+            ..StatsFilter::default()
+        };
+        let stats = store.extraction_stats(filter).await.unwrap();
+
+        assert_eq!(stats.len(), 1);
+        assert_eq!(stats[0].total, 1, "the org filter must exclude another org's extractions");
+    }
+
     #[test]
     fn should_render_index_status_as_lowercase_string() {
         assert_eq!(IndexStatus::Pending.as_ref(), "pending");
@@ -775,14 +1041,15 @@ mod tests {
             user_id: "u".to_string(),
         };
         store
-            .remember(
+            .remember(NewMemory {
                 scope,
-                content.to_string(),
-                serde_json::json!({}),
-                MemoryKind::Semantic,
-                None,
-                None,
-            )
+                content: content.to_string(),
+                metadata: serde_json::json!({}),
+                kind: MemoryKind::Semantic,
+                source_pid: None,
+                event_at: None,
+                confidence: crate::memory::Confidence::MAX,
+            })
             .await
             .unwrap()
     }
@@ -933,8 +1200,15 @@ mod tests {
         let trail = store.supersession_history(&loser.pid).await.unwrap();
 
         assert_eq!(trail.len(), 2);
-        assert_eq!(trail[0].winner_pid.as_deref(), Some(winner.pid.as_str()), "supersede first");
-        assert!(trail[1].winner_pid.is_none(), "unsupersede represented as winner_pid=None");
+        assert_eq!(
+            trail[0].winner_pid.as_deref(),
+            Some(winner.pid.as_str()),
+            "supersede first"
+        );
+        assert!(
+            trail[1].winner_pid.is_none(),
+            "unsupersede represented as winner_pid=None"
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
