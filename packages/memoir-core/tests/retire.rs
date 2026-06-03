@@ -9,7 +9,8 @@
 
 use std::time::Duration;
 
-use memoir_core::memory::RetirementReason;
+use memoir_core::memory::{Confidence, MemoryKind, RetirementReason};
+use memoir_core::store::{MemoryStore, NewMemory};
 
 mod common;
 
@@ -83,6 +84,51 @@ async fn should_return_not_found_when_retiring_unknown_pid() -> anyhow::Result<(
 
     let result = client.reject("does-not-exist").await;
     assert!(result.is_err(), "retiring an unknown pid must error; got {result:?}");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_compute_extraction_accuracy_from_rejected_over_total() -> anyhow::Result<()> {
+    let client = common::fresh_client().await?;
+    let scope = common::fresh_scope();
+    let store = client.store();
+
+    // An episodic source plus two semantic rows derived from the same model.
+    let source = client.remember("my favorite color is green", scope.clone()).await?;
+    let write_semantic = async |content: &str| -> anyhow::Result<String> {
+        Ok(store
+            .remember(NewMemory {
+                scope: scope.clone(),
+                content: content.to_string(),
+                metadata: serde_json::json!({ "provider": "ollama", "model": "qwen3:14b" }),
+                kind: MemoryKind::Semantic,
+                source_pid: Some(source.pid.clone()),
+                event_at: None,
+                confidence: Confidence::new(80),
+            })
+            .await?
+            .pid)
+    };
+    let wrong = write_semantic("the user hates green").await?;
+    let _right = write_semantic("the user likes green").await?;
+
+    client.reject(&wrong).await?;
+
+    // The live aggregate reads provider/model out of the metadata JSON and
+    // counts rejected vs total: 1 of 2 → 50% accuracy for this model.
+    let stats = client
+        .extraction_stats()
+        .org(&scope.org_id)
+        .user(&scope.user_id)
+        .agent(&scope.agent_id)
+        .await?;
+
+    assert_eq!(stats.len(), 1, "one (provider, model) pair in this scope; got {stats:?}");
+    let stat = &stats[0];
+    assert_eq!((stat.provider.as_str(), stat.model.as_str()), ("ollama", "qwen3:14b"));
+    assert_eq!((stat.total, stat.rejected), (2, 1));
+    assert!((stat.accuracy() - 0.5).abs() < f64::EPSILON, "accuracy must be 1 − 1/2; got {}", stat.accuracy());
 
     Ok(())
 }

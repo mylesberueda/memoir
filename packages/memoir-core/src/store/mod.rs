@@ -928,6 +928,105 @@ mod tests {
         assert!(agents.is_empty());
     }
 
+    /// Writes a semantic row tagged with `provider`/`model` and returns its pid.
+    async fn write_semantic(store: &StubStore, scope: Scope, provider: &str, model: &str) -> String {
+        store
+            .remember(NewMemory {
+                scope,
+                content: "a derived fact".to_string(),
+                metadata: serde_json::json!({ "provider": provider, "model": model }),
+                kind: MemoryKind::Semantic,
+                source_pid: Some("src".to_string()),
+                event_at: None,
+                confidence: crate::memory::Confidence::new(80),
+            })
+            .await
+            .unwrap()
+            .pid
+    }
+
+    #[tokio::test]
+    async fn should_count_only_rejected_rows_in_extraction_numerator() {
+        let store = StubStore::default();
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "o".to_string(),
+            user_id: "u".to_string(),
+        };
+
+        // Four extractions from one model: one rejected, one stale, one
+        // superseded, one untouched. Only the rejected one is a model error.
+        let rejected = write_semantic(&store, scope.clone(), "ollama", "qwen3:14b").await;
+        let stale = write_semantic(&store, scope.clone(), "ollama", "qwen3:14b").await;
+        let superseded = write_semantic(&store, scope.clone(), "ollama", "qwen3:14b").await;
+        let winner = write_semantic(&store, scope.clone(), "ollama", "qwen3:14b").await;
+
+        store.retire(&rejected, crate::memory::RetirementReason::Rejected).await.unwrap();
+        store.retire(&stale, crate::memory::RetirementReason::Stale).await.unwrap();
+        store.supersede(&superseded, &winner).await.unwrap();
+
+        let stats = store.extraction_stats(StatsFilter::default()).await.unwrap();
+
+        assert_eq!(stats.len(), 1, "one (provider, model) pair");
+        let stat = &stats[0];
+        assert_eq!(stat.total, 4, "every semantic row counts in the denominator, regardless of retirement");
+        assert_eq!(
+            stat.rejected, 1,
+            "only Rejected counts; Stale (source changed) and Superseded (newer fact won) are not model errors",
+        );
+    }
+
+    #[tokio::test]
+    async fn should_break_extraction_stats_down_per_provider_and_model() {
+        let store = StubStore::default();
+        let scope = Scope {
+            agent_id: "a".to_string(),
+            org_id: "o".to_string(),
+            user_id: "u".to_string(),
+        };
+
+        let weak = write_semantic(&store, scope.clone(), "ollama", "llama3.2:1b").await;
+        write_semantic(&store, scope.clone(), "ollama", "llama3.2:1b").await;
+        write_semantic(&store, scope.clone(), "ollama", "qwen3:14b").await;
+        store.retire(&weak, crate::memory::RetirementReason::Rejected).await.unwrap();
+
+        let stats = store.extraction_stats(StatsFilter::default()).await.unwrap();
+
+        // Ordered by (provider, model) ascending: llama before qwen.
+        assert_eq!(stats.len(), 2, "one row per distinct (provider, model)");
+        assert_eq!(stats[0].model, "llama3.2:1b");
+        assert_eq!((stats[0].total, stats[0].rejected), (2, 1));
+        assert_eq!(stats[1].model, "qwen3:14b");
+        assert_eq!((stats[1].total, stats[1].rejected), (1, 0), "rejecting one model must not touch the other");
+    }
+
+    #[tokio::test]
+    async fn should_scope_extraction_stats_to_the_filtered_subset() {
+        let store = StubStore::default();
+        let mine = Scope {
+            agent_id: "a".to_string(),
+            org_id: "acme".to_string(),
+            user_id: "u".to_string(),
+        };
+        let theirs = Scope {
+            agent_id: "a".to_string(),
+            org_id: "other".to_string(),
+            user_id: "u".to_string(),
+        };
+
+        write_semantic(&store, mine.clone(), "ollama", "m").await;
+        write_semantic(&store, theirs.clone(), "ollama", "m").await;
+
+        let filter = StatsFilter {
+            org_id: Some("acme".to_string()),
+            ..StatsFilter::default()
+        };
+        let stats = store.extraction_stats(filter).await.unwrap();
+
+        assert_eq!(stats.len(), 1);
+        assert_eq!(stats[0].total, 1, "the org filter must exclude another org's extractions");
+    }
+
     #[test]
     fn should_render_index_status_as_lowercase_string() {
         assert_eq!(IndexStatus::Pending.as_ref(), "pending");
