@@ -86,11 +86,20 @@ async fn should_cascade_delete_semantic_memories_when_episodic_is_forgotten() ->
 
     // When: the episodic memory is forgotten
     let deleted = client.forget(ForgetTarget::Pid(episodic_pid.clone())).await?;
-    assert_eq!(
-        deleted,
-        vec![episodic_pid.clone()],
-        "forget returns the deleted episodic pid",
+    // forget returns the episodic pid AND its cascade-deleted derived semantics
+    // (epic 0011 ticket 0012) — every returned pid must have its vector evicted,
+    // so the cascade-removed rows belong in this set, not silently dropped.
+    assert!(
+        deleted.contains(&episodic_pid),
+        "forget must return the deleted episodic pid; got {deleted:?}",
     );
+    for semantic in &semantics_before {
+        assert!(
+            deleted.contains(&semantic.pid),
+            "forget must return cascade-deleted semantic pid {} for vector eviction; got {deleted:?}",
+            semantic.pid,
+        );
+    }
 
     // Then: the semantic derivatives are gone too (FK ON DELETE CASCADE).
     // Inspect the store directly so we observe DB state, not search behavior.
