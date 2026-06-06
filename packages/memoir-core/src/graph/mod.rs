@@ -16,9 +16,13 @@
 //! recall simply returns vector hits with no graph enrichment.
 
 mod error;
+mod extraction;
 mod memory;
 
 pub use error::GraphError;
+pub use extraction::{
+    DEFAULT_TRIPLE_PROMPT, LlmExtractor, TRIPLE_REPLY_MAX_CHARS, Triple, TripleExtractor, TripleSet, parse_triples,
+};
 pub use memory::InMemoryGraphStore;
 
 #[cfg(feature = "knowledge-graph")]

@@ -154,6 +154,8 @@ impl Client {
         #[cfg(feature = "knowledge-graph")]
         #[builder(into)]
         graph_name: Option<String>,
+        #[cfg(feature = "knowledge-graph")]
+        relational_llm: Option<LlmConfig>,
     ) -> Result<Client, ClientError> {
         let schema = schema.unwrap_or_else(|| crate::migration::DEFAULT_SCHEMA.to_string());
 
@@ -184,6 +186,10 @@ impl Client {
         }
         if let Some(config) = contradiction_llm {
             llms.install(LlmRole::Contradiction, config)?;
+        }
+        #[cfg(feature = "knowledge-graph")]
+        if let Some(config) = relational_llm {
+            llms.install(LlmRole::Relational, config)?;
         }
 
         // Build the NLI classifier only when a model is configured — it
