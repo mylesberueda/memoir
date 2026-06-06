@@ -1,5 +1,3 @@
-// Rust guideline compliant 2026-02-21
-
 /// Failure modes for [`crate::graph::GraphStore`] implementations.
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {

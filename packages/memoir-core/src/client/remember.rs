@@ -199,5 +199,26 @@ async fn execute(builder: RememberBuilder<'_>) -> Result<Memory, ClientError> {
         );
     }
 
+    // Relational extraction fans out from the same episodic write as Extract,
+    // in parallel. Enqueue only when a graph store is wired, so the job is not
+    // left unclaimable (mirrors the Extract/Categorize capability gates).
+    #[cfg(feature = "knowledge-graph")]
+    if inner.graph.is_some() {
+        inner
+            .jobs
+            .enqueue(
+                crate::jobs::JobKind::RelationalExtract,
+                written.pid.clone(),
+                serde_json::json!({ "origin": "remember" }),
+            )
+            .await?;
+        tracing::event!(
+            name: "memoir.remember.relational_enqueued",
+            tracing::Level::DEBUG,
+            pid = %written.pid,
+            "relational extract job enqueued for {{pid}}",
+        );
+    }
+
     Ok(written)
 }

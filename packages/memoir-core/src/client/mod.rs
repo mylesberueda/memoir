@@ -10,6 +10,8 @@ mod feedback;
 mod query;
 mod recall_as_of;
 mod reconcile;
+#[cfg(feature = "knowledge-graph")]
+mod relational;
 mod remember;
 mod reprocess;
 mod search;
