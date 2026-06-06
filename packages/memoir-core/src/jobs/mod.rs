@@ -47,10 +47,7 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`JobsError::Database`] for database failures.
-    fn claim(
-        &self,
-        claimed_by: Option<&str>,
-    ) -> impl Future<Output = Result<Option<Job>, JobsError>> + Send;
+    fn claim(&self, claimed_by: Option<&str>) -> impl Future<Output = Result<Option<Job>, JobsError>> + Send;
 
     /// Marks a claimed job as completed (deletes the row).
     ///
@@ -75,12 +72,7 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     ///
     /// Returns [`JobsError::NotFound`] when no claimed job matches `id`,
     /// [`JobsError::Database`] for database failures.
-    fn fail(
-        &self,
-        id: i64,
-        reason: String,
-        max_attempts: i32,
-    ) -> impl Future<Output = Result<(), JobsError>> + Send;
+    fn fail(&self, id: i64, reason: String, max_attempts: i32) -> impl Future<Output = Result<(), JobsError>> + Send;
 
     /// Re-pends every claimed job whose lease has expired.
     ///
@@ -91,10 +83,7 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`JobsError::Database`] for database failures.
-    fn reset_expired_leases(
-        &self,
-        lease: std::time::Duration,
-    ) -> impl Future<Output = Result<u64, JobsError>> + Send;
+    fn reset_expired_leases(&self, lease: std::time::Duration) -> impl Future<Output = Result<u64, JobsError>> + Send;
 
     /// Returns up to `limit` failed jobs, newest-first by `updated_at`.
     ///
@@ -104,10 +93,7 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`JobsError::Database`] for database failures.
-    fn list_failed(
-        &self,
-        limit: usize,
-    ) -> impl Future<Output = Result<Vec<FailedJob>, JobsError>> + Send;
+    fn list_failed(&self, limit: usize) -> impl Future<Output = Result<Vec<FailedJob>, JobsError>> + Send;
 
     /// Flips one failed job back to `pending` and clears the attempt counter.
     ///
@@ -133,11 +119,7 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`JobsError::Database`] for database failures.
-    fn bulk_retry(
-        &self,
-        kind: Option<JobKind>,
-        dry_run: bool,
-    ) -> impl Future<Output = Result<u64, JobsError>> + Send;
+    fn bulk_retry(&self, kind: Option<JobKind>, dry_run: bool) -> impl Future<Output = Result<u64, JobsError>> + Send;
 
     /// Permanently deletes one failed job. The referenced memory is untouched.
     ///
@@ -240,15 +222,18 @@ mod tests {
 
         async fn fail(&self, id: i64, reason: String, max_attempts: i32) -> Result<(), JobsError> {
             let mut rows = self.rows.lock().unwrap();
-            let Some(row) = rows.iter_mut().find(|r| r.id == id && r.state == JobState::Claimed)
-            else {
+            let Some(row) = rows.iter_mut().find(|r| r.id == id && r.state == JobState::Claimed) else {
                 return Err(JobsError::NotFound(id.to_string()));
             };
             row.attempts += 1;
             row.failure_reason = Some(reason);
             row.claimed_at = None;
             row.claimed_by = None;
-            row.state = if row.attempts >= max_attempts { JobState::Failed } else { JobState::Pending };
+            row.state = if row.attempts >= max_attempts {
+                JobState::Failed
+            } else {
+                JobState::Pending
+            };
             row.updated_at = Utc::now().into();
             Ok(())
         }
@@ -296,8 +281,7 @@ mod tests {
 
         async fn retry_job(&self, id: i64) -> Result<(), JobsError> {
             let mut rows = self.rows.lock().unwrap();
-            let Some(row) = rows.iter_mut().find(|r| r.id == id && r.state == JobState::Failed)
-            else {
+            let Some(row) = rows.iter_mut().find(|r| r.id == id && r.state == JobState::Failed) else {
                 return Err(JobsError::NotFound(id.to_string()));
             };
             row.state = JobState::Pending;
@@ -309,11 +293,7 @@ mod tests {
             Ok(())
         }
 
-        async fn bulk_retry(
-            &self,
-            kind: Option<JobKind>,
-            dry_run: bool,
-        ) -> Result<u64, JobsError> {
+        async fn bulk_retry(&self, kind: Option<JobKind>, dry_run: bool) -> Result<u64, JobsError> {
             let mut rows = self.rows.lock().unwrap();
             let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
             let mut affected = 0u64;
@@ -473,7 +453,11 @@ mod tests {
         store.fail(id, "boom".to_string(), 1).await.unwrap();
 
         store.retry_job(id).await.unwrap();
-        let claimed = store.claim(None).await.unwrap().expect("retried job should be claimable");
+        let claimed = store
+            .claim(None)
+            .await
+            .unwrap()
+            .expect("retried job should be claimable");
         assert_eq!(claimed.id, id);
         assert_eq!(claimed.attempts, 0, "retry resets attempts to zero");
         assert!(claimed.failure_reason.is_none(), "retry clears failure reason");
