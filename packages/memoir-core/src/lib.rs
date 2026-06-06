@@ -41,6 +41,7 @@
 
 pub mod client;
 pub mod embedding;
+pub mod graph;
 pub mod jobs;
 pub mod llm;
 pub mod memory;

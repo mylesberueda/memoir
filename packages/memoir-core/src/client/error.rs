@@ -45,4 +45,14 @@ pub enum ClientError {
     /// row with no `source_pid` cannot be reprocessed.
     #[error("memory {pid} is not correctable via feedback: {reason}")]
     NotCorrectable { pid: String, reason: String },
+
+    /// Knowledge-graph backend failed to connect or initialize (epic 0012).
+    #[cfg(feature = "knowledge-graph")]
+    #[error("knowledge graph failed: {0}")]
+    Graph(String),
+
+    /// The builder received a `graph_name` but no `falkor` connection (epic 0012).
+    #[cfg(feature = "knowledge-graph")]
+    #[error("a graph_name was configured but no falkor connection was supplied")]
+    GraphNotConfigured,
 }

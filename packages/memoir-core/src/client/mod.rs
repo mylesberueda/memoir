@@ -5,8 +5,8 @@ mod categorize;
 mod edit;
 mod embed;
 mod error;
-mod feedback;
 mod extract;
+mod feedback;
 mod query;
 mod recall_as_of;
 mod reconcile;
@@ -63,6 +63,14 @@ pub(crate) struct ClientInner {
     pub(crate) nli: Option<Arc<crate::nli::NliClassifier>>,
     pub(crate) schema: String,
     pub(crate) system_prompt: Option<String>,
+    /// Optional FalkorDB knowledge-graph store
+    ///
+    /// `None` when no FalkorDB connection was supplied — graph features are then
+    /// absent and recall returns only vector hits. Only present with the
+    /// `knowledge-graph` feature; vector-only builds omit the field entirely.
+    #[cfg(feature = "knowledge-graph")]
+    #[allow(dead_code)]
+    pub(crate) graph: Option<crate::graph::FalkorGraphStore>,
 }
 
 /// High-level facade composing the embedder, store, and vector index.
@@ -138,6 +146,12 @@ impl Client {
         extraction_llm: Option<LlmConfig>,
         contradiction_llm: Option<LlmConfig>,
         categorize_model: Option<crate::nli::NliConfig>,
+        #[cfg(feature = "knowledge-graph")]
+        #[builder(into)]
+        falkor: Option<String>,
+        #[cfg(feature = "knowledge-graph")]
+        #[builder(into)]
+        graph_name: Option<String>,
     ) -> Result<Client, ClientError> {
         let schema = schema.unwrap_or_else(|| crate::migration::DEFAULT_SCHEMA.to_string());
 
@@ -186,6 +200,24 @@ impl Client {
             None
         };
 
+        // A `graph_name` with no `falkor` connection is a misconfiguration, not
+        // a silent fallback to vector-only.
+        #[cfg(feature = "knowledge-graph")]
+        let graph = match (falkor, graph_name) {
+            (Some(url), name) => {
+                let name = name.unwrap_or_else(|| crate::graph::DEFAULT_GRAPH_NAME.to_string());
+                let store = crate::graph::FalkorGraphStore::connect(url, name)
+                    .await
+                    .map_err(|e| ClientError::Graph(e.to_string()))?;
+                crate::graph::GraphStore::ensure_graph(&store)
+                    .await
+                    .map_err(|e| ClientError::Graph(e.to_string()))?;
+                Some(store)
+            }
+            (None, Some(_)) => return Err(ClientError::GraphNotConfigured),
+            (None, None) => None,
+        };
+
         Ok(Client {
             inner: Arc::new(ClientInner {
                 embedder: Arc::new(embedder),
@@ -196,6 +228,8 @@ impl Client {
                 nli,
                 schema,
                 system_prompt,
+                #[cfg(feature = "knowledge-graph")]
+                graph,
             }),
         })
     }
