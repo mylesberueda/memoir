@@ -15,11 +15,16 @@
 //! memories. Absence of a graph store is a first-class, non-degraded state —
 //! recall simply returns vector hits with no graph enrichment.
 
+mod edge;
 mod error;
 mod extraction;
 mod memory;
 mod resolve;
 
+pub use edge::{
+    CardinalityPolicy, Edge, EdgeCatalog, EdgeError, EdgeResolution, EdgeResolver, ExistingEdge, NaiveAppendResolver,
+    RelationCardinality, TemporalEdgeResolver,
+};
 pub use error::GraphError;
 pub use extraction::{
     DEFAULT_TRIPLE_PROMPT, LlmExtractor, TRIPLE_REPLY_MAX_CHARS, Triple, TripleExtractor, TripleSet,
