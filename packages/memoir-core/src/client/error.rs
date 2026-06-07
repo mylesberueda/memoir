@@ -49,7 +49,7 @@ pub enum ClientError {
     /// Knowledge-graph backend failed to connect or initialize (epic 0012).
     #[cfg(feature = "knowledge-graph")]
     #[error("knowledge graph failed: {0}")]
-    Graph(String),
+    Graph(#[from] crate::graph::GraphError),
 
     /// The builder received a `graph_name` but no `falkor` connection (epic 0012).
     #[cfg(feature = "knowledge-graph")]

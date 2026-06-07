@@ -401,10 +401,12 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
             .run_relational_extract(job.clone())
             .await
             .map_err(|err| err.to_string()),
-        // A vector-only build never enqueues this kind; a row written by a
+        #[cfg(feature = "knowledge-graph")]
+        JobKind::Synthesize => inner.run_synthesize(job.clone()).await.map_err(|err| err.to_string()),
+        // A vector-only build never enqueues these kinds; a row written by a
         // graph-enabled build is completed as a no-op rather than failing.
         #[cfg(not(feature = "knowledge-graph"))]
-        JobKind::RelationalExtract => Ok(()),
+        JobKind::RelationalExtract | JobKind::Synthesize => Ok(()),
     };
 
     match result {

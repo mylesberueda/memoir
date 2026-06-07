@@ -16,11 +16,13 @@
 //! recall simply returns vector hits with no graph enrichment.
 
 mod commit;
+mod cosine;
 mod edge;
 mod error;
 mod extraction;
 mod memory;
 mod resolve;
+mod synthesis;
 
 pub use commit::{CommitContext, CommitError, commit_triples};
 pub use edge::{
@@ -36,6 +38,10 @@ pub use resolve::{
     EmbeddingEntityResolver, EntityCatalog, EntityResolver, EntityVector, ExactStringResolver, InMemoryEntityCatalog,
     Resolution, ResolveError, MIN_ENTITY_SIMILARITY,
 };
+pub use synthesis::{
+    EmbeddingSynthesizer, MIN_CORROBORATION_SIMILARITY, PassthroughSynthesizer, SemanticFact, SynthesisError,
+    Synthesizer,
+};
 
 #[cfg(feature = "knowledge-graph")]
 mod falkor;
@@ -44,10 +50,16 @@ mod falkor;
 mod falkor_catalog;
 
 #[cfg(feature = "knowledge-graph")]
+mod staging;
+
+#[cfg(feature = "knowledge-graph")]
 pub use falkor::FalkorGraphStore;
 
 #[cfg(feature = "knowledge-graph")]
 pub use falkor_catalog::{FalkorEdgeCatalog, FalkorEntityCatalog};
+
+#[cfg(feature = "knowledge-graph")]
+pub use staging::TripleStaging;
 
 use std::collections::HashMap;
 use std::future::Future;

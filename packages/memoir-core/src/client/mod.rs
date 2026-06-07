@@ -15,6 +15,8 @@ mod relational;
 mod remember;
 mod reprocess;
 mod search;
+#[cfg(feature = "knowledge-graph")]
+mod synthesize;
 mod timeline;
 mod worker;
 
@@ -74,6 +76,14 @@ pub(crate) struct ClientInner {
     /// without reconnecting.
     #[cfg(feature = "knowledge-graph")]
     pub(crate) graph: Option<std::sync::Arc<crate::graph::FalkorGraphStore>>,
+
+    /// Staging store for relational triples awaiting the synthesis fan-in.
+    ///
+    /// Worker-internal handoff between `relational_extract` (which stages) and
+    /// `synthesize` (which reads, commits, and clears). Present whenever the
+    /// `knowledge-graph` feature is built; unused when no graph is configured.
+    #[cfg(feature = "knowledge-graph")]
+    pub(crate) triple_staging: crate::graph::TripleStaging,
 }
 
 /// High-level facade composing the embedder, store, and vector index.
@@ -173,6 +183,8 @@ impl Client {
 
         let embedder = OnnxEmbedding::new()?;
         let store = PostgresStore::new(db.clone());
+        #[cfg(feature = "knowledge-graph")]
+        let triple_staging = crate::graph::TripleStaging::new(db.clone());
         let jobs = PostgresJobsStore::new(db);
         let index = match collection {
             Some(name) => QdrantIndex::new(qdrant).with_collection(name),
@@ -215,12 +227,8 @@ impl Client {
         let graph = match (falkor, graph_name) {
             (Some(url), name) => {
                 let name = name.unwrap_or_else(|| crate::graph::DEFAULT_GRAPH_NAME.to_string());
-                let store = crate::graph::FalkorGraphStore::connect(url, name)
-                    .await
-                    .map_err(|e| ClientError::Graph(e.to_string()))?;
-                crate::graph::GraphStore::ensure_graph(&store)
-                    .await
-                    .map_err(|e| ClientError::Graph(e.to_string()))?;
+                let store = crate::graph::FalkorGraphStore::connect(url, name).await?;
+                crate::graph::GraphStore::ensure_graph(&store).await?;
                 Some(std::sync::Arc::new(store))
             }
             (None, Some(_)) => return Err(ClientError::GraphNotConfigured),
@@ -239,6 +247,8 @@ impl Client {
                 system_prompt,
                 #[cfg(feature = "knowledge-graph")]
                 graph,
+                #[cfg(feature = "knowledge-graph")]
+                triple_staging,
             }),
         })
     }

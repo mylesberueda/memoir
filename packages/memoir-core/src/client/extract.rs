@@ -253,6 +253,19 @@ impl ClientInner {
             "extraction persisted {{semantic_count}} semantic row(s) for {{source_pid}}",
         );
 
+        // Semantic extraction is one of the two synthesis parents. On success,
+        // try to fire synthesis: it only fires once the relational sibling is
+        // also done (the guard is a no-op while it is still pending), and only
+        // when a graph is configured (otherwise no relational sibling was ever
+        // enqueued, so there is nothing to synthesize).
+        #[cfg(feature = "knowledge-graph")]
+        if self.graph.is_some() {
+            self.jobs
+                .enqueue_synthesis_if_ready(&source_pid)
+                .await
+                .map_err(|err: JobsError| ExtractError::Persist(err.to_string()))?;
+        }
+
         Ok(())
     }
 }

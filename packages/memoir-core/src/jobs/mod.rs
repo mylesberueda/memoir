@@ -38,6 +38,24 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
         payload: serde_json::Value,
     ) -> impl Future<Output = Result<i64, JobsError>> + Send;
 
+    /// Atomically enqueues a `synthesize` job for `source_pid`, but only once
+    /// both LLM-derived siblings have succeeded.
+    ///
+    /// The two-parent fan-in of the knowledge-graph pipeline, resolved without a
+    /// job-dependency system: a `synthesize` row is inserted iff no `extract` or
+    /// `relational_extract` row for `source_pid` still exists. Because a
+    /// succeeded job deletes its row ([`Self::complete`]) while a failed or
+    /// in-flight one retains it, "no sibling row" means "both siblings
+    /// succeeded." The check and the insert MUST share one atomic statement so
+    /// two concurrent sibling completions cannot both insert. Returns whether a
+    /// row was inserted (`false` when a sibling is still present, or a
+    /// `synthesize` row already exists).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`JobsError::Database`] for database failures.
+    fn enqueue_synthesis_if_ready(&self, source_pid: &str) -> impl Future<Output = Result<bool, JobsError>> + Send;
+
     /// Atomically claims the oldest pending job and returns it, or `None`.
     ///
     /// Uses `SELECT FOR UPDATE SKIP LOCKED` (or equivalent) so concurrent
@@ -195,6 +213,40 @@ mod tests {
             };
             self.rows.lock().unwrap().push(job);
             Ok(id)
+        }
+
+        async fn enqueue_synthesis_if_ready(&self, source_pid: &str) -> Result<bool, JobsError> {
+            let mut rows = self.rows.lock().unwrap();
+            let blocked = rows.iter().any(|r| {
+                r.source_pid == source_pid
+                    && matches!(
+                        r.kind,
+                        JobKind::Extract | JobKind::RelationalExtract | JobKind::Synthesize
+                    )
+            });
+            if blocked {
+                return Ok(false);
+            }
+            let id = {
+                let mut guard = self.next_id.lock().unwrap();
+                *guard += 1;
+                *guard
+            };
+            let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
+            rows.push(Job {
+                id,
+                source_pid: source_pid.to_owned(),
+                kind: JobKind::Synthesize,
+                state: JobState::Pending,
+                payload: serde_json::json!({}),
+                attempts: 0,
+                failure_reason: None,
+                claimed_at: None,
+                claimed_by: None,
+                created_at: now,
+                updated_at: now,
+            });
+            Ok(true)
         }
 
         async fn claim(&self, claimed_by: Option<&str>) -> Result<Option<Job>, JobsError> {
@@ -554,6 +606,63 @@ mod tests {
         store.claim(None).await.unwrap();
         // After claim: 1 pending + 1 claimed.
         assert_eq!(store.pending_count().await.unwrap(), 1);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_enqueue_synthesis_when_no_siblings_remain() {
+        let store = StubJobsStore::default();
+        let inserted = store.enqueue_synthesis_if_ready("pid_done").await.unwrap();
+        assert!(inserted, "no sibling rows -> synthesis fires");
+        let claimed = store.claim(None).await.unwrap().expect("synthesize row");
+        assert_eq!(claimed.kind, JobKind::Synthesize);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_not_enqueue_synthesis_while_extract_sibling_present() {
+        let store = StubJobsStore::default();
+        store
+            .enqueue(JobKind::Extract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x").await.unwrap();
+        assert!(!inserted, "extract sibling still present -> no synthesis");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_not_enqueue_synthesis_while_relational_sibling_present() {
+        let store = StubJobsStore::default();
+        store
+            .enqueue(JobKind::RelationalExtract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x").await.unwrap();
+        assert!(!inserted, "relational sibling still present -> no synthesis");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_enqueue_synthesis_exactly_once_regardless_of_order() {
+        // Two sibling completions both call the guard; exactly one inserts.
+        let store = StubJobsStore::default();
+        let first = store.enqueue_synthesis_if_ready("pid_x").await.unwrap();
+        let second = store.enqueue_synthesis_if_ready("pid_x").await.unwrap();
+        assert!(first, "first call inserts");
+        assert!(!second, "second call sees the existing synthesize row -> no duplicate");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_ignore_unrelated_kinds_when_checking_readiness() {
+        // A pending embed/categorize for the same source must NOT block synthesis.
+        let store = StubJobsStore::default();
+        store
+            .enqueue(JobKind::Embed, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        store
+            .enqueue(JobKind::Categorize, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x").await.unwrap();
+        assert!(inserted, "embed/categorize are not synthesis parents -> synthesis fires");
     }
 
     #[tokio::test(flavor = "current_thread")]

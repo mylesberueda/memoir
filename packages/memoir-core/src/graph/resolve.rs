@@ -28,6 +28,8 @@ use std::sync::Mutex;
 use crate::embedding::{EmbeddingError, EmbeddingModel};
 use crate::memory::Scope;
 
+use super::cosine::cosine_similarity;
+
 /// Minimum cosine similarity for two entity strings to be the same node.
 ///
 /// Below this floor the surface forms are treated as distinct entities and a
@@ -217,29 +219,6 @@ impl<E: EmbeddingModel, C: EntityCatalog> EntityResolver for EmbeddingEntityReso
     }
 }
 
-/// Returns the cosine similarity of `a` and `b`, or `None` if undefined.
-///
-/// Undefined when the vectors differ in length or either has zero magnitude;
-/// callers treat `None` as "not a match" rather than a hard error so one
-/// malformed candidate does not fail the whole resolution.
-fn cosine_similarity(a: &[f32], b: &[f32]) -> Option<f32> {
-    if a.len() != b.len() || a.is_empty() {
-        return None;
-    }
-
-    let mut dot = 0.0f32;
-    let mut norm_a = 0.0f32;
-    let mut norm_b = 0.0f32;
-    for (x, y) in a.iter().zip(b) {
-        dot += x * y;
-        norm_a += x * x;
-        norm_b += y * y;
-    }
-
-    let denom = norm_a.sqrt() * norm_b.sqrt();
-    if denom == 0.0 { None } else { Some(dot / denom) }
-}
-
 /// In-memory [`EntityCatalog`] for tests and benchmarks, with no live backend.
 ///
 /// Holds entity vectors per scope so a resolver's matching logic runs against
@@ -416,21 +395,5 @@ mod tests {
                 name: "Alice".to_string()
             }
         );
-    }
-
-    #[test]
-    fn should_compute_cosine_for_identical_vectors() {
-        let similarity = cosine_similarity(&[1.0, 0.0], &[1.0, 0.0]).unwrap();
-        assert!((similarity - 1.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn should_return_none_cosine_for_mismatched_lengths() {
-        assert_eq!(cosine_similarity(&[1.0, 0.0], &[1.0]), None);
-    }
-
-    #[test]
-    fn should_return_none_cosine_for_zero_magnitude() {
-        assert_eq!(cosine_similarity(&[0.0, 0.0], &[1.0, 0.0]), None);
     }
 }

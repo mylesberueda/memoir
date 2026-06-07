@@ -277,7 +277,7 @@ mod tests {
 
     use super::*;
     use crate::graph::{
-        EntityCatalog, EntityVector, ExactStringResolver, GraphRows, InMemoryEntityCatalog, NaiveAppendResolver,
+        EntityVector, ExactStringResolver, GraphRows, InMemoryEntityCatalog, NaiveAppendResolver,
     };
 
     /// Embeds every name to the same fixed vector — node writes need only that

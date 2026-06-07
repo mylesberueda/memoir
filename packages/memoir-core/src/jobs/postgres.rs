@@ -60,6 +60,32 @@ impl MemoryJobsStore for PostgresJobsStore {
         row.try_get::<i64>("", "id").map_err(database)
     }
 
+    async fn enqueue_synthesis_if_ready(&self, source_pid: &str) -> Result<bool, JobsError> {
+        // Single atomic statement: insert the synthesize row only if neither
+        // LLM-derived sibling (extract / relational_extract) still has a row for
+        // this source, AND no synthesize row exists yet. The `SELECT ... WHERE
+        // NOT EXISTS` and the `INSERT` share one snapshot, so two concurrent
+        // sibling completions cannot both insert. `RETURNING` lets us report
+        // whether a row landed.
+        let stmt = Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            INSERT INTO memory_jobs (source_pid, kind, payload)
+            SELECT $1, 'synthesize', '{}'::jsonb
+            WHERE NOT EXISTS (
+                SELECT 1 FROM memory_jobs
+                WHERE source_pid = $1
+                  AND kind IN ('extract', 'relational_extract', 'synthesize')
+            )
+            RETURNING id
+            "#,
+            [SeaOrmValue::String(Some(source_pid.to_owned()))],
+        );
+
+        let inserted = self.db.query_one_raw(stmt).await.map_err(database)?.is_some();
+        Ok(inserted)
+    }
+
     async fn claim(&self, claimed_by: Option<&str>) -> Result<Option<Job>, JobsError> {
         // Single-statement claim: UPDATE the oldest pending row, where the
         // inner SELECT uses FOR UPDATE SKIP LOCKED so concurrent workers
