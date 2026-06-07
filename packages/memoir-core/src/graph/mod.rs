@@ -18,12 +18,17 @@
 mod error;
 mod extraction;
 mod memory;
+mod resolve;
 
 pub use error::GraphError;
 pub use extraction::{
-    DEFAULT_TRIPLE_PROMPT, LlmExtractor, TRIPLE_REPLY_MAX_CHARS, Triple, TripleExtractor, TripleSet, parse_triples,
+    DEFAULT_TRIPLE_PROMPT, LlmExtractor, TRIPLE_REPLY_MAX_CHARS, Triple, TripleExtractor, TripleSet,
 };
 pub use memory::InMemoryGraphStore;
+pub use resolve::{
+    EmbeddingEntityResolver, EntityCatalog, EntityResolver, EntityVector, ExactStringResolver, InMemoryEntityCatalog,
+    Resolution, ResolveError, MIN_ENTITY_SIMILARITY,
+};
 
 #[cfg(feature = "knowledge-graph")]
 mod falkor;

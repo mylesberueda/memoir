@@ -11,6 +11,7 @@
 //! concern of the resolution and commit path, not extraction.
 
 use std::future::Future;
+use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 
@@ -34,7 +35,85 @@ fn default_confidence() -> f32 {
 }
 
 /// The triples extracted from one episodic memory, in extraction order.
-pub type TripleSet = Vec<Triple>;
+///
+/// Also the deserialization target for an LLM reply: the JSON shape is
+/// `{"triples": [...]}`, so the field is named `triples`. Construct one from a
+/// raw reply with [`TripleSet::try_new`]; read it as a slice via [`Deref`].
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TripleSet {
+    #[serde(default)]
+    triples: Vec<Triple>,
+}
+
+impl TripleSet {
+    /// Parses an LLM's raw reply into a [`TripleSet`].
+    ///
+    /// Locates the first balanced JSON object in the reply (tolerating markdown
+    /// fences and surrounding prose) and deserializes it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlmError::Parse`] when the reply is empty, exceeds
+    /// [`TRIPLE_REPLY_MAX_CHARS`], contains no balanced JSON object, or does not
+    /// deserialize. The message carries length and reason, never the raw text.
+    pub fn try_new(raw: &str) -> Result<Self, LlmError> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err(LlmError::Parse("empty llm reply".to_string()));
+        }
+        if trimmed.len() > TRIPLE_REPLY_MAX_CHARS {
+            return Err(LlmError::Parse(format!(
+                "reply too long: len={} > max={TRIPLE_REPLY_MAX_CHARS}",
+                trimmed.len()
+            )));
+        }
+
+        let json_slice = crate::llm::locate_json_object(trimmed)
+            .ok_or_else(|| LlmError::Parse(format!("no balanced json object found in len={}", trimmed.len())))?;
+
+        serde_json::from_str(json_slice)
+            .map_err(|err| LlmError::Parse(format!("json deserialize failed at len={}: {err}", json_slice.len())))
+    }
+
+    /// Consumes the set, returning the owned triples.
+    pub fn into_inner(self) -> Vec<Triple> {
+        self.triples
+    }
+}
+
+impl Deref for TripleSet {
+    type Target = [Triple];
+
+    fn deref(&self) -> &Self::Target {
+        &self.triples
+    }
+}
+
+impl IntoIterator for TripleSet {
+    type Item = Triple;
+    type IntoIter = std::vec::IntoIter<Triple>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.triples.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a TripleSet {
+    type Item = &'a Triple;
+    type IntoIter = std::slice::Iter<'a, Triple>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.triples.iter()
+    }
+}
+
+impl FromIterator<Triple> for TripleSet {
+    fn from_iter<I: IntoIterator<Item = Triple>>(iter: I) -> Self {
+        Self {
+            triples: iter.into_iter().collect(),
+        }
+    }
+}
 
 /// System prompt steering an LLM toward a triple-extraction JSON reply.
 pub const DEFAULT_TRIPLE_PROMPT: &str = "\
@@ -95,95 +174,8 @@ impl<P: LlmProvider> LlmExtractor<P> {
 impl<P: LlmProvider> TripleExtractor for LlmExtractor<P> {
     async fn extract(&self, content: &str) -> Result<TripleSet, LlmError> {
         let raw = self.provider.extract(&self.prompt, content).await?;
-        parse_triples(&raw)
+        TripleSet::try_new(&raw)
     }
-}
-
-/// Reply shape [`parse_triples`] deserializes before unwrapping to a [`TripleSet`].
-#[derive(Debug, Clone, Default, Deserialize)]
-struct TripleReply {
-    #[serde(default)]
-    triples: TripleSet,
-}
-
-/// Parses an LLM's raw reply into a [`TripleSet`].
-///
-/// Locates the first balanced JSON object in the reply (tolerating markdown
-/// fences and surrounding prose) and deserializes it.
-///
-/// # Errors
-///
-/// Returns [`LlmError::Parse`] when the reply is empty, exceeds
-/// [`TRIPLE_REPLY_MAX_CHARS`], contains no balanced JSON object, or does not
-/// deserialize. The message carries length and reason, never the raw text.
-pub fn parse_triples(raw: &str) -> Result<TripleSet, LlmError> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Err(LlmError::Parse("empty llm reply".to_string()));
-    }
-    if trimmed.len() > TRIPLE_REPLY_MAX_CHARS {
-        return Err(LlmError::Parse(format!(
-            "reply too long: len={} > max={TRIPLE_REPLY_MAX_CHARS}",
-            trimmed.len()
-        )));
-    }
-
-    let json_slice = locate_json_object(trimmed)
-        .ok_or_else(|| LlmError::Parse(format!("no balanced json object found in len={}", trimmed.len())))?;
-
-    let reply: TripleReply = serde_json::from_str(json_slice)
-        .map_err(|err| LlmError::Parse(format!("json deserialize failed at len={}: {err}", json_slice.len())))?;
-
-    Ok(reply.triples)
-}
-
-/// Returns the first balanced `{...}` slice within `text`, fences stripped.
-fn locate_json_object(text: &str) -> Option<&str> {
-    let body = strip_markdown_fences(text);
-    let bytes = body.as_bytes();
-    let start = body.find('{')?;
-
-    let mut depth = 0i32;
-    let mut in_string = false;
-    let mut escape = false;
-
-    for (i, &b) in bytes.iter().enumerate().skip(start) {
-        if escape {
-            escape = false;
-            continue;
-        }
-        if in_string {
-            match b {
-                b'\\' => escape = true,
-                b'"' => in_string = false,
-                _ => {}
-            }
-            continue;
-        }
-        match b {
-            b'"' => in_string = true,
-            b'{' => depth += 1,
-            b'}' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(&body[start..=i]);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    None
-}
-
-/// Removes leading/trailing markdown fence markers, returning the inner text.
-fn strip_markdown_fences(text: &str) -> &str {
-    let trimmed = text.trim();
-    let Some(after_open) = trimmed.strip_prefix("```") else {
-        return trimmed;
-    };
-    let body = after_open.strip_prefix("json").unwrap_or(after_open);
-    body.trim().strip_suffix("```").unwrap_or(body).trim()
 }
 
 #[cfg(test)]
@@ -193,7 +185,7 @@ mod tests {
     #[test]
     fn should_parse_well_formed_triple_reply() {
         let raw = r#"{"triples":[{"subject":"Alice","relation":"works at","object":"Acme","confidence":0.9}]}"#;
-        let triples = parse_triples(raw).unwrap();
+        let triples = TripleSet::try_new(raw).unwrap();
         assert_eq!(triples.len(), 1);
         assert_eq!(triples[0].subject, "Alice");
         assert_eq!(triples[0].relation, "works at");
@@ -204,7 +196,7 @@ mod tests {
     #[test]
     fn should_parse_reply_wrapped_in_prose_and_fences() {
         let raw = "Here are the triples:\n```json\n{\"triples\":[{\"subject\":\"Bob\",\"relation\":\"lives in\",\"object\":\"Paris\"}]}\n```\nDone.";
-        let triples = parse_triples(raw).unwrap();
+        let triples = TripleSet::try_new(raw).unwrap();
         assert_eq!(triples.len(), 1);
         assert_eq!(triples[0].object, "Paris");
     }
@@ -212,24 +204,24 @@ mod tests {
     #[test]
     fn should_default_confidence_when_absent() {
         let raw = r#"{"triples":[{"subject":"Bob","relation":"likes","object":"tea"}]}"#;
-        let triples = parse_triples(raw).unwrap();
+        let triples = TripleSet::try_new(raw).unwrap();
         assert_eq!(triples[0].confidence, 1.0);
     }
 
     #[test]
     fn should_return_empty_set_for_empty_triple_list() {
-        let triples = parse_triples(r#"{"triples":[]}"#).unwrap();
+        let triples = TripleSet::try_new(r#"{"triples":[]}"#).unwrap();
         assert!(triples.is_empty());
     }
 
     #[test]
     fn should_reject_empty_reply() {
-        assert!(parse_triples("   ").is_err());
+        assert!(TripleSet::try_new("   ").is_err());
     }
 
     #[test]
     fn should_reject_reply_with_no_json() {
-        assert!(parse_triples("no json here").is_err());
+        assert!(TripleSet::try_new("no json here").is_err());
     }
 
     struct StubProvider {
