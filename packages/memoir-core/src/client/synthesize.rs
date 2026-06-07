@@ -19,7 +19,7 @@ use tracing::{Instrument, Level, event, info_span};
 
 use crate::graph::{
     CardinalityPolicy, CommitContext, EmbeddingEntityResolver, EmbeddingSynthesizer, FalkorEdgeCatalog,
-    FalkorEntityCatalog, SemanticFact, Synthesizer, TemporalEdgeResolver, commit_triples,
+    FalkorEntityCatalog, GraphStore, SemanticFact, Synthesizer, TemporalEdgeResolver,
 };
 use crate::jobs::Job;
 use crate::store::{MemoryStore, StoreError};
@@ -138,7 +138,8 @@ impl ClientInner {
             valid_from: source.event_at.unwrap_or(source.created_at),
         };
 
-        let committed = commit_triples(graph.as_ref(), &self.embedder, &entities, &edges, &ctx, &reconciled)
+        let committed = graph
+            .commit_triples(&self.embedder, &entities, &edges, &ctx, &reconciled)
             .await
             .map_err(|err| SynthesizeError::Commit(err.to_string()))?;
 

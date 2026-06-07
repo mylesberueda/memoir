@@ -83,7 +83,8 @@ pub enum CommitError {
 /// Returns [`CommitError`] on the first resolution or write failure. Because
 /// every write is an idempotent `MERGE`, a caller that retries the whole batch
 /// after a mid-way failure does not double-write.
-pub async fn commit_triples<G, EM, ER, EdgeR>(
+/// Backs [`GraphStore::commit_triples`]; see that method for semantics.
+pub(super) async fn commit_triples<G, EM, ER, EdgeR>(
     store: &G,
     embedder: &EM,
     entities: &ER,
@@ -92,7 +93,7 @@ pub async fn commit_triples<G, EM, ER, EdgeR>(
     triples: &TripleSet,
 ) -> Result<usize, CommitError>
 where
-    G: GraphStore,
+    G: GraphStore + ?Sized,
     EM: EmbeddingModel,
     ER: EntityResolver,
     EdgeR: EdgeResolver,
@@ -116,7 +117,7 @@ async fn commit_one<G, EM, ER, EdgeR>(
     triple: &Triple,
 ) -> Result<bool, CommitError>
 where
-    G: GraphStore,
+    G: GraphStore + ?Sized,
     EM: EmbeddingModel,
     ER: EntityResolver,
     EdgeR: EdgeResolver,
@@ -167,7 +168,7 @@ fn resolution_key(resolution: &Resolution) -> String {
 /// string only `ON CREATE`: an existing node keeps the embedding it was created
 /// with, and the JSON encoding round-trips deterministically back through
 /// [`GraphStore::query`]'s string-scalar results (the entity catalog parses it).
-async fn upsert_node<G: GraphStore, EM: EmbeddingModel>(
+async fn upsert_node<G: GraphStore + ?Sized, EM: EmbeddingModel>(
     store: &G,
     embedder: &EM,
     ctx: &CommitContext,
@@ -195,7 +196,7 @@ async fn upsert_node<G: GraphStore, EM: EmbeddingModel>(
 }
 
 /// `MERGE`s a current relationship edge, creating it or adding this pid.
-async fn upsert_edge<G: GraphStore>(store: &G, ctx: &CommitContext, edge: &Edge) -> Result<(), CommitError> {
+async fn upsert_edge<G: GraphStore + ?Sized>(store: &G, ctx: &CommitContext, edge: &Edge) -> Result<(), CommitError> {
     let label = sanitize_relation_label(&edge.relation);
     let cypher = format!(
         "MATCH (s:{ENTITY_LABEL} {{agent_id: $agent_id, org_id: $org_id, user_id: $user_id, name: $subject}}) \
@@ -220,7 +221,7 @@ async fn upsert_edge<G: GraphStore>(store: &G, ctx: &CommitContext, edge: &Edge)
 }
 
 /// Closes a superseded edge by stamping its `valid_to`, keeping it as history.
-async fn close_edge<G: GraphStore>(store: &G, ctx: &CommitContext, edge_key: &str) -> Result<(), CommitError> {
+async fn close_edge<G: GraphStore + ?Sized>(store: &G, ctx: &CommitContext, edge_key: &str) -> Result<(), CommitError> {
     let cypher = "MATCH ()-[r {relation: $relation_key, valid_to: null}]->() \
          WHERE r.agent_id = $agent_id AND r.org_id = $org_id AND r.user_id = $user_id \
          SET r.valid_to = $valid_to"

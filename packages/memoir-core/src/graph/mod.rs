@@ -20,11 +20,12 @@ mod cosine;
 mod edge;
 mod error;
 mod extraction;
+mod forget;
 mod memory;
 mod resolve;
 mod synthesis;
 
-pub use commit::{CommitContext, CommitError, commit_triples};
+pub use commit::{CommitContext, CommitError};
 pub use edge::{
     CardinalityPolicy, Edge, EdgeCatalog, EdgeError, EdgeResolution, EdgeResolver, ExistingEdge, NaiveAppendResolver,
     RelationCardinality, TemporalEdgeResolver,
@@ -120,4 +121,62 @@ pub trait GraphStore: Send + Sync + 'static {
         cypher: &str,
         params: &HashMap<String, String>,
     ) -> impl Future<Output = Result<GraphRows, GraphError>> + Send;
+
+    /// Removes each forgotten pid from the graph, reference-counted.
+    ///
+    /// For each pid: strips it from every edge's and node's `memory_pids`,
+    /// deletes edges whose array empties, then deletes nodes whose array empties
+    /// *and* that have no surviving edges (a node still joined by an other-pid
+    /// edge is kept). Edges are processed before nodes so a node is never deleted
+    /// out from under a surviving edge. A pid is a globally-unique memory id, so
+    /// matching needs no scope guard; the pid binds as a parameter. Idempotent —
+    /// re-forgetting an absent pid changes nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphError`] if the backend rejects a statement.
+    fn forget_pids(&self, pids: &[&str]) -> impl Future<Output = Result<(), GraphError>> + Send {
+        forget::forget_pids(self, pids)
+    }
+
+    /// Deletes every node and edge in `scope` — a whole-tenant forget.
+    ///
+    /// The entire scoped subgraph is removed regardless of `memory_pids`, so
+    /// this needs no pid list. `DETACH DELETE` removes each node together with
+    /// its edges.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphError`] if the backend rejects the statement.
+    fn forget_scope(&self, scope: &crate::memory::Scope) -> impl Future<Output = Result<(), GraphError>> + Send {
+        forget::forget_scope(self, scope)
+    }
+
+    /// Commits a source's resolved triples to the graph, returning the count.
+    ///
+    /// Resolves each triple's entities ([`EntityResolver`]) and edge
+    /// ([`EdgeResolver`]), embeds new nodes ([`EmbeddingModel`]), then `MERGE`s
+    /// the nodes and the (possibly supersession-closing) edge — tagging every
+    /// element with the source's pid and scope from `ctx`. Writes are idempotent,
+    /// so retrying a partially-failed batch does not double-write. Triples whose
+    /// subject and object resolve to the same node are skipped.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CommitError`] on the first resolution or write failure.
+    fn commit_triples<EM, ER, EdgeR>(
+        &self,
+        embedder: &EM,
+        entities: &ER,
+        edges: &EdgeR,
+        ctx: &CommitContext,
+        triples: &TripleSet,
+    ) -> impl Future<Output = Result<usize, CommitError>> + Send
+    where
+        EM: crate::embedding::EmbeddingModel,
+        ER: EntityResolver,
+        EdgeR: EdgeResolver,
+    {
+        commit::commit_triples(self, embedder, entities, edges, ctx, triples)
+    }
 }

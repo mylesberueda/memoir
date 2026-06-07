@@ -45,6 +45,8 @@ use qdrant_client::Qdrant;
 use sea_orm::{ConnectOptions, Database};
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
+#[cfg(feature = "knowledge-graph")]
+use crate::graph::GraphStore;
 use crate::jobs::{MemoryJobsStore, PostgresJobsStore};
 use crate::llm::{LlmConfig, LlmRegistry, LlmRole};
 use crate::memory::{ForgetTarget, Memory, SupersessionEvent};
@@ -538,6 +540,14 @@ impl Client {
     /// any empty field, and [`ClientError::Store`] wrapping
     /// [`crate::store::StoreError::Database`] for database failures.
     pub async fn forget(&self, target: ForgetTarget) -> Result<Vec<String>, ClientError> {
+        // A scope target wipes the whole scoped subgraph below, independent of
+        // the returned pid list; keep the scope before `target` is moved.
+        #[cfg(feature = "knowledge-graph")]
+        let forget_scope = match &target {
+            ForgetTarget::Scope(scope) => Some(scope.clone()),
+            ForgetTarget::Pid(_) => None,
+        };
+
         let deleted = self.inner.store.forget(target).await?;
 
         if deleted.is_empty() {
@@ -560,6 +570,27 @@ impl Client {
                 pid_count = deleted.len(),
                 "{{pid_count}} memories forgotten",
             );
+        }
+
+        // Remove the forgotten memories from the graph, best-effort: a failure
+        // is logged, not surfaced (the source-of-truth rows are already gone and
+        // reconciliation is the backstop). A scope target wipes the subgraph; a
+        // pid target reference-counts each forgotten pid out of the graph.
+        #[cfg(feature = "knowledge-graph")]
+        if let Some(graph) = self.inner.graph.as_deref() {
+            let graph_result = match &forget_scope {
+                Some(scope) => graph.forget_scope(scope).await,
+                None => graph.forget_pids(&pid_refs).await,
+            };
+            if let Err(err) = graph_result {
+                tracing::event!(
+                    name: "memoir.forget.graph_delete_failed",
+                    tracing::Level::WARN,
+                    pid_count = deleted.len(),
+                    error.message = %err,
+                    "graph delete failed for {{pid_count}} pid(s): {{error.message}} — reconciliation will clean up orphans",
+                );
+            }
         }
 
         Ok(deleted)
