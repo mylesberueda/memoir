@@ -70,9 +70,10 @@ pub(crate) struct ClientInner {
     /// `None` when no FalkorDB connection was supplied — graph features are then
     /// absent and recall returns only vector hits. Only present with the
     /// `knowledge-graph` feature; vector-only builds omit the field entirely.
+    /// Behind `Arc` so the per-job relational catalogs can share one connection
+    /// without reconnecting.
     #[cfg(feature = "knowledge-graph")]
-    #[allow(dead_code)]
-    pub(crate) graph: Option<crate::graph::FalkorGraphStore>,
+    pub(crate) graph: Option<std::sync::Arc<crate::graph::FalkorGraphStore>>,
 }
 
 /// High-level facade composing the embedder, store, and vector index.
@@ -220,7 +221,7 @@ impl Client {
                 crate::graph::GraphStore::ensure_graph(&store)
                     .await
                     .map_err(|e| ClientError::Graph(e.to_string()))?;
-                Some(store)
+                Some(std::sync::Arc::new(store))
             }
             (None, Some(_)) => return Err(ClientError::GraphNotConfigured),
             (None, None) => None,

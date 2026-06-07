@@ -15,12 +15,14 @@
 //! memories. Absence of a graph store is a first-class, non-degraded state —
 //! recall simply returns vector hits with no graph enrichment.
 
+mod commit;
 mod edge;
 mod error;
 mod extraction;
 mod memory;
 mod resolve;
 
+pub use commit::{CommitContext, CommitError, commit_triples};
 pub use edge::{
     CardinalityPolicy, Edge, EdgeCatalog, EdgeError, EdgeResolution, EdgeResolver, ExistingEdge, NaiveAppendResolver,
     RelationCardinality, TemporalEdgeResolver,
@@ -39,8 +41,15 @@ pub use resolve::{
 mod falkor;
 
 #[cfg(feature = "knowledge-graph")]
+mod falkor_catalog;
+
+#[cfg(feature = "knowledge-graph")]
 pub use falkor::FalkorGraphStore;
 
+#[cfg(feature = "knowledge-graph")]
+pub use falkor_catalog::{FalkorEdgeCatalog, FalkorEntityCatalog};
+
+use std::collections::HashMap;
 use std::future::Future;
 
 /// Default graph name memoir writes to within a shared FalkorDB instance.
@@ -79,15 +88,24 @@ pub trait GraphStore: Send + Sync + 'static {
     /// Returns [`GraphError::Connection`] if the backend is unreachable.
     fn ensure_graph(&self) -> impl Future<Output = Result<(), GraphError>> + Send;
 
-    /// Runs a Cypher query against the configured graph and returns its rows.
+    /// Runs a parameterized Cypher query against the graph, returning its rows.
     ///
-    /// The raw escape hatch the write-path and read-path tickets build their
-    /// typed operations on. Scalar result values are rendered to `String`;
+    /// The raw escape hatch the write-path and read-path build their operations
+    /// on. `params` binds query parameters by name, referenced as `$name` in the
+    /// `cypher` body — the only injection-safe way to embed values drawn from
+    /// user content (entity names, memory ids), since the values never enter the
+    /// query string. Relationship *types* and labels cannot be parameterized by
+    /// Cypher and must be sanitized by the caller. Pass an empty map for a query
+    /// with no parameters. Scalar result values are rendered to `String`;
     /// node/edge/path projections are out of scope until a consumer needs them.
     ///
     /// # Errors
     ///
     /// Returns [`GraphError::Query`] when the backend rejects or fails the
     /// query, and [`GraphError::Connection`] when the backend is unreachable.
-    fn query(&self, cypher: &str) -> impl Future<Output = Result<GraphRows, GraphError>> + Send;
+    fn query(
+        &self,
+        cypher: &str,
+        params: &HashMap<String, String>,
+    ) -> impl Future<Output = Result<GraphRows, GraphError>> + Send;
 }

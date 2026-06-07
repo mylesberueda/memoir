@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use falkordb::{FalkorAsyncClient, FalkorClientBuilder, FalkorConnectionInfo, FalkorValue, LazyResultSet};
 
 use super::{GraphError, GraphRows, GraphStore};
@@ -70,13 +72,15 @@ impl GraphStore for FalkorGraphStore {
             .map_err(|e| GraphError::Connection(e.to_string()))
     }
 
-    async fn query(&self, cypher: &str) -> Result<GraphRows, GraphError> {
+    async fn query(&self, cypher: &str, params: &HashMap<String, String>) -> Result<GraphRows, GraphError> {
         let mut graph = self.client.select_graph(&self.graph_name);
-        let mut result = graph
-            .query(cypher)
-            .execute()
-            .await
-            .map_err(|e| GraphError::Query(e.to_string()))?;
+        let builder = graph.query(cypher);
+        let builder = if params.is_empty() {
+            builder
+        } else {
+            builder.with_params(params)
+        };
+        let mut result = builder.execute().await.map_err(|e| GraphError::Query(e.to_string()))?;
 
         let header: Vec<String> = result.header.iter().map(ToString::to_string).collect();
 

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use super::{GraphError, GraphRows, GraphStore};
@@ -18,7 +19,7 @@ use super::{GraphError, GraphRows, GraphStore};
 /// let store = InMemoryGraphStore::new();
 /// store.ensure_graph().await?;
 /// store.stage_rows(vec![vec![("n".to_string(), "Alice".to_string())]]);
-/// let rows = store.query("MATCH (n) RETURN n").await?;
+/// let rows = store.query("MATCH (n) RETURN n", &Default::default()).await?;
 /// assert_eq!(rows[0][0].1, "Alice");
 /// # Ok(())
 /// # }
@@ -48,7 +49,7 @@ impl GraphStore for InMemoryGraphStore {
         Ok(())
     }
 
-    async fn query(&self, _cypher: &str) -> Result<GraphRows, GraphError> {
+    async fn query(&self, _cypher: &str, _params: &HashMap<String, String>) -> Result<GraphRows, GraphError> {
         Ok(self.rows.lock().expect("graph store mutex poisoned").clone())
     }
 }
@@ -63,7 +64,7 @@ mod tests {
         store.ensure_graph().await.unwrap();
         store.stage_rows(vec![vec![("n".to_string(), "Alice".to_string())]]);
 
-        let rows = store.query("MATCH (n) RETURN n").await.unwrap();
+        let rows = store.query("MATCH (n) RETURN n", &HashMap::new()).await.unwrap();
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0][0], ("n".to_string(), "Alice".to_string()));
@@ -72,7 +73,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_return_empty_when_nothing_staged() {
         let store = InMemoryGraphStore::new();
-        let rows = store.query("MATCH (n) RETURN n").await.unwrap();
+        let rows = store.query("MATCH (n) RETURN n", &HashMap::new()).await.unwrap();
         assert!(rows.is_empty());
     }
 }
