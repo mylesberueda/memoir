@@ -575,6 +575,37 @@ pub struct SearchHit {
     #[prost(float, tag="2")]
     pub score: f32,
 }
+/// One entity in a graph-enrichment neighborhood. Untyped in v0.1 (carries only
+/// the canonical name); an entity-type field may be added later.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GraphEntity {
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+}
+/// One current relationship in a graph-enrichment neighborhood.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GraphRelationship {
+    #[prost(string, tag="1")]
+    pub subject: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub relation: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub object: ::prost::alloc::string::String,
+    /// The extractor's certainty, \[0.0, 1.0\].
+    #[prost(float, tag="4")]
+    pub confidence: f32,
+}
+/// The graph neighborhood around a search/query's hits, returned only when the
+/// request opted in via `with_graph_enrichment`. Flat, deduplicated lists; empty
+/// when enrichment was not requested or no graph backend is configured. A
+/// property of the whole result, not of any single hit.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GraphEnrichment {
+    #[prost(message, repeated, tag="1")]
+    pub entities: ::prost::alloc::vec::Vec<GraphEntity>,
+    #[prost(message, repeated, tag="2")]
+    pub relationships: ::prost::alloc::vec::Vec<GraphRelationship>,
+}
 // ─── RPCs ───────────────────────────────────────────────────────────────────
 
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -605,6 +636,17 @@ pub struct SearchRequest {
     /// `SearchBuilder::episodic` / `::semantic` toggles.
     #[prost(message, optional, tag="6")]
     pub kinds: ::core::option::Option<KindSelector>,
+    /// Opt into graph enrichment: after the vector search, traverse the knowledge
+    /// graph from the hits' entities and return the neighborhood in
+    /// `SearchResponse.enrichment`. Off (false) by default. Maps to the library's
+    /// `SearchBuilder::with_graph`. A no-op when the service has no graph backend.
+    #[prost(bool, tag="7")]
+    pub with_graph_enrichment: bool,
+    /// Traversal depth for `with_graph_enrichment`, in hops. 0 = library default
+    /// (1); values are clamped to the library maximum (2). Maps to
+    /// `SearchBuilder::with_graph_depth`. Ignored when enrichment is off.
+    #[prost(uint32, tag="8")]
+    pub graph_depth: u32,
 }
 /// Caller-supplied filter applied at search time. Mirrors Qdrant's payload
 /// filter structure one-to-one but is a memoir-owned type so consumers do not
@@ -708,6 +750,10 @@ pub struct NumericRange {
 pub struct SearchResponse {
     #[prost(message, repeated, tag="1")]
     pub hits: ::prost::alloc::vec::Vec<SearchHit>,
+    /// The graph neighborhood around the hits, present only when the request set
+    /// `with_graph_enrichment`. Empty/absent otherwise.
+    #[prost(message, optional, tag="2")]
+    pub enrichment: ::core::option::Option<GraphEnrichment>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct RecallRequest {
@@ -983,6 +1029,16 @@ pub struct QueryRequest {
     /// pre-1.0; pin an explicit Ranking for stable behavior).
     #[prost(message, optional, tag="11")]
     pub ranking: ::core::option::Option<Ranking>,
+    /// Opt into graph enrichment: traverse the knowledge graph from the hits'
+    /// entities and return the neighborhood in `QueryResponse.enrichment`. Off by
+    /// default. Maps to `QueryBuilder::with_graph`. No-op without a graph backend.
+    #[prost(bool, tag="12")]
+    pub with_graph_enrichment: bool,
+    /// Traversal depth for `with_graph_enrichment`, in hops. 0 = library default
+    /// (1); clamped to the library maximum (2). Maps to
+    /// `QueryBuilder::with_graph_depth`. Ignored when enrichment is off.
+    #[prost(uint32, tag="13")]
+    pub graph_depth: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct QueryResponse {
@@ -994,6 +1050,10 @@ pub struct QueryResponse {
     /// `MemoryContext::strategy_used()`.
     #[prost(message, optional, tag="2")]
     pub ranking_used: ::core::option::Option<Ranking>,
+    /// The graph neighborhood around the hits, present only when the request set
+    /// `with_graph_enrichment`. Empty/absent otherwise.
+    #[prost(message, optional, tag="3")]
+    pub enrichment: ::core::option::Option<GraphEnrichment>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EditRequest {

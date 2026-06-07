@@ -88,6 +88,8 @@ pub struct SearchBuilder<'a> {
     event_at_range: NumericRange,
     confidence_range: NumericRange,
     category: Option<String>,
+    #[cfg(feature = "knowledge-graph")]
+    graph_depth: Option<usize>,
 }
 
 impl<'a> SearchBuilder<'a> {
@@ -105,6 +107,8 @@ impl<'a> SearchBuilder<'a> {
             event_at_range: NumericRange::default(),
             confidence_range: NumericRange::default(),
             category: None,
+            #[cfg(feature = "knowledge-graph")]
+            graph_depth: None,
         }
     }
 
@@ -220,6 +224,30 @@ impl<'a> SearchBuilder<'a> {
         self
     }
 
+    /// Enriches the result with a graph traversal from the hits' entities.
+    ///
+    /// Off by default. When set, the returned [`Memories`]'s
+    /// [`graph`](Memories::graph) carries entities and relationships within
+    /// [`DEFAULT_ENRICHMENT_DEPTH`](crate::graph::DEFAULT_ENRICHMENT_DEPTH) hops
+    /// of the hits. A no-op when no graph backend is configured. Use
+    /// [`Self::with_graph_depth`] to traverse deeper.
+    #[cfg(feature = "knowledge-graph")]
+    pub fn with_graph(mut self) -> Self {
+        self.graph_depth = Some(crate::graph::DEFAULT_ENRICHMENT_DEPTH);
+        self
+    }
+
+    /// Enriches with a graph traversal to `depth` hops (clamped to
+    /// [`MAX_ENRICHMENT_DEPTH`](crate::graph::MAX_ENRICHMENT_DEPTH)).
+    ///
+    /// Implies [`Self::with_graph`]. Depth is bounded so an opt-in enrichment
+    /// cannot become an unbounded scan.
+    #[cfg(feature = "knowledge-graph")]
+    pub fn with_graph_depth(mut self, depth: usize) -> Self {
+        self.graph_depth = Some(depth.clamp(1, crate::graph::MAX_ENRICHMENT_DEPTH));
+        self
+    }
+
     fn kind_selector(&self) -> KindSelector {
         kind_selector(self.episodic, self.semantic)
     }
@@ -293,6 +321,8 @@ impl<'a> IntoFuture for SearchBuilder<'a> {
 
 async fn execute(builder: SearchBuilder<'_>) -> Result<Memories, ClientError> {
     let kinds = builder.kind_selector();
+    #[cfg(feature = "knowledge-graph")]
+    let graph_depth = builder.graph_depth;
     let SearchBuilder {
         client,
         query,
@@ -306,6 +336,10 @@ async fn execute(builder: SearchBuilder<'_>) -> Result<Memories, ClientError> {
         category,
         ..
     } = builder;
+
+    // The traversal needs the scope after `index.search` consumes it.
+    #[cfg(feature = "knowledge-graph")]
+    let graph_scope = scope.clone();
 
     let combined_filter = combine_filter(
         metadata_filter,
@@ -336,7 +370,22 @@ async fn execute(builder: SearchBuilder<'_>) -> Result<Memories, ClientError> {
         memory.score = order.get(memory.pid.as_str()).map(|(_, score)| *score);
     }
 
-    Ok(Memories::new(rows, inner.system_prompt.clone()))
+    let memories = Memories::new(rows, inner.system_prompt.clone());
+
+    // Opt-in graph enrichment: traverse from the hits' entities. The consumer
+    // asked for it, so a traversal error fails the search (not a silent
+    // memories-only degrade); an unconfigured graph is a no-op empty context.
+    #[cfg(feature = "knowledge-graph")]
+    if let Some(depth) = graph_depth {
+        if let Some(graph) = inner.graph.as_deref() {
+            use crate::graph::GraphStore;
+            let seed_pids: Vec<&str> = memories.list().iter().map(|m| m.pid.as_str()).collect();
+            let context = graph.neighbors(&seed_pids, &graph_scope, depth).await?;
+            return Ok(memories.with_graph_context(context));
+        }
+    }
+
+    Ok(memories)
 }
 
 #[cfg(test)]

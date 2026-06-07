@@ -165,6 +165,29 @@ message SearchHit {
   float score = 2;
 }
 
+// One entity in a graph-enrichment neighborhood. Untyped in v0.1 (carries only
+// the canonical name); an entity-type field may be added later.
+message GraphEntity {
+  string name = 1;
+}
+
+// One current relationship in a graph-enrichment neighborhood.
+message GraphRelationship {
+  string subject = 1;
+  string relation = 2;
+  string object = 3;
+  float confidence = 4; // The extractor's certainty, [0.0, 1.0].
+}
+
+// The graph neighborhood around a search/query's hits, returned only when the
+// request opted in via `with_graph_enrichment`. Flat, deduplicated lists; empty
+// when enrichment was not requested or no graph backend is configured. A
+// property of the whole result, not of any single hit.
+message GraphEnrichment {
+  repeated GraphEntity entities = 1;
+  repeated GraphRelationship relationships = 2;
+}
+
 // ─── RPCs ───────────────────────────────────────────────────────────────────
 
 message SearchRequest {
@@ -192,6 +215,17 @@ message SearchRequest {
   // both-false = all kinds (see `KindSelector`). Maps to the library's
   // `SearchBuilder::episodic` / `::semantic` toggles.
   optional KindSelector kinds = 6;
+
+  // Opt into graph enrichment: after the vector search, traverse the knowledge
+  // graph from the hits' entities and return the neighborhood in
+  // `SearchResponse.enrichment`. Off (false) by default. Maps to the library's
+  // `SearchBuilder::with_graph`. A no-op when the service has no graph backend.
+  bool with_graph_enrichment = 7;
+
+  // Traversal depth for `with_graph_enrichment`, in hops. 0 = library default
+  // (1); values are clamped to the library maximum (2). Maps to
+  // `SearchBuilder::with_graph_depth`. Ignored when enrichment is off.
+  uint32 graph_depth = 8;
 }
 
 // Caller-supplied filter applied at search time. Mirrors Qdrant's payload
@@ -259,6 +293,10 @@ message NumericRange {
 
 message SearchResponse {
   repeated SearchHit hits = 1;
+
+  // The graph neighborhood around the hits, present only when the request set
+  // `with_graph_enrichment`. Empty/absent otherwise.
+  optional GraphEnrichment enrichment = 2;
 }
 
 message RecallRequest {
@@ -470,6 +508,16 @@ message QueryRequest {
   // Ranking strategy. Unset = library default hybrid (parameters may drift
   // pre-1.0; pin an explicit Ranking for stable behavior).
   optional Ranking ranking = 11;
+
+  // Opt into graph enrichment: traverse the knowledge graph from the hits'
+  // entities and return the neighborhood in `QueryResponse.enrichment`. Off by
+  // default. Maps to `QueryBuilder::with_graph`. No-op without a graph backend.
+  bool with_graph_enrichment = 12;
+
+  // Traversal depth for `with_graph_enrichment`, in hops. 0 = library default
+  // (1); clamped to the library maximum (2). Maps to
+  // `QueryBuilder::with_graph_depth`. Ignored when enrichment is off.
+  uint32 graph_depth = 13;
 }
 
 message QueryResponse {
@@ -480,6 +528,10 @@ message QueryResponse {
   // when the request left `ranking` unset. Mirrors
   // `MemoryContext::strategy_used()`.
   Ranking ranking_used = 2;
+
+  // The graph neighborhood around the hits, present only when the request set
+  // `with_graph_enrichment`. Empty/absent otherwise.
+  optional GraphEnrichment enrichment = 3;
 }
 
 message EditRequest {

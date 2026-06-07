@@ -12,7 +12,7 @@ import type { JsonObject, Message } from "@bufbuild/protobuf";
  * Describes the file memoir/v1/memory.proto.
  */
 export const file_memoir_v1_memory: GenFile = /*@__PURE__*/
-  fileDesc("ChZtZW1vaXIvdjEvbWVtb3J5LnByb3RvEgltZW1vaXIudjEiOgoFU2NvcGUSEAoIYWdlbnRfaWQYASABKAkSDgoGb3JnX2lkGAIgASgJEg8KB3VzZXJfaWQYAyABKAki7QMKBk1lbW9yeRILCgNwaWQYASABKAkSHwoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgDIAEoCRIpCghtZXRhZGF0YRgEIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoMcHJvY2Vzc2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgAiAEBEicKBnN0YXR1cxgHIAEoDjIXLm1lbW9pci52MS5NZW1vcnlTdGF0dXMSLgoKdXBkYXRlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMQoIZXZlbnRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAGIAQESMgoMc3VwZXJzZXNzaW9uGAogASgLMhcubWVtb2lyLnYxLlN1cGVyc2Vzc2lvbkgCiAEBEiMKBGtpbmQYCyABKA4yFS5tZW1vaXIudjEuTWVtb3J5S2luZEIPCg1fcHJvY2Vzc2VkX2F0QgsKCV9ldmVudF9hdEIPCg1fc3VwZXJzZXNzaW9uIkoKDFN1cGVyc2Vzc2lvbhISCgp3aW5uZXJfcGlkGAEgASgJEiYKAmF0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIyCgxLaW5kU2VsZWN0b3ISEAoIZXBpc29kaWMYASABKAgSEAoIc2VtYW50aWMYAiABKAgiPQoJU2VhcmNoSGl0EiEKBm1lbW9yeRgBIAEoCzIRLm1lbW9pci52MS5NZW1vcnkSDQoFc2NvcmUYAiABKAIigAIKDVNlYXJjaFJlcXVlc3QSHwoFc2NvcGUYASABKAsyEC5tZW1vaXIudjEuU2NvcGUSDQoFcXVlcnkYAiABKAkSDQoFbGltaXQYAyABKAUSNQoPbWV0YWRhdGFfZmlsdGVyGAQgASgLMhcubWVtb2lyLnYxLk1lbW9yeUZpbHRlckgAiAEBEhsKDm1pbl9zaW1pbGFyaXR5GAUgASgCSAGIAQESKwoFa2luZHMYBiABKAsyFy5tZW1vaXIudjEuS2luZFNlbGVjdG9ySAKIAQFCEgoQX21ldGFkYXRhX2ZpbHRlckIRCg9fbWluX3NpbWlsYXJpdHlCCAoGX2tpbmRzIpIBCgxNZW1vcnlGaWx0ZXISKAoEbXVzdBgBIAMoCzIaLm1lbW9pci52MS5GaWx0ZXJDb25kaXRpb24SLAoIbXVzdF9ub3QYAiADKAsyGi5tZW1vaXIudjEuRmlsdGVyQ29uZGl0aW9uEioKBnNob3VsZBgDIAMoCzIaLm1lbW9pci52MS5GaWx0ZXJDb25kaXRpb24irQEKD0ZpbHRlckNvbmRpdGlvbhINCgVmaWVsZBgBIAEoCRInCgZlcXVhbHMYAiABKAsyFS5tZW1vaXIudjEuTWF0Y2hWYWx1ZUgAEisKCWluX3ZhbHVlcxgDIAEoCzIWLm1lbW9pci52MS5NYXRjaFZhbHVlc0gAEigKBXJhbmdlGAQgASgLMhcubWVtb2lyLnYxLk51bWVyaWNSYW5nZUgAQgsKCWNvbmRpdGlvbiJOCgpNYXRjaFZhbHVlEhEKB2tleXdvcmQYASABKAlIABIRCgdpbnRlZ2VyGAIgASgDSAASEQoHYm9vbGVhbhgDIAEoCEgAQgcKBXZhbHVlIm8KC01hdGNoVmFsdWVzEioKCGtleXdvcmRzGAEgASgLMhYubWVtb2lyLnYxLktleXdvcmRMaXN0SAASKgoIaW50ZWdlcnMYAiABKAsyFi5tZW1vaXIudjEuSW50ZWdlckxpc3RIAEIICgZ2YWx1ZXMiHQoLS2V5d29yZExpc3QSDgoGdmFsdWVzGAEgAygJIh0KC0ludGVnZXJMaXN0Eg4KBnZhbHVlcxgBIAMoAyJyCgxOdW1lcmljUmFuZ2USDwoCbHQYASABKAFIAIgBARIQCgNsdGUYAiABKAFIAYgBARIPCgJndBgDIAEoAUgCiAEBEhAKA2d0ZRgEIAEoAUgDiAEBQgUKA19sdEIGCgRfbHRlQgUKA19ndEIGCgRfZ3RlIjQKDlNlYXJjaFJlc3BvbnNlEiIKBGhpdHMYASADKAsyFC5tZW1vaXIudjEuU2VhcmNoSGl0IhwKDVJlY2FsbFJlcXVlc3QSCwoDcGlkGAEgASgJIjMKDlJlY2FsbFJlc3BvbnNlEiEKBm1lbW9yeRgBIAEoCzIRLm1lbW9pci52MS5NZW1vcnkigAEKD1JlbWVtYmVyUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRIPCgdjb250ZW50GAIgASgJEi4KCG1ldGFkYXRhGAMgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdEgAiAEBQgsKCV9tZXRhZGF0YSI1ChBSZW1lbWJlclJlc3BvbnNlEiEKBm1lbW9yeRgBIAEoCzIRLm1lbW9pci52MS5NZW1vcnkiYAoNRm9yZ2V0UmVxdWVzdBINCgNwaWQYASABKAlIABIhCgVzY29wZRgCIAEoCzIQLm1lbW9pci52MS5TY29wZUgAEhMKC2hhcmRfZGVsZXRlGAMgASgIQggKBnRhcmdldCImCg5Gb3JnZXRSZXNwb25zZRIUCgxkZWxldGVkX3BpZHMYASADKAki1wMKD1RpbWVsaW5lUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRIrCgVraW5kcxgCIAEoCzIXLm1lbW9pci52MS5LaW5kU2VsZWN0b3JIAIgBARI2Cg1jcmVhdGVkX2FmdGVyGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgBiAEBEjcKDmNyZWF0ZWRfYmVmb3JlGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgCiAEBEjcKDmV2ZW50X2F0X2FmdGVyGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgDiAEBEjgKD2V2ZW50X2F0X2JlZm9yZRgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIBIgBARIaChJleGNsdWRlX3N1cGVyc2VkZWQYByABKAgSDQoFbGltaXQYCCABKAUSEQoJYXNjZW5kaW5nGAkgASgIQggKBl9raW5kc0IQCg5fY3JlYXRlZF9hZnRlckIRCg9fY3JlYXRlZF9iZWZvcmVCEQoPX2V2ZW50X2F0X2FmdGVyQhIKEF9ldmVudF9hdF9iZWZvcmUiNwoQVGltZWxpbmVSZXNwb25zZRIjCghtZW1vcmllcxgBIAMoCzIRLm1lbW9pci52MS5NZW1vcnkipQEKEVJlY2FsbEFzT2ZSZXF1ZXN0Eh8KBXNjb3BlGAEgASgLMhAubWVtb2lyLnYxLlNjb3BlEikKBWFzX29mGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIrCgVraW5kcxgDIAEoCzIXLm1lbW9pci52MS5LaW5kU2VsZWN0b3JIAIgBARINCgVsaW1pdBgEIAEoBUIICgZfa2luZHMiOQoSUmVjYWxsQXNPZlJlc3BvbnNlEiMKCG1lbW9yaWVzGAEgAygLMhEubWVtb2lyLnYxLk1lbW9yeSJhCgdSYW5raW5nEiMKBmh5YnJpZBgBIAEoCzIRLm1lbW9pci52MS5IeWJyaWRIABIlCgdibGVuZGVkGAIgASgLMhIubWVtb2lyLnYxLkJsZW5kZWRIAEIKCghzdHJhdGVneSI4CgZIeWJyaWQSDQoFYWxwaGEYASABKAISHwoFZGVjYXkYAiABKAsyEC5tZW1vaXIudjEuRGVjYXkiVAoHQmxlbmRlZBIoCgd3ZWlnaHRzGAEgASgLMhcubWVtb2lyLnYxLkJsZW5kV2VpZ2h0cxIfCgVkZWNheRgCIAEoCzIQLm1lbW9pci52MS5EZWNheSJ5CgxCbGVuZFdlaWdodHMSDgoGY29zaW5lGAEgASgCEhIKCmNvbmZpZGVuY2UYAiABKAISDwoHcmVjZW5jeRgDIAEoAhIWCg5jYXRlZ29yeV9ib251cxgEIAEoAhIcChRwcmVmZXJyZWRfY2F0ZWdvcmllcxgFIAMoCSKfAQoFRGVjYXkSMgoLZXhwb25lbnRpYWwYASABKAsyGy5tZW1vaXIudjEuRXhwb25lbnRpYWxEZWNheUgAEjAKCnJlY2lwcm9jYWwYAiABKAsyGi5tZW1vaXIudjEuUmVjaXByb2NhbERlY2F5SAASJAoEc3RlcBgDIAEoCzIULm1lbW9pci52MS5TdGVwRGVjYXlIAEIKCghmdW5jdGlvbiJAChBFeHBvbmVudGlhbERlY2F5EiwKCWhhbGZfbGlmZRgBIAEoCzIZLmdvb2dsZS5wcm90b2J1Zi5EdXJhdGlvbiI7Cg9SZWNpcHJvY2FsRGVjYXkSKAoFc2NhbGUYASABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24iNAoJU3RlcERlY2F5EicKB2J1Y2tldHMYASADKAsyFi5tZW1vaXIudjEuRGVjYXlCdWNrZXQiSQoLRGVjYXlCdWNrZXQSKwoIYm91bmRhcnkYASABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24SDQoFdmFsdWUYAiABKAIiPAoIUXVlcnlIaXQSIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeRINCgVzY29yZRgCIAEoAiLlBAoMUXVlcnlSZXF1ZXN0Eh8KBXNjb3BlGAEgASgLMhAubWVtb2lyLnYxLlNjb3BlEg0KBXF1ZXJ5GAIgASgJEg0KBWxpbWl0GAMgASgFEisKBWtpbmRzGAQgASgLMhcubWVtb2lyLnYxLktpbmRTZWxlY3RvckgAiAEBEjUKD21ldGFkYXRhX2ZpbHRlchgFIAEoCzIXLm1lbW9pci52MS5NZW1vcnlGaWx0ZXJIAYgBARIbCg5taW5fc2ltaWxhcml0eRgGIAEoAkgCiAEBEjYKDWNyZWF0ZWRfYWZ0ZXIYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAOIAQESNwoOY3JlYXRlZF9iZWZvcmUYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSASIAQESNwoOZXZlbnRfYXRfYWZ0ZXIYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAWIAQESOAoPZXZlbnRfYXRfYmVmb3JlGAogASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgGiAEBEigKB3JhbmtpbmcYCyABKAsyEi5tZW1vaXIudjEuUmFua2luZ0gHiAEBQggKBl9raW5kc0ISChBfbWV0YWRhdGFfZmlsdGVyQhEKD19taW5fc2ltaWxhcml0eUIQCg5fY3JlYXRlZF9hZnRlckIRCg9fY3JlYXRlZF9iZWZvcmVCEQoPX2V2ZW50X2F0X2FmdGVyQhIKEF9ldmVudF9hdF9iZWZvcmVCCgoIX3JhbmtpbmciXAoNUXVlcnlSZXNwb25zZRIhCgRoaXRzGAEgAygLMhMubWVtb2lyLnYxLlF1ZXJ5SGl0EigKDHJhbmtpbmdfdXNlZBgCIAEoCzISLm1lbW9pci52MS5SYW5raW5nIrkBCgtFZGl0UmVxdWVzdBILCgNwaWQYASABKAkSFAoHY29udGVudBgCIAEoCUgAiAEBEi4KCG1ldGFkYXRhGAMgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdEgBiAEBEjEKCGV2ZW50X2F0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgCiAEBQgoKCF9jb250ZW50QgsKCV9tZXRhZGF0YUILCglfZXZlbnRfYXQiMQoMRWRpdFJlc3BvbnNlEiEKBm1lbW9yeRgBIAEoCzIRLm1lbW9pci52MS5NZW1vcnkiRgoPRmVlZGJhY2tSZXF1ZXN0EgsKA3BpZBgBIAEoCRIXCgpjb3JyZWN0aW9uGAIgASgJSACIAQFCDQoLX2NvcnJlY3Rpb24iEgoQRmVlZGJhY2tSZXNwb25zZSIpChpTdXBlcnNlc3Npb25IaXN0b3J5UmVxdWVzdBILCgNwaWQYASABKAkiSwobU3VwZXJzZXNzaW9uSGlzdG9yeVJlc3BvbnNlEiwKBmV2ZW50cxgBIAMoCzIcLm1lbW9pci52MS5TdXBlcnNlc3Npb25FdmVudCI0ChFMaXN0QWdlbnRzUmVxdWVzdBIOCgZvcmdfaWQYASABKAkSDwoHdXNlcl9pZBgCIAEoCSInChJMaXN0QWdlbnRzUmVzcG9uc2USEQoJYWdlbnRfaWRzGAEgAygJImsKEVN1cGVyc2Vzc2lvbkV2ZW50EhcKCndpbm5lcl9waWQYASABKAlIAIgBARIuCgpkZWNpZGVkX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEINCgtfd2lubmVyX3BpZCp/CgxNZW1vcnlTdGF0dXMSHQoZTUVNT1JZX1NUQVRVU19VTlNQRUNJRklFRBAAEhkKFU1FTU9SWV9TVEFUVVNfUEVORElORxABEhsKF01FTU9SWV9TVEFUVVNfUFJPQ0VTU0VEEAISGAoUTUVNT1JZX1NUQVRVU19GQUlMRUQQAypdCgpNZW1vcnlLaW5kEhsKF01FTU9SWV9LSU5EX1VOU1BFQ0lGSUVEEAASGAoUTUVNT1JZX0tJTkRfRVBJU09ESUMQARIYChRNRU1PUllfS0lORF9TRU1BTlRJQxACMowGCg1NZW1vcnlTZXJ2aWNlEj0KBlNlYXJjaBIYLm1lbW9pci52MS5TZWFyY2hSZXF1ZXN0GhkubWVtb2lyLnYxLlNlYXJjaFJlc3BvbnNlEj0KBlJlY2FsbBIYLm1lbW9pci52MS5SZWNhbGxSZXF1ZXN0GhkubWVtb2lyLnYxLlJlY2FsbFJlc3BvbnNlEkMKCFJlbWVtYmVyEhoubWVtb2lyLnYxLlJlbWVtYmVyUmVxdWVzdBobLm1lbW9pci52MS5SZW1lbWJlclJlc3BvbnNlEj0KBkZvcmdldBIYLm1lbW9pci52MS5Gb3JnZXRSZXF1ZXN0GhkubWVtb2lyLnYxLkZvcmdldFJlc3BvbnNlEkMKCFRpbWVsaW5lEhoubWVtb2lyLnYxLlRpbWVsaW5lUmVxdWVzdBobLm1lbW9pci52MS5UaW1lbGluZVJlc3BvbnNlEkkKClJlY2FsbEFzT2YSHC5tZW1vaXIudjEuUmVjYWxsQXNPZlJlcXVlc3QaHS5tZW1vaXIudjEuUmVjYWxsQXNPZlJlc3BvbnNlEjoKBVF1ZXJ5EhcubWVtb2lyLnYxLlF1ZXJ5UmVxdWVzdBoYLm1lbW9pci52MS5RdWVyeVJlc3BvbnNlEjcKBEVkaXQSFi5tZW1vaXIudjEuRWRpdFJlcXVlc3QaFy5tZW1vaXIudjEuRWRpdFJlc3BvbnNlEkMKCEZlZWRiYWNrEhoubWVtb2lyLnYxLkZlZWRiYWNrUmVxdWVzdBobLm1lbW9pci52MS5GZWVkYmFja1Jlc3BvbnNlEmQKE1N1cGVyc2Vzc2lvbkhpc3RvcnkSJS5tZW1vaXIudjEuU3VwZXJzZXNzaW9uSGlzdG9yeVJlcXVlc3QaJi5tZW1vaXIudjEuU3VwZXJzZXNzaW9uSGlzdG9yeVJlc3BvbnNlEkkKCkxpc3RBZ2VudHMSHC5tZW1vaXIudjEuTGlzdEFnZW50c1JlcXVlc3QaHS5tZW1vaXIudjEuTGlzdEFnZW50c1Jlc3BvbnNlYgZwcm90bzM", [file_google_protobuf_duration, file_google_protobuf_struct, file_google_protobuf_timestamp]);
+  fileDesc("ChZtZW1vaXIvdjEvbWVtb3J5LnByb3RvEgltZW1vaXIudjEiOgoFU2NvcGUSEAoIYWdlbnRfaWQYASABKAkSDgoGb3JnX2lkGAIgASgJEg8KB3VzZXJfaWQYAyABKAki7QMKBk1lbW9yeRILCgNwaWQYASABKAkSHwoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgDIAEoCRIpCghtZXRhZGF0YRgEIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNQoMcHJvY2Vzc2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgAiAEBEicKBnN0YXR1cxgHIAEoDjIXLm1lbW9pci52MS5NZW1vcnlTdGF0dXMSLgoKdXBkYXRlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMQoIZXZlbnRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAGIAQESMgoMc3VwZXJzZXNzaW9uGAogASgLMhcubWVtb2lyLnYxLlN1cGVyc2Vzc2lvbkgCiAEBEiMKBGtpbmQYCyABKA4yFS5tZW1vaXIudjEuTWVtb3J5S2luZEIPCg1fcHJvY2Vzc2VkX2F0QgsKCV9ldmVudF9hdEIPCg1fc3VwZXJzZXNzaW9uIkoKDFN1cGVyc2Vzc2lvbhISCgp3aW5uZXJfcGlkGAEgASgJEiYKAmF0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIyCgxLaW5kU2VsZWN0b3ISEAoIZXBpc29kaWMYASABKAgSEAoIc2VtYW50aWMYAiABKAgiPQoJU2VhcmNoSGl0EiEKBm1lbW9yeRgBIAEoCzIRLm1lbW9pci52MS5NZW1vcnkSDQoFc2NvcmUYAiABKAIiGwoLR3JhcGhFbnRpdHkSDAoEbmFtZRgBIAEoCSJaChFHcmFwaFJlbGF0aW9uc2hpcBIPCgdzdWJqZWN0GAEgASgJEhAKCHJlbGF0aW9uGAIgASgJEg4KBm9iamVjdBgDIAEoCRISCgpjb25maWRlbmNlGAQgASgCInAKD0dyYXBoRW5yaWNobWVudBIoCghlbnRpdGllcxgBIAMoCzIWLm1lbW9pci52MS5HcmFwaEVudGl0eRIzCg1yZWxhdGlvbnNoaXBzGAIgAygLMhwubWVtb2lyLnYxLkdyYXBoUmVsYXRpb25zaGlwIrQCCg1TZWFyY2hSZXF1ZXN0Eh8KBXNjb3BlGAEgASgLMhAubWVtb2lyLnYxLlNjb3BlEg0KBXF1ZXJ5GAIgASgJEg0KBWxpbWl0GAMgASgFEjUKD21ldGFkYXRhX2ZpbHRlchgEIAEoCzIXLm1lbW9pci52MS5NZW1vcnlGaWx0ZXJIAIgBARIbCg5taW5fc2ltaWxhcml0eRgFIAEoAkgBiAEBEisKBWtpbmRzGAYgASgLMhcubWVtb2lyLnYxLktpbmRTZWxlY3RvckgCiAEBEh0KFXdpdGhfZ3JhcGhfZW5yaWNobWVudBgHIAEoCBITCgtncmFwaF9kZXB0aBgIIAEoDUISChBfbWV0YWRhdGFfZmlsdGVyQhEKD19taW5fc2ltaWxhcml0eUIICgZfa2luZHMikgEKDE1lbW9yeUZpbHRlchIoCgRtdXN0GAEgAygLMhoubWVtb2lyLnYxLkZpbHRlckNvbmRpdGlvbhIsCghtdXN0X25vdBgCIAMoCzIaLm1lbW9pci52MS5GaWx0ZXJDb25kaXRpb24SKgoGc2hvdWxkGAMgAygLMhoubWVtb2lyLnYxLkZpbHRlckNvbmRpdGlvbiKtAQoPRmlsdGVyQ29uZGl0aW9uEg0KBWZpZWxkGAEgASgJEicKBmVxdWFscxgCIAEoCzIVLm1lbW9pci52MS5NYXRjaFZhbHVlSAASKwoJaW5fdmFsdWVzGAMgASgLMhYubWVtb2lyLnYxLk1hdGNoVmFsdWVzSAASKAoFcmFuZ2UYBCABKAsyFy5tZW1vaXIudjEuTnVtZXJpY1JhbmdlSABCCwoJY29uZGl0aW9uIk4KCk1hdGNoVmFsdWUSEQoHa2V5d29yZBgBIAEoCUgAEhEKB2ludGVnZXIYAiABKANIABIRCgdib29sZWFuGAMgASgISABCBwoFdmFsdWUibwoLTWF0Y2hWYWx1ZXMSKgoIa2V5d29yZHMYASABKAsyFi5tZW1vaXIudjEuS2V5d29yZExpc3RIABIqCghpbnRlZ2VycxgCIAEoCzIWLm1lbW9pci52MS5JbnRlZ2VyTGlzdEgAQggKBnZhbHVlcyIdCgtLZXl3b3JkTGlzdBIOCgZ2YWx1ZXMYASADKAkiHQoLSW50ZWdlckxpc3QSDgoGdmFsdWVzGAEgAygDInIKDE51bWVyaWNSYW5nZRIPCgJsdBgBIAEoAUgAiAEBEhAKA2x0ZRgCIAEoAUgBiAEBEg8KAmd0GAMgASgBSAKIAQESEAoDZ3RlGAQgASgBSAOIAQFCBQoDX2x0QgYKBF9sdGVCBQoDX2d0QgYKBF9ndGUieAoOU2VhcmNoUmVzcG9uc2USIgoEaGl0cxgBIAMoCzIULm1lbW9pci52MS5TZWFyY2hIaXQSMwoKZW5yaWNobWVudBgCIAEoCzIaLm1lbW9pci52MS5HcmFwaEVucmljaG1lbnRIAIgBAUINCgtfZW5yaWNobWVudCIcCg1SZWNhbGxSZXF1ZXN0EgsKA3BpZBgBIAEoCSIzCg5SZWNhbGxSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5IoABCg9SZW1lbWJlclJlcXVlc3QSHwoFc2NvcGUYASABKAsyEC5tZW1vaXIudjEuU2NvcGUSDwoHY29udGVudBgCIAEoCRIuCghtZXRhZGF0YRgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3RIAIgBAUILCglfbWV0YWRhdGEiNQoQUmVtZW1iZXJSZXNwb25zZRIhCgZtZW1vcnkYASABKAsyES5tZW1vaXIudjEuTWVtb3J5ImAKDUZvcmdldFJlcXVlc3QSDQoDcGlkGAEgASgJSAASIQoFc2NvcGUYAiABKAsyEC5tZW1vaXIudjEuU2NvcGVIABITCgtoYXJkX2RlbGV0ZRgDIAEoCEIICgZ0YXJnZXQiJgoORm9yZ2V0UmVzcG9uc2USFAoMZGVsZXRlZF9waWRzGAEgAygJItcDCg9UaW1lbGluZVJlcXVlc3QSHwoFc2NvcGUYASABKAsyEC5tZW1vaXIudjEuU2NvcGUSKwoFa2luZHMYAiABKAsyFy5tZW1vaXIudjEuS2luZFNlbGVjdG9ySACIAQESNgoNY3JlYXRlZF9hZnRlchgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIAYgBARI3Cg5jcmVhdGVkX2JlZm9yZRgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIAogBARI3Cg5ldmVudF9hdF9hZnRlchgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIA4gBARI4Cg9ldmVudF9hdF9iZWZvcmUYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSASIAQESGgoSZXhjbHVkZV9zdXBlcnNlZGVkGAcgASgIEg0KBWxpbWl0GAggASgFEhEKCWFzY2VuZGluZxgJIAEoCEIICgZfa2luZHNCEAoOX2NyZWF0ZWRfYWZ0ZXJCEQoPX2NyZWF0ZWRfYmVmb3JlQhEKD19ldmVudF9hdF9hZnRlckISChBfZXZlbnRfYXRfYmVmb3JlIjcKEFRpbWVsaW5lUmVzcG9uc2USIwoIbWVtb3JpZXMYASADKAsyES5tZW1vaXIudjEuTWVtb3J5IqUBChFSZWNhbGxBc09mUmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRIpCgVhc19vZhgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASKwoFa2luZHMYAyABKAsyFy5tZW1vaXIudjEuS2luZFNlbGVjdG9ySACIAQESDQoFbGltaXQYBCABKAVCCAoGX2tpbmRzIjkKElJlY2FsbEFzT2ZSZXNwb25zZRIjCghtZW1vcmllcxgBIAMoCzIRLm1lbW9pci52MS5NZW1vcnkiYQoHUmFua2luZxIjCgZoeWJyaWQYASABKAsyES5tZW1vaXIudjEuSHlicmlkSAASJQoHYmxlbmRlZBgCIAEoCzISLm1lbW9pci52MS5CbGVuZGVkSABCCgoIc3RyYXRlZ3kiOAoGSHlicmlkEg0KBWFscGhhGAEgASgCEh8KBWRlY2F5GAIgASgLMhAubWVtb2lyLnYxLkRlY2F5IlQKB0JsZW5kZWQSKAoHd2VpZ2h0cxgBIAEoCzIXLm1lbW9pci52MS5CbGVuZFdlaWdodHMSHwoFZGVjYXkYAiABKAsyEC5tZW1vaXIudjEuRGVjYXkieQoMQmxlbmRXZWlnaHRzEg4KBmNvc2luZRgBIAEoAhISCgpjb25maWRlbmNlGAIgASgCEg8KB3JlY2VuY3kYAyABKAISFgoOY2F0ZWdvcnlfYm9udXMYBCABKAISHAoUcHJlZmVycmVkX2NhdGVnb3JpZXMYBSADKAkinwEKBURlY2F5EjIKC2V4cG9uZW50aWFsGAEgASgLMhsubWVtb2lyLnYxLkV4cG9uZW50aWFsRGVjYXlIABIwCgpyZWNpcHJvY2FsGAIgASgLMhoubWVtb2lyLnYxLlJlY2lwcm9jYWxEZWNheUgAEiQKBHN0ZXAYAyABKAsyFC5tZW1vaXIudjEuU3RlcERlY2F5SABCCgoIZnVuY3Rpb24iQAoQRXhwb25lbnRpYWxEZWNheRIsCgloYWxmX2xpZmUYASABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24iOwoPUmVjaXByb2NhbERlY2F5EigKBXNjYWxlGAEgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uIjQKCVN0ZXBEZWNheRInCgdidWNrZXRzGAEgAygLMhYubWVtb2lyLnYxLkRlY2F5QnVja2V0IkkKC0RlY2F5QnVja2V0EisKCGJvdW5kYXJ5GAEgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uEg0KBXZhbHVlGAIgASgCIjwKCFF1ZXJ5SGl0EiEKBm1lbW9yeRgBIAEoCzIRLm1lbW9pci52MS5NZW1vcnkSDQoFc2NvcmUYAiABKAIimQUKDFF1ZXJ5UmVxdWVzdBIfCgVzY29wZRgBIAEoCzIQLm1lbW9pci52MS5TY29wZRINCgVxdWVyeRgCIAEoCRINCgVsaW1pdBgDIAEoBRIrCgVraW5kcxgEIAEoCzIXLm1lbW9pci52MS5LaW5kU2VsZWN0b3JIAIgBARI1Cg9tZXRhZGF0YV9maWx0ZXIYBSABKAsyFy5tZW1vaXIudjEuTWVtb3J5RmlsdGVySAGIAQESGwoObWluX3NpbWlsYXJpdHkYBiABKAJIAogBARI2Cg1jcmVhdGVkX2FmdGVyGAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgDiAEBEjcKDmNyZWF0ZWRfYmVmb3JlGAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgEiAEBEjcKDmV2ZW50X2F0X2FmdGVyGAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgFiAEBEjgKD2V2ZW50X2F0X2JlZm9yZRgKIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBIBogBARIoCgdyYW5raW5nGAsgASgLMhIubWVtb2lyLnYxLlJhbmtpbmdIB4gBARIdChV3aXRoX2dyYXBoX2VucmljaG1lbnQYDCABKAgSEwoLZ3JhcGhfZGVwdGgYDSABKA1CCAoGX2tpbmRzQhIKEF9tZXRhZGF0YV9maWx0ZXJCEQoPX21pbl9zaW1pbGFyaXR5QhAKDl9jcmVhdGVkX2FmdGVyQhEKD19jcmVhdGVkX2JlZm9yZUIRCg9fZXZlbnRfYXRfYWZ0ZXJCEgoQX2V2ZW50X2F0X2JlZm9yZUIKCghfcmFua2luZyKgAQoNUXVlcnlSZXNwb25zZRIhCgRoaXRzGAEgAygLMhMubWVtb2lyLnYxLlF1ZXJ5SGl0EigKDHJhbmtpbmdfdXNlZBgCIAEoCzISLm1lbW9pci52MS5SYW5raW5nEjMKCmVucmljaG1lbnQYAyABKAsyGi5tZW1vaXIudjEuR3JhcGhFbnJpY2htZW50SACIAQFCDQoLX2VucmljaG1lbnQiuQEKC0VkaXRSZXF1ZXN0EgsKA3BpZBgBIAEoCRIUCgdjb250ZW50GAIgASgJSACIAQESLgoIbWV0YWRhdGEYAyABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0SAGIAQESMQoIZXZlbnRfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAKIAQFCCgoIX2NvbnRlbnRCCwoJX21ldGFkYXRhQgsKCV9ldmVudF9hdCIxCgxFZGl0UmVzcG9uc2USIQoGbWVtb3J5GAEgASgLMhEubWVtb2lyLnYxLk1lbW9yeSJGCg9GZWVkYmFja1JlcXVlc3QSCwoDcGlkGAEgASgJEhcKCmNvcnJlY3Rpb24YAiABKAlIAIgBAUINCgtfY29ycmVjdGlvbiISChBGZWVkYmFja1Jlc3BvbnNlIikKGlN1cGVyc2Vzc2lvbkhpc3RvcnlSZXF1ZXN0EgsKA3BpZBgBIAEoCSJLChtTdXBlcnNlc3Npb25IaXN0b3J5UmVzcG9uc2USLAoGZXZlbnRzGAEgAygLMhwubWVtb2lyLnYxLlN1cGVyc2Vzc2lvbkV2ZW50IjQKEUxpc3RBZ2VudHNSZXF1ZXN0Eg4KBm9yZ19pZBgBIAEoCRIPCgd1c2VyX2lkGAIgASgJIicKEkxpc3RBZ2VudHNSZXNwb25zZRIRCglhZ2VudF9pZHMYASADKAkiawoRU3VwZXJzZXNzaW9uRXZlbnQSFwoKd2lubmVyX3BpZBgBIAEoCUgAiAEBEi4KCmRlY2lkZWRfYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQg0KC193aW5uZXJfcGlkKn8KDE1lbW9yeVN0YXR1cxIdChlNRU1PUllfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGQoVTUVNT1JZX1NUQVRVU19QRU5ESU5HEAESGwoXTUVNT1JZX1NUQVRVU19QUk9DRVNTRUQQAhIYChRNRU1PUllfU1RBVFVTX0ZBSUxFRBADKl0KCk1lbW9yeUtpbmQSGwoXTUVNT1JZX0tJTkRfVU5TUEVDSUZJRUQQABIYChRNRU1PUllfS0lORF9FUElTT0RJQxABEhgKFE1FTU9SWV9LSU5EX1NFTUFOVElDEAIyjAYKDU1lbW9yeVNlcnZpY2USPQoGU2VhcmNoEhgubWVtb2lyLnYxLlNlYXJjaFJlcXVlc3QaGS5tZW1vaXIudjEuU2VhcmNoUmVzcG9uc2USPQoGUmVjYWxsEhgubWVtb2lyLnYxLlJlY2FsbFJlcXVlc3QaGS5tZW1vaXIudjEuUmVjYWxsUmVzcG9uc2USQwoIUmVtZW1iZXISGi5tZW1vaXIudjEuUmVtZW1iZXJSZXF1ZXN0GhsubWVtb2lyLnYxLlJlbWVtYmVyUmVzcG9uc2USPQoGRm9yZ2V0EhgubWVtb2lyLnYxLkZvcmdldFJlcXVlc3QaGS5tZW1vaXIudjEuRm9yZ2V0UmVzcG9uc2USQwoIVGltZWxpbmUSGi5tZW1vaXIudjEuVGltZWxpbmVSZXF1ZXN0GhsubWVtb2lyLnYxLlRpbWVsaW5lUmVzcG9uc2USSQoKUmVjYWxsQXNPZhIcLm1lbW9pci52MS5SZWNhbGxBc09mUmVxdWVzdBodLm1lbW9pci52MS5SZWNhbGxBc09mUmVzcG9uc2USOgoFUXVlcnkSFy5tZW1vaXIudjEuUXVlcnlSZXF1ZXN0GhgubWVtb2lyLnYxLlF1ZXJ5UmVzcG9uc2USNwoERWRpdBIWLm1lbW9pci52MS5FZGl0UmVxdWVzdBoXLm1lbW9pci52MS5FZGl0UmVzcG9uc2USQwoIRmVlZGJhY2sSGi5tZW1vaXIudjEuRmVlZGJhY2tSZXF1ZXN0GhsubWVtb2lyLnYxLkZlZWRiYWNrUmVzcG9uc2USZAoTU3VwZXJzZXNzaW9uSGlzdG9yeRIlLm1lbW9pci52MS5TdXBlcnNlc3Npb25IaXN0b3J5UmVxdWVzdBomLm1lbW9pci52MS5TdXBlcnNlc3Npb25IaXN0b3J5UmVzcG9uc2USSQoKTGlzdEFnZW50cxIcLm1lbW9pci52MS5MaXN0QWdlbnRzUmVxdWVzdBodLm1lbW9pci52MS5MaXN0QWdlbnRzUmVzcG9uc2ViBnByb3RvMw", [file_google_protobuf_duration, file_google_protobuf_struct, file_google_protobuf_timestamp]);
 
 /**
  * Scope uniquely identifies a memory partition. Memories written under one
@@ -220,6 +220,89 @@ export const SearchHitSchema: GenMessage<SearchHit> = /*@__PURE__*/
   messageDesc(file_memoir_v1_memory, 4);
 
 /**
+ * One entity in a graph-enrichment neighborhood. Untyped in v0.1 (carries only
+ * the canonical name); an entity-type field may be added later.
+ *
+ * @generated from message memoir.v1.GraphEntity
+ */
+export type GraphEntity = Message<"memoir.v1.GraphEntity"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message memoir.v1.GraphEntity.
+ * Use `create(GraphEntitySchema)` to create a new message.
+ */
+export const GraphEntitySchema: GenMessage<GraphEntity> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 5);
+
+/**
+ * One current relationship in a graph-enrichment neighborhood.
+ *
+ * @generated from message memoir.v1.GraphRelationship
+ */
+export type GraphRelationship = Message<"memoir.v1.GraphRelationship"> & {
+  /**
+   * @generated from field: string subject = 1;
+   */
+  subject: string;
+
+  /**
+   * @generated from field: string relation = 2;
+   */
+  relation: string;
+
+  /**
+   * @generated from field: string object = 3;
+   */
+  object: string;
+
+  /**
+   * The extractor's certainty, [0.0, 1.0].
+   *
+   * @generated from field: float confidence = 4;
+   */
+  confidence: number;
+};
+
+/**
+ * Describes the message memoir.v1.GraphRelationship.
+ * Use `create(GraphRelationshipSchema)` to create a new message.
+ */
+export const GraphRelationshipSchema: GenMessage<GraphRelationship> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 6);
+
+/**
+ * The graph neighborhood around a search/query's hits, returned only when the
+ * request opted in via `with_graph_enrichment`. Flat, deduplicated lists; empty
+ * when enrichment was not requested or no graph backend is configured. A
+ * property of the whole result, not of any single hit.
+ *
+ * @generated from message memoir.v1.GraphEnrichment
+ */
+export type GraphEnrichment = Message<"memoir.v1.GraphEnrichment"> & {
+  /**
+   * @generated from field: repeated memoir.v1.GraphEntity entities = 1;
+   */
+  entities: GraphEntity[];
+
+  /**
+   * @generated from field: repeated memoir.v1.GraphRelationship relationships = 2;
+   */
+  relationships: GraphRelationship[];
+};
+
+/**
+ * Describes the message memoir.v1.GraphEnrichment.
+ * Use `create(GraphEnrichmentSchema)` to create a new message.
+ */
+export const GraphEnrichmentSchema: GenMessage<GraphEnrichment> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_memory, 7);
+
+/**
  * @generated from message memoir.v1.SearchRequest
  */
 export type SearchRequest = Message<"memoir.v1.SearchRequest"> & {
@@ -270,6 +353,25 @@ export type SearchRequest = Message<"memoir.v1.SearchRequest"> & {
    * @generated from field: optional memoir.v1.KindSelector kinds = 6;
    */
   kinds?: KindSelector;
+
+  /**
+   * Opt into graph enrichment: after the vector search, traverse the knowledge
+   * graph from the hits' entities and return the neighborhood in
+   * `SearchResponse.enrichment`. Off (false) by default. Maps to the library's
+   * `SearchBuilder::with_graph`. A no-op when the service has no graph backend.
+   *
+   * @generated from field: bool with_graph_enrichment = 7;
+   */
+  withGraphEnrichment: boolean;
+
+  /**
+   * Traversal depth for `with_graph_enrichment`, in hops. 0 = library default
+   * (1); values are clamped to the library maximum (2). Maps to
+   * `SearchBuilder::with_graph_depth`. Ignored when enrichment is off.
+   *
+   * @generated from field: uint32 graph_depth = 8;
+   */
+  graphDepth: number;
 };
 
 /**
@@ -277,7 +379,7 @@ export type SearchRequest = Message<"memoir.v1.SearchRequest"> & {
  * Use `create(SearchRequestSchema)` to create a new message.
  */
 export const SearchRequestSchema: GenMessage<SearchRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 5);
+  messageDesc(file_memoir_v1_memory, 8);
 
 /**
  * Caller-supplied filter applied at search time. Mirrors Qdrant's payload
@@ -312,7 +414,7 @@ export type MemoryFilter = Message<"memoir.v1.MemoryFilter"> & {
  * Use `create(MemoryFilterSchema)` to create a new message.
  */
 export const MemoryFilterSchema: GenMessage<MemoryFilter> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 6);
+  messageDesc(file_memoir_v1_memory, 9);
 
 /**
  * One field-targeted condition inside a [`MemoryFilter`].
@@ -362,7 +464,7 @@ export type FilterCondition = Message<"memoir.v1.FilterCondition"> & {
  * Use `create(FilterConditionSchema)` to create a new message.
  */
 export const FilterConditionSchema: GenMessage<FilterCondition> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 7);
+  messageDesc(file_memoir_v1_memory, 10);
 
 /**
  * Concrete value for equality matching. Mirrors memoir-core's `MatchValue`.
@@ -399,7 +501,7 @@ export type MatchValue = Message<"memoir.v1.MatchValue"> & {
  * Use `create(MatchValueSchema)` to create a new message.
  */
 export const MatchValueSchema: GenMessage<MatchValue> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 8);
+  messageDesc(file_memoir_v1_memory, 11);
 
 /**
  * List of values for `IN (...)` matching. Mirrors memoir-core's `MatchValues`.
@@ -430,7 +532,7 @@ export type MatchValues = Message<"memoir.v1.MatchValues"> & {
  * Use `create(MatchValuesSchema)` to create a new message.
  */
 export const MatchValuesSchema: GenMessage<MatchValues> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 9);
+  messageDesc(file_memoir_v1_memory, 12);
 
 /**
  * @generated from message memoir.v1.KeywordList
@@ -447,7 +549,7 @@ export type KeywordList = Message<"memoir.v1.KeywordList"> & {
  * Use `create(KeywordListSchema)` to create a new message.
  */
 export const KeywordListSchema: GenMessage<KeywordList> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 10);
+  messageDesc(file_memoir_v1_memory, 13);
 
 /**
  * @generated from message memoir.v1.IntegerList
@@ -464,7 +566,7 @@ export type IntegerList = Message<"memoir.v1.IntegerList"> & {
  * Use `create(IntegerListSchema)` to create a new message.
  */
 export const IntegerListSchema: GenMessage<IntegerList> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 11);
+  messageDesc(file_memoir_v1_memory, 14);
 
 /**
  * Half-open or closed numeric range. All bounds optional; an entirely-unbounded
@@ -500,7 +602,7 @@ export type NumericRange = Message<"memoir.v1.NumericRange"> & {
  * Use `create(NumericRangeSchema)` to create a new message.
  */
 export const NumericRangeSchema: GenMessage<NumericRange> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 12);
+  messageDesc(file_memoir_v1_memory, 15);
 
 /**
  * @generated from message memoir.v1.SearchResponse
@@ -510,6 +612,14 @@ export type SearchResponse = Message<"memoir.v1.SearchResponse"> & {
    * @generated from field: repeated memoir.v1.SearchHit hits = 1;
    */
   hits: SearchHit[];
+
+  /**
+   * The graph neighborhood around the hits, present only when the request set
+   * `with_graph_enrichment`. Empty/absent otherwise.
+   *
+   * @generated from field: optional memoir.v1.GraphEnrichment enrichment = 2;
+   */
+  enrichment?: GraphEnrichment;
 };
 
 /**
@@ -517,7 +627,7 @@ export type SearchResponse = Message<"memoir.v1.SearchResponse"> & {
  * Use `create(SearchResponseSchema)` to create a new message.
  */
 export const SearchResponseSchema: GenMessage<SearchResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 13);
+  messageDesc(file_memoir_v1_memory, 16);
 
 /**
  * @generated from message memoir.v1.RecallRequest
@@ -534,7 +644,7 @@ export type RecallRequest = Message<"memoir.v1.RecallRequest"> & {
  * Use `create(RecallRequestSchema)` to create a new message.
  */
 export const RecallRequestSchema: GenMessage<RecallRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 14);
+  messageDesc(file_memoir_v1_memory, 17);
 
 /**
  * @generated from message memoir.v1.RecallResponse
@@ -551,7 +661,7 @@ export type RecallResponse = Message<"memoir.v1.RecallResponse"> & {
  * Use `create(RecallResponseSchema)` to create a new message.
  */
 export const RecallResponseSchema: GenMessage<RecallResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 15);
+  messageDesc(file_memoir_v1_memory, 18);
 
 /**
  * @generated from message memoir.v1.RememberRequest
@@ -578,7 +688,7 @@ export type RememberRequest = Message<"memoir.v1.RememberRequest"> & {
  * Use `create(RememberRequestSchema)` to create a new message.
  */
 export const RememberRequestSchema: GenMessage<RememberRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 16);
+  messageDesc(file_memoir_v1_memory, 19);
 
 /**
  * @generated from message memoir.v1.RememberResponse
@@ -600,7 +710,7 @@ export type RememberResponse = Message<"memoir.v1.RememberResponse"> & {
  * Use `create(RememberResponseSchema)` to create a new message.
  */
 export const RememberResponseSchema: GenMessage<RememberResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 17);
+  messageDesc(file_memoir_v1_memory, 20);
 
 /**
  * @generated from message memoir.v1.ForgetRequest
@@ -639,7 +749,7 @@ export type ForgetRequest = Message<"memoir.v1.ForgetRequest"> & {
  * Use `create(ForgetRequestSchema)` to create a new message.
  */
 export const ForgetRequestSchema: GenMessage<ForgetRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 18);
+  messageDesc(file_memoir_v1_memory, 21);
 
 /**
  * @generated from message memoir.v1.ForgetResponse
@@ -660,7 +770,7 @@ export type ForgetResponse = Message<"memoir.v1.ForgetResponse"> & {
  * Use `create(ForgetResponseSchema)` to create a new message.
  */
 export const ForgetResponseSchema: GenMessage<ForgetResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 19);
+  messageDesc(file_memoir_v1_memory, 22);
 
 /**
  * @generated from message memoir.v1.TimelineRequest
@@ -735,7 +845,7 @@ export type TimelineRequest = Message<"memoir.v1.TimelineRequest"> & {
  * Use `create(TimelineRequestSchema)` to create a new message.
  */
 export const TimelineRequestSchema: GenMessage<TimelineRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 20);
+  messageDesc(file_memoir_v1_memory, 23);
 
 /**
  * @generated from message memoir.v1.TimelineResponse
@@ -755,7 +865,7 @@ export type TimelineResponse = Message<"memoir.v1.TimelineResponse"> & {
  * Use `create(TimelineResponseSchema)` to create a new message.
  */
 export const TimelineResponseSchema: GenMessage<TimelineResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 21);
+  messageDesc(file_memoir_v1_memory, 24);
 
 /**
  * @generated from message memoir.v1.RecallAsOfRequest
@@ -796,7 +906,7 @@ export type RecallAsOfRequest = Message<"memoir.v1.RecallAsOfRequest"> & {
  * Use `create(RecallAsOfRequestSchema)` to create a new message.
  */
 export const RecallAsOfRequestSchema: GenMessage<RecallAsOfRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 22);
+  messageDesc(file_memoir_v1_memory, 25);
 
 /**
  * @generated from message memoir.v1.RecallAsOfResponse
@@ -816,7 +926,7 @@ export type RecallAsOfResponse = Message<"memoir.v1.RecallAsOfResponse"> & {
  * Use `create(RecallAsOfResponseSchema)` to create a new message.
  */
 export const RecallAsOfResponseSchema: GenMessage<RecallAsOfResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 23);
+  messageDesc(file_memoir_v1_memory, 26);
 
 /**
  * How Query orders candidates. Mirrors memoir-core's `RankingStrategy`.
@@ -850,7 +960,7 @@ export type Ranking = Message<"memoir.v1.Ranking"> & {
  * Use `create(RankingSchema)` to create a new message.
  */
 export const RankingSchema: GenMessage<Ranking> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 24);
+  messageDesc(file_memoir_v1_memory, 27);
 
 /**
  * Blend of cosine similarity and recency. Mirrors `RankingStrategy::Hybrid`.
@@ -879,7 +989,7 @@ export type Hybrid = Message<"memoir.v1.Hybrid"> & {
  * Use `create(HybridSchema)` to create a new message.
  */
 export const HybridSchema: GenMessage<Hybrid> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 25);
+  messageDesc(file_memoir_v1_memory, 28);
 
 /**
  * Linear blend of cosine, confidence, recency, and a category bonus.
@@ -908,7 +1018,7 @@ export type Blended = Message<"memoir.v1.Blended"> & {
  * Use `create(BlendedSchema)` to create a new message.
  */
 export const BlendedSchema: GenMessage<Blended> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 26);
+  messageDesc(file_memoir_v1_memory, 29);
 
 /**
  * Signal weights for `Blended`. Mirrors memoir-core's `BlendWeights`.
@@ -957,7 +1067,7 @@ export type BlendWeights = Message<"memoir.v1.BlendWeights"> & {
  * Use `create(BlendWeightsSchema)` to create a new message.
  */
 export const BlendWeightsSchema: GenMessage<BlendWeights> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 27);
+  messageDesc(file_memoir_v1_memory, 30);
 
 /**
  * Recency-decay function. Mirrors memoir-core's `DecayFn`. Message-with-oneof
@@ -995,7 +1105,7 @@ export type Decay = Message<"memoir.v1.Decay"> & {
  * Use `create(DecaySchema)` to create a new message.
  */
 export const DecaySchema: GenMessage<Decay> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 28);
+  messageDesc(file_memoir_v1_memory, 31);
 
 /**
  * exp(-ln(2) * age / half_life); reaches 0.5 at half_life.
@@ -1014,7 +1124,7 @@ export type ExponentialDecay = Message<"memoir.v1.ExponentialDecay"> & {
  * Use `create(ExponentialDecaySchema)` to create a new message.
  */
 export const ExponentialDecaySchema: GenMessage<ExponentialDecay> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 29);
+  messageDesc(file_memoir_v1_memory, 32);
 
 /**
  * 1 / (1 + age / scale); reaches 0.5 at scale, slower tail than exponential.
@@ -1033,7 +1143,7 @@ export type ReciprocalDecay = Message<"memoir.v1.ReciprocalDecay"> & {
  * Use `create(ReciprocalDecaySchema)` to create a new message.
  */
 export const ReciprocalDecaySchema: GenMessage<ReciprocalDecay> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 30);
+  messageDesc(file_memoir_v1_memory, 33);
 
 /**
  * Bucketed decay. Buckets are ordered by ascending boundary; an age within
@@ -1054,7 +1164,7 @@ export type StepDecay = Message<"memoir.v1.StepDecay"> & {
  * Use `create(StepDecaySchema)` to create a new message.
  */
 export const StepDecaySchema: GenMessage<StepDecay> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 31);
+  messageDesc(file_memoir_v1_memory, 34);
 
 /**
  * @generated from message memoir.v1.DecayBucket
@@ -1076,7 +1186,7 @@ export type DecayBucket = Message<"memoir.v1.DecayBucket"> & {
  * Use `create(DecayBucketSchema)` to create a new message.
  */
 export const DecayBucketSchema: GenMessage<DecayBucket> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 32);
+  messageDesc(file_memoir_v1_memory, 35);
 
 /**
  * Query result with its hybrid (blended cosine + recency) score attached.
@@ -1102,7 +1212,7 @@ export type QueryHit = Message<"memoir.v1.QueryHit"> & {
  * Use `create(QueryHitSchema)` to create a new message.
  */
 export const QueryHitSchema: GenMessage<QueryHit> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 33);
+  messageDesc(file_memoir_v1_memory, 36);
 
 /**
  * @generated from message memoir.v1.QueryRequest
@@ -1178,6 +1288,24 @@ export type QueryRequest = Message<"memoir.v1.QueryRequest"> & {
    * @generated from field: optional memoir.v1.Ranking ranking = 11;
    */
   ranking?: Ranking;
+
+  /**
+   * Opt into graph enrichment: traverse the knowledge graph from the hits'
+   * entities and return the neighborhood in `QueryResponse.enrichment`. Off by
+   * default. Maps to `QueryBuilder::with_graph`. No-op without a graph backend.
+   *
+   * @generated from field: bool with_graph_enrichment = 12;
+   */
+  withGraphEnrichment: boolean;
+
+  /**
+   * Traversal depth for `with_graph_enrichment`, in hops. 0 = library default
+   * (1); clamped to the library maximum (2). Maps to
+   * `QueryBuilder::with_graph_depth`. Ignored when enrichment is off.
+   *
+   * @generated from field: uint32 graph_depth = 13;
+   */
+  graphDepth: number;
 };
 
 /**
@@ -1185,7 +1313,7 @@ export type QueryRequest = Message<"memoir.v1.QueryRequest"> & {
  * Use `create(QueryRequestSchema)` to create a new message.
  */
 export const QueryRequestSchema: GenMessage<QueryRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 34);
+  messageDesc(file_memoir_v1_memory, 37);
 
 /**
  * @generated from message memoir.v1.QueryResponse
@@ -1206,6 +1334,14 @@ export type QueryResponse = Message<"memoir.v1.QueryResponse"> & {
    * @generated from field: memoir.v1.Ranking ranking_used = 2;
    */
   rankingUsed?: Ranking;
+
+  /**
+   * The graph neighborhood around the hits, present only when the request set
+   * `with_graph_enrichment`. Empty/absent otherwise.
+   *
+   * @generated from field: optional memoir.v1.GraphEnrichment enrichment = 3;
+   */
+  enrichment?: GraphEnrichment;
 };
 
 /**
@@ -1213,7 +1349,7 @@ export type QueryResponse = Message<"memoir.v1.QueryResponse"> & {
  * Use `create(QueryResponseSchema)` to create a new message.
  */
 export const QueryResponseSchema: GenMessage<QueryResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 35);
+  messageDesc(file_memoir_v1_memory, 38);
 
 /**
  * @generated from message memoir.v1.EditRequest
@@ -1253,7 +1389,7 @@ export type EditRequest = Message<"memoir.v1.EditRequest"> & {
  * Use `create(EditRequestSchema)` to create a new message.
  */
 export const EditRequestSchema: GenMessage<EditRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 36);
+  messageDesc(file_memoir_v1_memory, 39);
 
 /**
  * @generated from message memoir.v1.EditResponse
@@ -1274,7 +1410,7 @@ export type EditResponse = Message<"memoir.v1.EditResponse"> & {
  * Use `create(EditResponseSchema)` to create a new message.
  */
 export const EditResponseSchema: GenMessage<EditResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 37);
+  messageDesc(file_memoir_v1_memory, 40);
 
 /**
  * @generated from message memoir.v1.FeedbackRequest
@@ -1304,7 +1440,7 @@ export type FeedbackRequest = Message<"memoir.v1.FeedbackRequest"> & {
  * Use `create(FeedbackRequestSchema)` to create a new message.
  */
 export const FeedbackRequestSchema: GenMessage<FeedbackRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 38);
+  messageDesc(file_memoir_v1_memory, 41);
 
 /**
  * Empty: feedback is fire-and-forget. The correction completes behind the
@@ -1320,7 +1456,7 @@ export type FeedbackResponse = Message<"memoir.v1.FeedbackResponse"> & {
  * Use `create(FeedbackResponseSchema)` to create a new message.
  */
 export const FeedbackResponseSchema: GenMessage<FeedbackResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 39);
+  messageDesc(file_memoir_v1_memory, 42);
 
 /**
  * @generated from message memoir.v1.SupersessionHistoryRequest
@@ -1339,7 +1475,7 @@ export type SupersessionHistoryRequest = Message<"memoir.v1.SupersessionHistoryR
  * Use `create(SupersessionHistoryRequestSchema)` to create a new message.
  */
 export const SupersessionHistoryRequestSchema: GenMessage<SupersessionHistoryRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 40);
+  messageDesc(file_memoir_v1_memory, 43);
 
 /**
  * @generated from message memoir.v1.SupersessionHistoryResponse
@@ -1359,7 +1495,7 @@ export type SupersessionHistoryResponse = Message<"memoir.v1.SupersessionHistory
  * Use `create(SupersessionHistoryResponseSchema)` to create a new message.
  */
 export const SupersessionHistoryResponseSchema: GenMessage<SupersessionHistoryResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 41);
+  messageDesc(file_memoir_v1_memory, 44);
 
 /**
  * @generated from message memoir.v1.ListAgentsRequest
@@ -1385,7 +1521,7 @@ export type ListAgentsRequest = Message<"memoir.v1.ListAgentsRequest"> & {
  * Use `create(ListAgentsRequestSchema)` to create a new message.
  */
 export const ListAgentsRequestSchema: GenMessage<ListAgentsRequest> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 42);
+  messageDesc(file_memoir_v1_memory, 45);
 
 /**
  * @generated from message memoir.v1.ListAgentsResponse
@@ -1405,7 +1541,7 @@ export type ListAgentsResponse = Message<"memoir.v1.ListAgentsResponse"> & {
  * Use `create(ListAgentsResponseSchema)` to create a new message.
  */
 export const ListAgentsResponseSchema: GenMessage<ListAgentsResponse> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 43);
+  messageDesc(file_memoir_v1_memory, 46);
 
 /**
  * One supersede or unsupersede decision against a memory. Mirrors memoir-
@@ -1432,7 +1568,7 @@ export type SupersessionEvent = Message<"memoir.v1.SupersessionEvent"> & {
  * Use `create(SupersessionEventSchema)` to create a new message.
  */
 export const SupersessionEventSchema: GenMessage<SupersessionEvent> = /*@__PURE__*/
-  messageDesc(file_memoir_v1_memory, 44);
+  messageDesc(file_memoir_v1_memory, 47);
 
 /**
  * @generated from enum memoir.v1.MemoryStatus

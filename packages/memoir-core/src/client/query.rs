@@ -262,6 +262,7 @@ pub struct MemoryContext {
     memories: Vec<Memory>,
     system_prompt: Option<String>,
     strategy: RankingStrategy,
+    graph: crate::graph::GraphContext,
 }
 
 impl MemoryContext {
@@ -274,7 +275,16 @@ impl MemoryContext {
             memories,
             system_prompt,
             strategy,
+            graph: crate::graph::GraphContext::default(),
         }
+    }
+
+    /// Attaches the graph neighborhood produced by an enriched query.
+    #[cfg(feature = "knowledge-graph")]
+    #[must_use]
+    pub(super) fn with_graph_context(mut self, graph: crate::graph::GraphContext) -> Self {
+        self.graph = graph;
+        self
     }
 
     /// Returns the ranked memories.
@@ -293,6 +303,17 @@ impl MemoryContext {
     #[must_use]
     pub fn system_prompt(&self) -> Option<&str> {
         self.system_prompt.as_deref()
+    }
+
+    /// Returns the graph neighborhood from an enriched query.
+    ///
+    /// Empty unless the query opted in via `.with_graph()`. Read-only context
+    /// for the consumer to format; [`Display`] renders only the memories.
+    ///
+    /// [`Display`]: std::fmt::Display
+    #[must_use]
+    pub fn graph(&self) -> &crate::graph::GraphContext {
+        &self.graph
     }
 }
 
@@ -403,6 +424,8 @@ pub struct QueryBuilder<'a> {
     created_at_range: NumericRange,
     event_at_range: NumericRange,
     ranking: Option<RankingStrategy>,
+    #[cfg(feature = "knowledge-graph")]
+    graph_depth: Option<usize>,
 }
 
 impl<'a> QueryBuilder<'a> {
@@ -419,6 +442,8 @@ impl<'a> QueryBuilder<'a> {
             created_at_range: NumericRange::default(),
             event_at_range: NumericRange::default(),
             ranking: None,
+            #[cfg(feature = "knowledge-graph")]
+            graph_depth: None,
         }
     }
 
@@ -479,6 +504,30 @@ impl<'a> QueryBuilder<'a> {
     /// Selects the ranking strategy. Defaults to [`RankingStrategy::default_hybrid`].
     pub fn ranking(mut self, strategy: RankingStrategy) -> Self {
         self.ranking = Some(strategy);
+        self
+    }
+
+    /// Enriches the result with a graph traversal from the hits' entities.
+    ///
+    /// Off by default. When set, the returned [`MemoryContext`]'s
+    /// [`graph`](MemoryContext::graph) carries entities and relationships within
+    /// [`DEFAULT_ENRICHMENT_DEPTH`](crate::graph::DEFAULT_ENRICHMENT_DEPTH) hops
+    /// of the hits. A no-op when no graph backend is configured. Use
+    /// [`Self::with_graph_depth`] to traverse deeper.
+    #[cfg(feature = "knowledge-graph")]
+    pub fn with_graph(mut self) -> Self {
+        self.graph_depth = Some(crate::graph::DEFAULT_ENRICHMENT_DEPTH);
+        self
+    }
+
+    /// Enriches with a graph traversal to `depth` hops (clamped to
+    /// [`MAX_ENRICHMENT_DEPTH`](crate::graph::MAX_ENRICHMENT_DEPTH)).
+    ///
+    /// Implies [`Self::with_graph`]. Depth is bounded so an opt-in enrichment
+    /// cannot become an unbounded scan.
+    #[cfg(feature = "knowledge-graph")]
+    pub fn with_graph_depth(mut self, depth: usize) -> Self {
+        self.graph_depth = Some(depth.clamp(1, crate::graph::MAX_ENRICHMENT_DEPTH));
         self
     }
 }
@@ -555,6 +604,8 @@ impl<'a> IntoFuture for QueryBuilder<'a> {
 async fn execute(builder: QueryBuilder<'_>) -> Result<MemoryContext, ClientError> {
     let kinds = kind_selector(builder.episodic, builder.semantic);
     let strategy = builder.ranking.unwrap_or_else(RankingStrategy::default_hybrid);
+    #[cfg(feature = "knowledge-graph")]
+    let graph_depth = builder.graph_depth;
     let QueryBuilder {
         client,
         query,
@@ -566,6 +617,10 @@ async fn execute(builder: QueryBuilder<'_>) -> Result<MemoryContext, ClientError
         event_at_range,
         ..
     } = builder;
+
+    // The traversal needs the scope after `index.search` consumes it.
+    #[cfg(feature = "knowledge-graph")]
+    let graph_scope = scope.clone();
 
     let combined_filter = combine_filter(metadata_filter, created_at_range, event_at_range);
     let candidate_limit = limit.saturating_mul(3).max(limit);
@@ -606,7 +661,21 @@ async fn execute(builder: QueryBuilder<'_>) -> Result<MemoryContext, ClientError
         })
         .collect();
 
-    Ok(MemoryContext::new(memories, inner.system_prompt.clone(), strategy))
+    let context = MemoryContext::new(memories, inner.system_prompt.clone(), strategy);
+
+    // Opt-in graph enrichment from the ranked hits' entities. A traversal error
+    // fails the query (the consumer asked for it); an unconfigured graph no-ops.
+    #[cfg(feature = "knowledge-graph")]
+    if let Some(depth) = graph_depth {
+        if let Some(graph) = inner.graph.as_deref() {
+            use crate::graph::GraphStore;
+            let seed_pids: Vec<&str> = context.memories().iter().map(|m| m.pid.as_str()).collect();
+            let graph_context = graph.neighbors(&seed_pids, &graph_scope, depth).await?;
+            return Ok(context.with_graph_context(graph_context));
+        }
+    }
+
+    Ok(context)
 }
 
 #[cfg(test)]

@@ -18,6 +18,7 @@
 mod commit;
 mod cosine;
 mod edge;
+mod enrich;
 mod error;
 mod extraction;
 mod forget;
@@ -26,6 +27,9 @@ mod resolve;
 mod synthesis;
 
 pub use commit::{CommitContext, CommitError};
+pub use enrich::{
+    DEFAULT_ENRICHMENT_DEPTH, GraphContext, GraphEntity, GraphRelationship, MAX_ENRICHMENT_DEPTH,
+};
 pub use edge::{
     CardinalityPolicy, Edge, EdgeCatalog, EdgeError, EdgeResolution, EdgeResolver, ExistingEdge, NaiveAppendResolver,
     RelationCardinality, TemporalEdgeResolver,
@@ -178,5 +182,25 @@ pub trait GraphStore: Send + Sync + 'static {
         EdgeR: EdgeResolver,
     {
         commit::commit_triples(self, embedder, entities, edges, ctx, triples)
+    }
+
+    /// Returns the graph neighborhood around a set of seed memories.
+    ///
+    /// Seeds from the entities whose `memory_pids` contains any of `seed_pids`,
+    /// then walks current edges (`valid_to = null`) out to `depth` hops
+    /// (clamped to [`MAX_ENRICHMENT_DEPTH`]), scope-confined. Returns a flat,
+    /// deduplicated [`GraphContext`]; an empty `seed_pids` yields an empty
+    /// context with no query. The read-path enrichment behind `.with_graph()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphError`] if the backend rejects the traversal.
+    fn neighbors(
+        &self,
+        seed_pids: &[&str],
+        scope: &crate::memory::Scope,
+        depth: usize,
+    ) -> impl Future<Output = Result<GraphContext, GraphError>> + Send {
+        enrich::neighbors(self, seed_pids, scope, depth)
     }
 }
