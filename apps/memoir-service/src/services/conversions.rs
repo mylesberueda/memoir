@@ -26,6 +26,7 @@
 use std::ops::Deref;
 
 use memoir_core::client::{DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, RankingStrategy, ReconcileSummary};
+use memoir_core::graph::GraphContext as LibGraphContext;
 use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind};
 use memoir_core::memory::{
     ExtractionStat as LibExtractionStat, ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory,
@@ -42,10 +43,11 @@ use memoir_sdk::memoir::v1::{
     FailedJob as ProtoFailedJob, FeedbackRequest, FilterCondition as ProtoFilterCondition, ForgetRequest,
     Hybrid as ProtoHybrid, JobKind as ProtoJobKind, KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue,
     MatchValues as ProtoMatchValues, MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit,
-    QueryRequest, QueryResponse, Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReciprocalDecay,
-    ReconcileResponse, Scope as ProtoScope, StepDecay, SupersessionEvent as ProtoSupersessionEvent,
-    SupersessionHistoryRequest, TimelineRequest, TimelineResponse, decay, filter_condition, forget_request,
-    match_value, match_values, ranking,
+    GraphEnrichment as ProtoGraphEnrichment, GraphEntity as ProtoGraphEntity,
+    GraphRelationship as ProtoGraphRelationship, QueryRequest, QueryResponse, Ranking as ProtoRanking,
+    RecallAsOfRequest, RecallAsOfResponse, ReciprocalDecay, ReconcileResponse, Scope as ProtoScope, StepDecay,
+    SupersessionEvent as ProtoSupersessionEvent, SupersessionHistoryRequest, TimelineRequest, TimelineResponse, decay,
+    filter_condition, forget_request, match_value, match_values, ranking,
 };
 use tonic::Status;
 
@@ -486,6 +488,8 @@ pub(crate) struct QueryArgs {
     pub event_at_after: Option<chrono::DateTime<chrono::FixedOffset>>,
     pub event_at_before: Option<chrono::DateTime<chrono::FixedOffset>>,
     pub ranking: RankingStrategy,
+    pub with_graph_enrichment: bool,
+    pub graph_depth: Option<usize>,
 }
 
 impl TryFrom<QueryRequest> for QueryArgs {
@@ -512,6 +516,8 @@ impl TryFrom<QueryRequest> for QueryArgs {
             event_at_after: request.event_at_after.map(timestamp_to_chrono).transpose()?,
             event_at_before: request.event_at_before.map(timestamp_to_chrono).transpose()?,
             ranking: ranking_from_proto(request.ranking)?,
+            with_graph_enrichment: request.with_graph_enrichment,
+            graph_depth: (request.graph_depth > 0).then_some(request.graph_depth as usize),
         })
     }
 }
@@ -523,6 +529,7 @@ impl TryFrom<QueryRequest> for QueryArgs {
 pub(crate) fn query_response(context: MemoryContext) -> QueryResponse {
     use crate::services::wire::WireMemory;
     let ranking_used = Some(ranking_to_proto(context.strategy_used()));
+    let enrichment = graph_enrichment_to_proto(context.graph());
     let hits = context
         .memories()
         .iter()
@@ -535,7 +542,40 @@ pub(crate) fn query_response(context: MemoryContext) -> QueryResponse {
             }
         })
         .collect();
-    QueryResponse { hits, ranking_used }
+    QueryResponse {
+        hits,
+        ranking_used,
+        enrichment,
+    }
+}
+
+/// Converts a graph [`LibGraphContext`] to the wire `GraphEnrichment`.
+///
+/// Returns `None` for an empty context (no graph configured, enrichment not
+/// requested, or no neighbors found) so the wire field stays absent rather than
+/// carrying an empty message. The entity/relationship shapes map one-to-one.
+pub(crate) fn graph_enrichment_to_proto(context: &LibGraphContext) -> Option<ProtoGraphEnrichment> {
+    if context.entities.is_empty() && context.relationships.is_empty() {
+        return None;
+    }
+    let entities = context
+        .entities
+        .iter()
+        .map(|entity| ProtoGraphEntity {
+            name: entity.name.clone(),
+        })
+        .collect();
+    let relationships = context
+        .relationships
+        .iter()
+        .map(|relationship| ProtoGraphRelationship {
+            subject: relationship.subject.clone(),
+            relation: relationship.relation.clone(),
+            object: relationship.object.clone(),
+            confidence: relationship.confidence,
+        })
+        .collect();
+    Some(ProtoGraphEnrichment { entities, relationships })
 }
 
 /// A validated `Edit` request: the target pid plus the optional field edits.
@@ -645,6 +685,8 @@ impl From<LibJobKind> for WireJobKind {
             LibJobKind::Extract => ProtoJobKind::Extract,
             LibJobKind::Categorize => ProtoJobKind::Categorize,
             LibJobKind::Reprocess => ProtoJobKind::Reprocess,
+            LibJobKind::RelationalExtract => ProtoJobKind::RelationalExtract,
+            LibJobKind::Synthesize => ProtoJobKind::Synthesize,
         })
     }
 }
@@ -675,6 +717,8 @@ pub(crate) fn job_kind_filter_from_proto(value: Option<i32>) -> Result<Option<Li
         ProtoJobKind::Extract => Ok(Some(LibJobKind::Extract)),
         ProtoJobKind::Categorize => Ok(Some(LibJobKind::Categorize)),
         ProtoJobKind::Reprocess => Ok(Some(LibJobKind::Reprocess)),
+        ProtoJobKind::RelationalExtract => Ok(Some(LibJobKind::RelationalExtract)),
+        ProtoJobKind::Synthesize => Ok(Some(LibJobKind::Synthesize)),
     }
 }
 
@@ -1118,6 +1162,7 @@ mod tests {
             failed_retried: 0,
             failed_recovered: 0,
             orphans_deleted: 0,
+            graph_rebuild_enqueued: 0,
         };
         let proto = WireReconcileResponse::from(summary).0;
         assert_eq!(proto.failed_retried, 0);
@@ -1131,6 +1176,7 @@ mod tests {
             failed_retried: 5,
             failed_recovered: 3,
             orphans_deleted: 12,
+            graph_rebuild_enqueued: 0,
         };
         let proto = WireReconcileResponse::from(summary).0;
         assert_eq!(proto.failed_retried, 5);

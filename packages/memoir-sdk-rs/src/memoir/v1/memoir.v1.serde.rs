@@ -4250,6 +4250,8 @@ impl serde::Serialize for JobKind {
             Self::Extract => "JOB_KIND_EXTRACT",
             Self::Categorize => "JOB_KIND_CATEGORIZE",
             Self::Reprocess => "JOB_KIND_REPROCESS",
+            Self::RelationalExtract => "JOB_KIND_RELATIONAL_EXTRACT",
+            Self::Synthesize => "JOB_KIND_SYNTHESIZE",
         };
         serializer.serialize_str(variant)
     }
@@ -4266,6 +4268,8 @@ impl<'de> serde::Deserialize<'de> for JobKind {
             "JOB_KIND_EXTRACT",
             "JOB_KIND_CATEGORIZE",
             "JOB_KIND_REPROCESS",
+            "JOB_KIND_RELATIONAL_EXTRACT",
+            "JOB_KIND_SYNTHESIZE",
         ];
 
         struct GeneratedVisitor;
@@ -4311,6 +4315,8 @@ impl<'de> serde::Deserialize<'de> for JobKind {
                     "JOB_KIND_EXTRACT" => Ok(JobKind::Extract),
                     "JOB_KIND_CATEGORIZE" => Ok(JobKind::Categorize),
                     "JOB_KIND_REPROCESS" => Ok(JobKind::Reprocess),
+                    "JOB_KIND_RELATIONAL_EXTRACT" => Ok(JobKind::RelationalExtract),
+                    "JOB_KIND_SYNTHESIZE" => Ok(JobKind::Synthesize),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

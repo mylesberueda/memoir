@@ -79,6 +79,7 @@ impl WireError {
 
 impl From<WireError> for Status {
     fn from(err: WireError) -> Self {
+        use memoir_core::graph::GraphError;
         use memoir_core::jobs::JobsError;
         use memoir_core::memory::MemoryKind;
         use memoir_core::store::StoreError;
@@ -134,6 +135,19 @@ impl From<WireError> for Status {
                 Code::FailedPrecondition,
                 "client.not_correctable",
                 format!("memory {pid} is not correctable via feedback: {reason}"),
+            ),
+            ClientError::Graph(GraphError::Connection(_)) => (
+                Code::Unavailable,
+                "graph.connection",
+                "graph backend unavailable".into(),
+            ),
+            ClientError::Graph(GraphError::Query(_) | GraphError::BadRequest(_)) => {
+                (Code::Internal, "graph", "internal error".into())
+            }
+            ClientError::GraphNotConfigured => (
+                Code::FailedPrecondition,
+                "client.graph_not_configured",
+                "graph enrichment requested but no knowledge graph is configured".into(),
             ),
         };
 

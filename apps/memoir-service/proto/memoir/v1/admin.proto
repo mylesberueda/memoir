@@ -91,6 +91,8 @@ enum JobKind {
   JOB_KIND_EXTRACT = 2; // Run LLM extraction against an episodic memory.
   JOB_KIND_CATEGORIZE = 3; // Run NLI categorization against a semantic memory.
   JOB_KIND_REPROCESS = 4; // Re-derive semantic rows from a corrected episodic source.
+  JOB_KIND_RELATIONAL_EXTRACT = 5; // Derive relational triples from an episodic memory (knowledge graph).
+  JOB_KIND_SYNTHESIZE = 6; // Reconcile triples against semantic facts + commit to the graph.
 }
 
 // FailedJob mirrors `memoir_core::jobs::FailedJob` exactly. Deliberately

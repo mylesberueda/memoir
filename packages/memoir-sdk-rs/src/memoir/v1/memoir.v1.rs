@@ -188,6 +188,10 @@ pub enum JobKind {
     Categorize = 3,
     /// Re-derive semantic rows from a corrected episodic source.
     Reprocess = 4,
+    /// Derive relational triples from an episodic memory (knowledge graph).
+    RelationalExtract = 5,
+    /// Reconcile triples against semantic facts + commit to the graph.
+    Synthesize = 6,
 }
 impl JobKind {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -201,6 +205,8 @@ impl JobKind {
             Self::Extract => "JOB_KIND_EXTRACT",
             Self::Categorize => "JOB_KIND_CATEGORIZE",
             Self::Reprocess => "JOB_KIND_REPROCESS",
+            Self::RelationalExtract => "JOB_KIND_RELATIONAL_EXTRACT",
+            Self::Synthesize => "JOB_KIND_SYNTHESIZE",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -211,6 +217,8 @@ impl JobKind {
             "JOB_KIND_EXTRACT" => Some(Self::Extract),
             "JOB_KIND_CATEGORIZE" => Some(Self::Categorize),
             "JOB_KIND_REPROCESS" => Some(Self::Reprocess),
+            "JOB_KIND_RELATIONAL_EXTRACT" => Some(Self::RelationalExtract),
+            "JOB_KIND_SYNTHESIZE" => Some(Self::Synthesize),
             _ => None,
         }
     }
