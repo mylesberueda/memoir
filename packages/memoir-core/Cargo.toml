@@ -21,6 +21,18 @@ path = "src/lib.rs"
 name = "memoir_core_migrate"
 path = "src/bin/memoir_core_migrate.rs"
 
+[[bench]]
+name = "extractor_accuracy"
+harness = false
+
+[[bench]]
+name = "extractor_latency"
+harness = false
+
+[[bench]]
+name = "resolver_accuracy"
+harness = false
+
 [dependencies]
 async-trait = "0.1"
 bon = { version = "3.9" }
@@ -58,6 +70,7 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 anyhow = { version = "1" }
+criterion = { version = "0.5", features = ["async_tokio"] }
 nanoid = { version = "0.5" }
 qdrant-client = { version = "1.18" }
 sea-orm = { version = "2.0.0-rc.20", features = [

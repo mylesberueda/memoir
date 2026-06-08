@@ -1,0 +1,104 @@
+{
+	"_comment": "Synthesized agent-memory extraction corpus (the 60% slice of ticket 0012-0011). Gold triples follow the LlmExtractor contract (graph/extraction.rs DEFAULT_TRIPLE_PROMPT): subject/object are concrete entities as bare strings; relation is a lowercase short verb phrase in the model's own words; (subject, relation, object) is the match key (confidence is not graded). Open-vocabulary preference/task/state relations that no standard RE dataset (CaRB/WebNLG) covers. Includes negative cases (empty gold) to test precision against over-extraction, per the prompt's 'emit an empty list if there are none' rule.",
+	"items": [
+		{
+			"id": "syn-pref-001",
+			"provenance": "synthesized",
+			"text": "I prefer dark mode in the editor.",
+			"gold": [{ "subject": "user", "relation": "prefers", "object": "dark mode" }]
+		},
+		{
+			"id": "syn-pref-002",
+			"provenance": "synthesized",
+			"text": "Please stop pinging me on Slack after 6pm, I really dislike it.",
+			"gold": [{ "subject": "user", "relation": "dislikes", "object": "Slack pings after 6pm" }]
+		},
+		{
+			"id": "syn-pref-003",
+			"provenance": "synthesized",
+			"text": "I like my code reviews to be terse and to the point.",
+			"gold": [{ "subject": "user", "relation": "prefers", "object": "terse code reviews" }]
+		},
+		{
+			"id": "syn-task-001",
+			"provenance": "synthesized",
+			"text": "I snoozed the standup reminder until tomorrow.",
+			"gold": [{ "subject": "user", "relation": "snoozed", "object": "standup reminder" }]
+		},
+		{
+			"id": "syn-task-002",
+			"provenance": "synthesized",
+			"text": "I delegated the triage rotation to agent-X this week.",
+			"gold": [
+				{ "subject": "user", "relation": "delegated", "object": "triage rotation" },
+				{ "subject": "triage rotation", "relation": "assigned to", "object": "agent-X" }
+			]
+		},
+		{
+			"id": "syn-task-003",
+			"provenance": "synthesized",
+			"text": "The deploy is blocked by the failing migration test.",
+			"gold": [{ "subject": "deploy", "relation": "blocked by", "object": "failing migration test" }]
+		},
+		{
+			"id": "syn-task-004",
+			"provenance": "synthesized",
+			"text": "I assigned the auth refactor to Priya.",
+			"gold": [{ "subject": "auth refactor", "relation": "assigned to", "object": "Priya" }]
+		},
+		{
+			"id": "syn-state-001",
+			"provenance": "synthesized",
+			"text": "I use Neovim as my main editor.",
+			"gold": [{ "subject": "user", "relation": "uses", "object": "Neovim" }]
+		},
+		{
+			"id": "syn-state-002",
+			"provenance": "synthesized",
+			"text": "I'm currently working on the knowledge-graph epic.",
+			"gold": [{ "subject": "user", "relation": "working on", "object": "knowledge-graph epic" }]
+		},
+		{
+			"id": "syn-state-003",
+			"provenance": "synthesized",
+			"text": "My laptop runs Arch Linux.",
+			"gold": [{ "subject": "laptop", "relation": "runs", "object": "Arch Linux" }]
+		},
+		{
+			"id": "syn-multi-001",
+			"provenance": "synthesized",
+			"text": "Sarah owns the billing service and reports to Tom.",
+			"gold": [
+				{ "subject": "Sarah", "relation": "owns", "object": "billing service" },
+				{ "subject": "Sarah", "relation": "reports to", "object": "Tom" }
+			]
+		},
+		{
+			"id": "syn-multi-002",
+			"provenance": "synthesized",
+			"text": "I prefer Rust for backends but use TypeScript for the frontend.",
+			"gold": [
+				{ "subject": "user", "relation": "prefers", "object": "Rust" },
+				{ "subject": "user", "relation": "uses", "object": "TypeScript" }
+			]
+		},
+		{
+			"id": "syn-neg-001",
+			"provenance": "synthesized",
+			"text": "Hmm, let me think about that for a second.",
+			"gold": []
+		},
+		{
+			"id": "syn-neg-002",
+			"provenance": "synthesized",
+			"text": "Okay, thanks!",
+			"gold": []
+		},
+		{
+			"id": "syn-neg-003",
+			"provenance": "synthesized",
+			"text": "What time is it right now?",
+			"gold": []
+		}
+	]
+}

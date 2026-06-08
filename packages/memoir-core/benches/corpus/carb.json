@@ -1,0 +1,50 @@
+{
+  "_comment": "CaRB slice (the 40% borrowed slice of ticket 0012-0011). Vendored from github.com/dair-iitd/CaRB, data/gold/test.tsv (MIT License, (c) 2021 Data Analytics and Intelligence Research (DAIR) Group, IIT Delhi). A hand-picked hermetic subset of well-formed 4-column rows (Sentence, Relation, Arg1, Arg2), grouped by sentence into our (subject=Arg1, relation=Relation, object=Arg2) shape; rows with a 5th context column or garbled argument spans were skipped. CaRB is OpenIE (free-form verb-phrase relations, long noun-phrase argument spans), so under this benchmark's strict normalized-exact match this slice scores as a documented FLOOR — encyclopedic-source text, REBEL's would-be home turf, deliberately strict. See ticket decision: one strict matcher across both slices (internal consistency over leaderboard-comparability).",
+  "_license": "MIT License, Copyright (c) 2021 Data Analytics and Intelligence Research (DAIR) Group, IIT Delhi. Source: https://github.com/dair-iitd/CaRB",
+  "items": [
+    {
+      "id": "carb-001",
+      "provenance": "carb",
+      "text": "A CEN forms an important but small part of a Local Strategic Partnership .",
+      "gold": [
+        { "subject": "A CEN", "relation": "forms", "object": "an important part of a Local Strategic Partnership" },
+        { "subject": "A CEN", "relation": "forms", "object": "a small part of a Local Strategic Partnership" }
+      ]
+    },
+    {
+      "id": "carb-002",
+      "provenance": "carb",
+      "text": "A cafeteria is also located on the sixth floor , a chapel on the 14th floor , and a study hall on the 15th floor .",
+      "gold": [
+        { "subject": "A cafeteria", "relation": "is also located", "object": "on the sixth floor" },
+        { "subject": "a chapel", "relation": "is located", "object": "on the 14th floor" },
+        { "subject": "a study hall", "relation": "is located", "object": "on the 15th floor" }
+      ]
+    },
+    {
+      "id": "carb-003",
+      "provenance": "carb",
+      "text": "A cooling center is a temporary air-conditioned public space set up by local authorities to deal with the health effects of a heat wave .",
+      "gold": [
+        { "subject": "A cooling center", "relation": "is set up by", "object": "local authorities" }
+      ]
+    },
+    {
+      "id": "carb-004",
+      "provenance": "carb",
+      "text": "A spectrum from a single FID has a low signal-to-noise ratio , but fortunately it improves readily with averaging of repeated acquisitions .",
+      "gold": [
+        { "subject": "A spectrum from a single FID", "relation": "has", "object": "a low signal-to-noise ratio" },
+        { "subject": "signal-to-noise ratio", "relation": "improves readily with averaging of", "object": "repeated acquisitions" }
+      ]
+    },
+    {
+      "id": "carb-005",
+      "provenance": "carb",
+      "text": "A manifold is `` prime '' if it can not be presented as a connected sum of more than one manifold , none of which is the sphere of the same dimension .",
+      "gold": [
+        { "subject": "A manifold", "relation": "is `` prime ''", "object": "if it can not be presented as a connected sum  of more than one manifold , none of which is the sphere of the same dimension" }
+      ]
+    }
+  ]
+}
