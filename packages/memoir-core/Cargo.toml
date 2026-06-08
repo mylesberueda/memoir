@@ -33,6 +33,14 @@ harness = false
 name = "resolver_accuracy"
 harness = false
 
+[[bench]]
+name = "edge_accuracy"
+harness = false
+
+[[bench]]
+name = "synthesizer_accuracy"
+harness = false
+
 [dependencies]
 async-trait = "0.1"
 bon = { version = "3.9" }

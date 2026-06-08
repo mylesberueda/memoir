@@ -1,0 +1,75 @@
+{
+  "_comment": "Synthesizer corpus (the Synthesizer seam of ticket 0012-0011). Each case gives a set of candidate triples (some corroborated by the semantic facts, some hallucinated) and the facts, then checks which triples a synthesizer keeps. EmbeddingSynthesizer (prod) vetoes any triple whose cosine similarity to every fact embedding is below MIN_CORROBORATION_SIMILARITY (0.6); PassthroughSynthesizer (floor) keeps all. Embeddings are computed at runtime with the real fastembed embedder — corroboration quality IS embedding quality. 'survive' lists the (subject,relation,object) triples that SHOULD remain: the precision goal is to veto the hallucinated ones without vetoing the real ones. A triple is identified by its full (subject,relation,object).",
+  "cases": [
+    {
+      "id": "syn-corrob-001",
+      "facts": [{ "content": "Alice works at Acme Corporation." }],
+      "triples": [
+        { "subject": "Alice", "relation": "works at", "object": "Acme" },
+        { "subject": "Alice", "relation": "works at", "object": "Globex" }
+      ],
+      "survive": [
+        { "subject": "Alice", "relation": "works at", "object": "Acme" }
+      ]
+    },
+    {
+      "id": "syn-corrob-002",
+      "facts": [{ "content": "Bob lives in Paris and loves the city." }],
+      "triples": [
+        { "subject": "Bob", "relation": "lives in", "object": "Paris" },
+        { "subject": "Bob", "relation": "lives in", "object": "Tokyo" }
+      ],
+      "survive": [
+        { "subject": "Bob", "relation": "lives in", "object": "Paris" }
+      ]
+    },
+    {
+      "id": "syn-corrob-003",
+      "facts": [
+        { "content": "The user prefers dark mode." },
+        { "content": "The user uses Neovim as their editor." }
+      ],
+      "triples": [
+        { "subject": "user", "relation": "prefers", "object": "dark mode" },
+        { "subject": "user", "relation": "uses", "object": "Neovim" },
+        { "subject": "user", "relation": "prefers", "object": "light mode" }
+      ],
+      "survive": [
+        { "subject": "user", "relation": "prefers", "object": "dark mode" },
+        { "subject": "user", "relation": "uses", "object": "Neovim" }
+      ]
+    },
+    {
+      "id": "syn-all-real-001",
+      "facts": [
+        { "content": "Sarah owns the billing service." },
+        { "content": "Sarah reports to Tom." }
+      ],
+      "triples": [
+        { "subject": "Sarah", "relation": "owns", "object": "billing service" },
+        { "subject": "Sarah", "relation": "reports to", "object": "Tom" }
+      ],
+      "survive": [
+        { "subject": "Sarah", "relation": "owns", "object": "billing service" },
+        { "subject": "Sarah", "relation": "reports to", "object": "Tom" }
+      ]
+    },
+    {
+      "id": "syn-all-hallucinated-001",
+      "facts": [{ "content": "The deploy is blocked by the failing migration test." }],
+      "triples": [
+        { "subject": "user", "relation": "lives in", "object": "Berlin" },
+        { "subject": "Acme", "relation": "acquired", "object": "Globex" }
+      ],
+      "survive": []
+    },
+    {
+      "id": "syn-empty-facts-001",
+      "facts": [],
+      "triples": [
+        { "subject": "Alice", "relation": "works at", "object": "Acme" }
+      ],
+      "survive": []
+    }
+  ]
+}

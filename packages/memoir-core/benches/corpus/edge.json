@@ -1,0 +1,76 @@
+{
+  "_comment": "Edge-resolution corpus (the EdgeResolver seam of ticket 0012-0011). Each case seeds the current edges already in the graph, applies a per-relation cardinality policy, then resolves one new edge and checks which existing edges the resolver closes (supersedes). Deterministic pure logic (no model/provider) — this scores the close-decision against gold, the floor NaiveAppendResolver (closes nothing) vs the production TemporalEdgeResolver. 'single_valued' lists the relations treated as single-valued (a newer fact supersedes the old); all others are multi-valued (coexist). 'expected_close' is the set of existing-edge keys that SHOULD be closed. All edges share one scope.",
+  "cases": [
+    {
+      "id": "edge-supersede-001",
+      "single_valued": ["works at"],
+      "existing": [
+        { "key": "e1", "subject": "alice", "relation": "works at", "object": "acme" }
+      ],
+      "new": { "subject": "alice", "relation": "works at", "object": "globex", "day": 10 },
+      "expected_close": ["e1"]
+    },
+    {
+      "id": "edge-supersede-002",
+      "single_valued": ["lives in"],
+      "existing": [
+        { "key": "e1", "subject": "bob", "relation": "lives in", "object": "paris" }
+      ],
+      "new": { "subject": "bob", "relation": "lives in", "object": "berlin", "day": 12 },
+      "expected_close": ["e1"]
+    },
+    {
+      "id": "edge-coexist-multi-001",
+      "single_valued": ["works at"],
+      "existing": [
+        { "key": "e1", "subject": "team", "relation": "deployed", "object": "weekend" },
+        { "key": "e2", "subject": "team", "relation": "deployed", "object": "monday" }
+      ],
+      "new": { "subject": "team", "relation": "deployed", "object": "today", "day": 7 },
+      "expected_close": []
+    },
+    {
+      "id": "edge-coexist-multi-002",
+      "single_valued": ["works at"],
+      "existing": [
+        { "key": "e1", "subject": "alice", "relation": "knows", "object": "bob" }
+      ],
+      "new": { "subject": "alice", "relation": "knows", "object": "carol", "day": 9 },
+      "expected_close": []
+    },
+    {
+      "id": "edge-same-object-noop-001",
+      "single_valued": ["works at"],
+      "existing": [
+        { "key": "e1", "subject": "alice", "relation": "works at", "object": "acme" }
+      ],
+      "new": { "subject": "alice", "relation": "works at", "object": "acme", "day": 11 },
+      "expected_close": []
+    },
+    {
+      "id": "edge-different-subject-001",
+      "single_valued": ["works at"],
+      "existing": [
+        { "key": "e1", "subject": "alice", "relation": "works at", "object": "acme" }
+      ],
+      "new": { "subject": "bob", "relation": "works at", "object": "globex", "day": 10 },
+      "expected_close": []
+    },
+    {
+      "id": "edge-empty-graph-001",
+      "single_valued": ["works at"],
+      "existing": [],
+      "new": { "subject": "alice", "relation": "works at", "object": "acme", "day": 5 },
+      "expected_close": []
+    },
+    {
+      "id": "edge-unknown-relation-multi-001",
+      "single_valued": ["works at"],
+      "existing": [
+        { "key": "e1", "subject": "user", "relation": "prefers", "object": "dark mode" }
+      ],
+      "new": { "subject": "user", "relation": "prefers", "object": "light mode", "day": 8 },
+      "expected_close": []
+    }
+  ]
+}
