@@ -65,6 +65,8 @@ async fn should_search_and_return_indexed_memories() {
             metadata_filter: None,
             min_similarity: None,
             kinds: None,
+            with_graph_enrichment: false,
+            graph_depth: 0,
         }))
         .await
         .expect("search rpc")
@@ -321,6 +323,8 @@ async fn should_exclude_memories_via_must_not_metadata_filter() {
             metadata_filter: Some(must_not_conversation_1),
             min_similarity: None,
             kinds: None,
+            with_graph_enrichment: false,
+            graph_depth: 0,
         }))
         .await
         .expect("search rpc")
@@ -373,6 +377,8 @@ async fn should_apply_min_similarity_floor() {
             metadata_filter: None,
             min_similarity: Some(0.999_999),
             kinds: None,
+            with_graph_enrichment: false,
+            graph_depth: 0,
         }))
         .await
         .expect("search rpc")
@@ -393,6 +399,8 @@ async fn should_apply_min_similarity_floor() {
             metadata_filter: None,
             min_similarity: Some(-1.0),
             kinds: None,
+            with_graph_enrichment: false,
+            graph_depth: 0,
         }))
         .await
         .expect("search rpc")

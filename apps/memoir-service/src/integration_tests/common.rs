@@ -282,6 +282,8 @@ impl TestHarness {
                 metadata_filter: None,
                 min_similarity: None,
                 kinds: None,
+                with_graph_enrichment: false,
+                graph_depth: 0,
             });
             let resp = self.memory.search(req).await.context("search probe")?.into_inner();
             if resp
