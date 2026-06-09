@@ -4,9 +4,5 @@ pub mod prelude;
 
 pub mod api_keys;
 pub mod bootstrap_tokens;
-pub mod memoir_core_migrations;
 pub mod memoir_service_migrations;
-pub mod memories;
-pub mod memory_jobs;
-pub mod supersession_events;
 pub mod users;
