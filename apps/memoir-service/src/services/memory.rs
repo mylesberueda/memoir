@@ -40,8 +40,8 @@ use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
     EditArgs, FeedbackArgs, Metadata, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs,
-    WireSupersessionEvent, forget_target_from_proto, graph_enrichment_to_proto, metadata_filter_from_proto,
-    query_response, recall_as_of_response, scope_from_proto, timeline_response,
+    WireGraphEnrichment, WireMemoryFilter, WireSupersessionEvent, forget_target_from_proto, query_response,
+    recall_as_of_response, scope_from_proto, timeline_response,
 };
 use crate::services::wire::{WireError, WireMemory};
 
@@ -96,7 +96,10 @@ impl MemoryService for Memory {
         } = request.into_inner();
 
         let scope = scope_from_proto(scope)?;
-        let metadata_filter = metadata_filter_from_proto(metadata_filter)?;
+        let metadata_filter = metadata_filter
+            .map(WireMemoryFilter::try_from)
+            .transpose()?
+            .map(WireMemoryFilter::into_inner);
 
         tracing::event!(
             name: "memoir.service.memory.search.invoked",
@@ -139,7 +142,7 @@ impl MemoryService for Memory {
         }
         let memories = builder.await.map_err(WireError::into_status)?;
 
-        let enrichment = graph_enrichment_to_proto(memories.graph());
+        let enrichment = WireGraphEnrichment::from(memories.graph()).into_inner();
         let hits = memories
             .list()
             .iter()

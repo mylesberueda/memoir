@@ -22,6 +22,7 @@ mod enrich;
 mod error;
 mod extraction;
 mod forget;
+mod inspect;
 mod memory;
 mod resolve;
 mod synthesis;
@@ -37,6 +38,9 @@ pub use edge::{
 pub use error::GraphError;
 pub use extraction::{
     DEFAULT_TRIPLE_PROMPT, LlmExtractor, TRIPLE_REPLY_MAX_CHARS, Triple, TripleExtractor, TripleSet,
+};
+pub use inspect::{
+    DEFAULT_INSPECTION_LIMIT, GraphEdge, GraphNode, GraphSnapshot, MAX_INSPECTION_LIMIT,
 };
 pub use memory::InMemoryGraphStore;
 pub use resolve::{
@@ -202,5 +206,31 @@ pub trait GraphStore: Send + Sync + 'static {
         depth: usize,
     ) -> impl Future<Output = Result<GraphContext, GraphError>> + Send {
         enrich::neighbors(self, seed_pids, scope, depth)
+    }
+
+    /// Returns a whole-scope snapshot of the graph for admin inspection.
+    ///
+    /// Reads every entity and relationship matching the *partial* scope — any of
+    /// `agent_id` / `org_id` / `user_id` may be `None`, and an absent dimension
+    /// imposes no filter, so a fully-`None` scope dumps the whole graph. This is
+    /// the one cross-scope read in memoir (an admin views across agents/users/
+    /// orgs); the caller's auth layer gates it. Nodes and edges are each capped
+    /// at `limit` (clamped to [`MAX_INSPECTION_LIMIT`]); the snapshot's
+    /// `truncated` flag marks when a cap was hit. Both current and superseded
+    /// edges are returned, each flagged by `valid_to`, for a temporal view —
+    /// unlike [`neighbors`](Self::neighbors), which reads current edges only.
+    /// Scope values bind as parameters, never interpolated.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphError`] if the backend rejects either read.
+    fn inspect_scope(
+        &self,
+        agent_id: Option<&str>,
+        org_id: Option<&str>,
+        user_id: Option<&str>,
+        limit: usize,
+    ) -> impl Future<Output = Result<GraphSnapshot, GraphError>> + Send {
+        inspect::inspect_scope(self, agent_id, org_id, user_id, limit)
     }
 }

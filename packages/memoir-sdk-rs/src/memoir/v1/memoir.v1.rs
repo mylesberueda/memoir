@@ -171,6 +171,77 @@ pub struct ExtractionStatsResponse {
     #[prost(message, repeated, tag="1")]
     pub stats: ::prost::alloc::vec::Vec<ExtractionStat>,
 }
+// ─── InspectGraph RPC ───────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct InspectGraphRequest {
+    /// Optional scope-subset filters. Each set field narrows the view; an unset
+    /// field widens across that dimension. All three unset inspects every tenant
+    /// — the cross-scope admin view. Maps to memoir-core's partial-scope
+    /// `Client::inspect_graph` setters.
+    #[prost(string, optional, tag="1")]
+    pub agent_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag="2")]
+    pub org_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag="3")]
+    pub user_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Maximum nodes and maximum edges to return (applied independently). `0`
+    /// means "use library default"; the library clamps to its hard maximum. When
+    /// a cap is hit, the response's `truncated` flag is set.
+    #[prost(uint32, tag="4")]
+    pub limit: u32,
+}
+/// One entity node in an admin graph snapshot. Mirrors
+/// `memoir_core::graph::GraphNode`. Untyped in v1 (the node carries only its
+/// canonical name for identity) plus the provenance the admin view renders.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GraphNode {
+    /// Canonical entity name (identity within a scope).
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+    /// Memories that contributed this entity.
+    #[prost(string, repeated, tag="2")]
+    pub memory_pids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// RFC 3339; absent if the node lacks it.
+    #[prost(string, optional, tag="3")]
+    pub first_seen_at: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// One relationship edge in an admin graph snapshot. Mirrors
+/// `memoir_core::graph::GraphEdge`. Carries the full temporal state so the UI can
+/// render history: `valid_to` is absent for a current edge, set for a superseded
+/// one.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GraphEdge {
+    #[prost(string, tag="1")]
+    pub subject: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub relation: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub object: ::prost::alloc::string::String,
+    /// \[0.0, 1.0\].
+    #[prost(float, tag="4")]
+    pub confidence: f32,
+    /// RFC 3339; when the fact became true.
+    #[prost(string, optional, tag="5")]
+    pub valid_from: ::core::option::Option<::prost::alloc::string::String>,
+    /// RFC 3339; when superseded. Absent = current.
+    #[prost(string, optional, tag="6")]
+    pub valid_to: ::core::option::Option<::prost::alloc::string::String>,
+    /// Memories that contributed this edge.
+    #[prost(string, repeated, tag="7")]
+    pub memory_pids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InspectGraphResponse {
+    #[prost(message, repeated, tag="1")]
+    pub nodes: ::prost::alloc::vec::Vec<GraphNode>,
+    #[prost(message, repeated, tag="2")]
+    pub edges: ::prost::alloc::vec::Vec<GraphEdge>,
+    /// Whether the node or edge list was capped at the limit — the view is
+    /// partial, not the scope small.
+    #[prost(bool, tag="3")]
+    pub truncated: bool,
+}
 // ─── Core types ─────────────────────────────────────────────────────────────
 
 /// JobKind mirrors `memoir_core::jobs::JobKind`. The set is closed by the

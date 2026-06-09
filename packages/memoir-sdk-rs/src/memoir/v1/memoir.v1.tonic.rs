@@ -282,6 +282,30 @@ pub mod admin_service_client {
                 .insert(GrpcMethod::new("memoir.v1.AdminService", "ExtractionStats"));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn inspect_graph(
+            &mut self,
+            request: impl tonic::IntoRequest<super::InspectGraphRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::InspectGraphResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/memoir.v1.AdminService/InspectGraph",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("memoir.v1.AdminService", "InspectGraph"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -351,6 +375,13 @@ pub mod admin_service_server {
             request: tonic::Request<super::ExtractionStatsRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ExtractionStatsResponse>,
+            tonic::Status,
+        >;
+        async fn inspect_graph(
+            &self,
+            request: tonic::Request<super::InspectGraphRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::InspectGraphResponse>,
             tonic::Status,
         >;
     }
@@ -778,6 +809,51 @@ pub mod admin_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ExtractionStatsSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/memoir.v1.AdminService/InspectGraph" => {
+                    #[allow(non_camel_case_types)]
+                    struct InspectGraphSvc<T: AdminService>(pub Arc<T>);
+                    impl<
+                        T: AdminService,
+                    > tonic::server::UnaryService<super::InspectGraphRequest>
+                    for InspectGraphSvc<T> {
+                        type Response = super::InspectGraphResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::InspectGraphRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as AdminService>::inspect_graph(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = InspectGraphSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -78,6 +78,20 @@ service AdminService {
   // AND-combined; all-unset aggregates the whole store. Wraps memoir-core's
   // `Client::extraction_stats`.
   rpc ExtractionStats(ExtractionStatsRequest) returns (ExtractionStatsResponse);
+
+  // ── Knowledge graph ──────────────────────────────────────────────────────
+
+  // Read a whole-scope snapshot of the knowledge graph — the admin "Knowledge
+  // graph view": every entity and relationship (current AND superseded) in a
+  // scope, for memoir-ui to render. Read-only graph traversal, no LLM call.
+  //
+  // Scope fields narrow the view and are AND-combined; an unset field widens
+  // ACROSS that dimension — all-unset inspects every tenant. This is the one
+  // cross-scope read in memoir, and it is admin-only by design: the write,
+  // forget, and search-enrichment paths keep full-scope-tuple isolation. Wraps
+  // memoir-core's `Client::inspect_graph`. Returns an empty snapshot when the
+  // service has no graph configured.
+  rpc InspectGraph(InspectGraphRequest) returns (InspectGraphResponse);
 }
 
 // ─── Core types ─────────────────────────────────────────────────────────────
@@ -225,4 +239,52 @@ message ExtractionStatsResponse {
   // Per-(provider, model) rows, ordered by provider then model. Empty when
   // the slice has no semantic rows.
   repeated ExtractionStat stats = 1;
+}
+
+// ─── InspectGraph RPC ───────────────────────────────────────────────────────
+
+message InspectGraphRequest {
+  // Optional scope-subset filters. Each set field narrows the view; an unset
+  // field widens across that dimension. All three unset inspects every tenant
+  // — the cross-scope admin view. Maps to memoir-core's partial-scope
+  // `Client::inspect_graph` setters.
+  optional string agent_id = 1;
+  optional string org_id = 2;
+  optional string user_id = 3;
+
+  // Maximum nodes and maximum edges to return (applied independently). `0`
+  // means "use library default"; the library clamps to its hard maximum. When
+  // a cap is hit, the response's `truncated` flag is set.
+  uint32 limit = 4;
+}
+
+// One entity node in an admin graph snapshot. Mirrors
+// `memoir_core::graph::GraphNode`. Untyped in v1 (the node carries only its
+// canonical name for identity) plus the provenance the admin view renders.
+message GraphNode {
+  string name = 1; // Canonical entity name (identity within a scope).
+  repeated string memory_pids = 2; // Memories that contributed this entity.
+  optional string first_seen_at = 3; // RFC 3339; absent if the node lacks it.
+}
+
+// One relationship edge in an admin graph snapshot. Mirrors
+// `memoir_core::graph::GraphEdge`. Carries the full temporal state so the UI can
+// render history: `valid_to` is absent for a current edge, set for a superseded
+// one.
+message GraphEdge {
+  string subject = 1;
+  string relation = 2;
+  string object = 3;
+  float confidence = 4; // [0.0, 1.0].
+  optional string valid_from = 5; // RFC 3339; when the fact became true.
+  optional string valid_to = 6; // RFC 3339; when superseded. Absent = current.
+  repeated string memory_pids = 7; // Memories that contributed this edge.
+}
+
+message InspectGraphResponse {
+  repeated GraphNode nodes = 1;
+  repeated GraphEdge edges = 2;
+  // Whether the node or edge list was capped at the limit — the view is
+  // partial, not the scope small.
+  bool truncated = 3;
 }

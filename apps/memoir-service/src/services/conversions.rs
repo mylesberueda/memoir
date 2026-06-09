@@ -27,6 +27,7 @@ use std::ops::Deref;
 
 use memoir_core::client::{DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, RankingStrategy, ReconcileSummary};
 use memoir_core::graph::GraphContext as LibGraphContext;
+use memoir_core::graph::GraphSnapshot as LibGraphSnapshot;
 use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind};
 use memoir_core::memory::{
     ExtractionStat as LibExtractionStat, ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory,
@@ -41,11 +42,12 @@ use memoir_sdk::memoir::v1::{
     BlendWeights as ProtoBlendWeights, Blended as ProtoBlended, Decay as ProtoDecay, DecayBucket as ProtoDecayBucket,
     EditRequest, ExponentialDecay, ExtractionStat as ProtoExtractionStat, ExtractionStatsRequest,
     FailedJob as ProtoFailedJob, FeedbackRequest, FilterCondition as ProtoFilterCondition, ForgetRequest,
-    Hybrid as ProtoHybrid, JobKind as ProtoJobKind, KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue,
+    GraphEdge as ProtoGraphEdge, GraphEnrichment as ProtoGraphEnrichment, GraphEntity as ProtoGraphEntity,
+    GraphNode as ProtoGraphNode, GraphRelationship as ProtoGraphRelationship, Hybrid as ProtoHybrid,
+    InspectGraphResponse, JobKind as ProtoJobKind, KindSelector as ProtoKindSelector, MatchValue as ProtoMatchValue,
     MatchValues as ProtoMatchValues, MemoryFilter as ProtoMemoryFilter, NumericRange as ProtoNumericRange, QueryHit,
-    GraphEnrichment as ProtoGraphEnrichment, GraphEntity as ProtoGraphEntity,
-    GraphRelationship as ProtoGraphRelationship, QueryRequest, QueryResponse, Ranking as ProtoRanking,
-    RecallAsOfRequest, RecallAsOfResponse, ReciprocalDecay, ReconcileResponse, Scope as ProtoScope, StepDecay,
+    QueryRequest, QueryResponse, Ranking as ProtoRanking, RecallAsOfRequest, RecallAsOfResponse, ReciprocalDecay,
+    ReconcileResponse, RetryFailedJobsRequest, Scope as ProtoScope, StepDecay,
     SupersessionEvent as ProtoSupersessionEvent, SupersessionHistoryRequest, TimelineRequest, TimelineResponse, decay,
     filter_condition, forget_request, match_value, match_values, ranking,
 };
@@ -509,7 +511,11 @@ impl TryFrom<QueryRequest> for QueryArgs {
             scope: scope_from_proto(request.scope)?,
             limit,
             kinds: kind_selector_from_proto(request.kinds),
-            metadata_filter: metadata_filter_from_proto(request.metadata_filter)?,
+            metadata_filter: request
+                .metadata_filter
+                .map(WireMemoryFilter::try_from)
+                .transpose()?
+                .map(WireMemoryFilter::into_inner),
             min_similarity: request.min_similarity,
             created_after: request.created_after.map(timestamp_to_chrono).transpose()?,
             created_before: request.created_before.map(timestamp_to_chrono).transpose()?,
@@ -529,7 +535,7 @@ impl TryFrom<QueryRequest> for QueryArgs {
 pub(crate) fn query_response(context: MemoryContext) -> QueryResponse {
     use crate::services::wire::WireMemory;
     let ranking_used = Some(ranking_to_proto(context.strategy_used()));
-    let enrichment = graph_enrichment_to_proto(context.graph());
+    let enrichment = WireGraphEnrichment::from(context.graph()).into_inner();
     let hits = context
         .memories()
         .iter()
@@ -549,33 +555,117 @@ pub(crate) fn query_response(context: MemoryContext) -> QueryResponse {
     }
 }
 
-/// Converts a graph [`LibGraphContext`] to the wire `GraphEnrichment`.
+/// Wire form of a graph [`LibGraphContext`]. Build via `WireGraphEnrichment::from(context)`.
 ///
-/// Returns `None` for an empty context (no graph configured, enrichment not
-/// requested, or no neighbors found) so the wire field stays absent rather than
-/// carrying an empty message. The entity/relationship shapes map one-to-one.
-pub(crate) fn graph_enrichment_to_proto(context: &LibGraphContext) -> Option<ProtoGraphEnrichment> {
-    if context.entities.is_empty() && context.relationships.is_empty() {
-        return None;
+/// The inner `Option` is `None` for an empty context (no graph configured,
+/// enrichment not requested, or no neighbors found) so the wire field stays
+/// absent rather than carrying an empty message — the one converter that
+/// collapses empty to absent. The entity/relationship shapes map one-to-one. The
+/// newtype satisfies coherence — both `LibGraphContext` and
+/// `Option<ProtoGraphEnrichment>` are foreign to this crate, so the `From` impl
+/// needs a local anchor (same pattern as [`WireInspectGraphResponse`]).
+pub(crate) struct WireGraphEnrichment(pub Option<ProtoGraphEnrichment>);
+
+impl From<&LibGraphContext> for WireGraphEnrichment {
+    fn from(context: &LibGraphContext) -> Self {
+        if context.is_empty() {
+            return Self(None);
+        }
+        let entities = context
+            .entities
+            .iter()
+            .map(|entity| ProtoGraphEntity {
+                name: entity.name.clone(),
+            })
+            .collect();
+        let relationships = context
+            .relationships
+            .iter()
+            .map(|relationship| ProtoGraphRelationship {
+                subject: relationship.subject.clone(),
+                relation: relationship.relation.clone(),
+                object: relationship.object.clone(),
+                confidence: relationship.confidence,
+            })
+            .collect();
+        Self(Some(ProtoGraphEnrichment {
+            entities,
+            relationships,
+        }))
     }
-    let entities = context
-        .entities
-        .iter()
-        .map(|entity| ProtoGraphEntity {
-            name: entity.name.clone(),
+}
+
+impl Deref for WireGraphEnrichment {
+    type Target = Option<ProtoGraphEnrichment>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl WireGraphEnrichment {
+    /// Consumes the wrapper, yielding the inner wire enrichment.
+    pub(crate) fn into_inner(self) -> Option<ProtoGraphEnrichment> {
+        self.0
+    }
+}
+
+/// Wire form of a [`LibGraphSnapshot`]. Build via `WireInspectGraphResponse::from(snapshot)`.
+///
+/// The whole snapshot maps one-to-one — an empty graph is a valid response, so
+/// there is no empty-to-`None` collapse (unlike [`WireGraphEnrichment`], whose
+/// inner `Option` goes absent for an empty context). Library `Option<String>`
+/// timestamps map to proto `optional string` directly. The newtype satisfies
+/// coherence — both `LibGraphSnapshot` and `InspectGraphResponse` are foreign to
+/// this crate, so the `From` impl needs a local anchor (same pattern as
+/// [`WireReconcileResponse`]).
+pub(crate) struct WireInspectGraphResponse(pub InspectGraphResponse);
+
+impl From<LibGraphSnapshot> for WireInspectGraphResponse {
+    fn from(snapshot: LibGraphSnapshot) -> Self {
+        let nodes = snapshot
+            .nodes
+            .into_iter()
+            .map(|node| ProtoGraphNode {
+                name: node.name,
+                memory_pids: node.memory_pids,
+                first_seen_at: node.first_seen_at,
+            })
+            .collect();
+        let edges = snapshot
+            .edges
+            .into_iter()
+            .map(|edge| ProtoGraphEdge {
+                subject: edge.subject,
+                relation: edge.relation,
+                object: edge.object,
+                confidence: edge.confidence,
+                valid_from: edge.valid_from,
+                valid_to: edge.valid_to,
+                memory_pids: edge.memory_pids,
+            })
+            .collect();
+        Self(InspectGraphResponse {
+            nodes,
+            edges,
+            truncated: snapshot.truncated,
         })
-        .collect();
-    let relationships = context
-        .relationships
-        .iter()
-        .map(|relationship| ProtoGraphRelationship {
-            subject: relationship.subject.clone(),
-            relation: relationship.relation.clone(),
-            object: relationship.object.clone(),
-            confidence: relationship.confidence,
-        })
-        .collect();
-    Some(ProtoGraphEnrichment { entities, relationships })
+    }
+}
+
+impl Deref for WireInspectGraphResponse {
+    type Target = InspectGraphResponse;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl WireInspectGraphResponse {
+    /// Consumes the wrapper, yielding the inner wire response.
+    pub(crate) fn into_inner(self) -> InspectGraphResponse {
+        self.0
+    }
 }
 
 /// A validated `Edit` request: the target pid plus the optional field edits.
@@ -598,11 +688,6 @@ impl TryFrom<EditRequest> for EditArgs {
         if request.pid.is_empty() {
             return Err(Status::invalid_argument("pid: required"));
         }
-        // `metadata` is proto-`optional`: `None` leaves the row's metadata
-        // untouched, `Some` replaces it. Route the present case through
-        // `Metadata` for the same integer-narrowing the remember path gets,
-        // while preserving the outer `Option` so absence still means "no
-        // change".
         let metadata = request
             .metadata
             .map(|struct_value| Metadata::try_from(Some(struct_value)).map(Metadata::into_inner))
@@ -691,34 +776,50 @@ impl From<LibJobKind> for WireJobKind {
     }
 }
 
-/// Converts an optional wire-side `JobKind` filter to the library shape.
+/// Validated args for `Client::retry_failed_jobs`. Build via `WireRetryArgs::try_from(request)`.
 ///
+/// `of_kind` resolves the wire discriminant to an optional library filter:
 /// `None` and `Some(JOB_KIND_UNSPECIFIED)` both mean "no filter, retry all
-/// kinds" — matching the library's `RetryBuilder` default. Unknown
-/// discriminants (e.g., a forward-compatible proto carrying a value this
-/// build doesn't recognize) are rejected with `InvalidArgument`.
-///
-/// Left as a free function because there is no proto wrapper type to
-/// newtype — the wire shape is a naked `optional int32`, not a message.
+/// kinds" (matching the library's `RetryBuilder` default); an unknown
+/// discriminant (a forward-compatible proto carrying a value this build doesn't
+/// recognize) is rejected. `dry_run` passes through. Anchors on the request
+/// message like [`QueryArgs`]/[`TimelineArgs`].
 ///
 /// # Errors
 ///
-/// Returns [`Status::invalid_argument`] when the discriminant is set but
-/// not a known [`ProtoJobKind`].
-pub(crate) fn job_kind_filter_from_proto(value: Option<i32>) -> Result<Option<LibJobKind>, Status> {
-    let Some(discriminant) = value else {
-        return Ok(None);
-    };
-    let proto_kind = ProtoJobKind::try_from(discriminant)
-        .map_err(|_| Status::invalid_argument(format!("of_kind: unknown JobKind discriminant {discriminant}")))?;
-    match proto_kind {
-        ProtoJobKind::Unspecified => Ok(None),
-        ProtoJobKind::Embed => Ok(Some(LibJobKind::Embed)),
-        ProtoJobKind::Extract => Ok(Some(LibJobKind::Extract)),
-        ProtoJobKind::Categorize => Ok(Some(LibJobKind::Categorize)),
-        ProtoJobKind::Reprocess => Ok(Some(LibJobKind::Reprocess)),
-        ProtoJobKind::RelationalExtract => Ok(Some(LibJobKind::RelationalExtract)),
-        ProtoJobKind::Synthesize => Ok(Some(LibJobKind::Synthesize)),
+/// Returns [`Status::invalid_argument`] when `of_kind` is set but not a known
+/// [`ProtoJobKind`].
+#[derive(Debug)]
+pub(crate) struct WireRetryArgs {
+    pub of_kind: Option<LibJobKind>,
+    pub dry_run: bool,
+}
+
+impl TryFrom<RetryFailedJobsRequest> for WireRetryArgs {
+    type Error = Status;
+
+    fn try_from(request: RetryFailedJobsRequest) -> Result<Self, Status> {
+        let of_kind = match request.of_kind {
+            None => None,
+            Some(discriminant) => {
+                let proto_kind = ProtoJobKind::try_from(discriminant).map_err(|_| {
+                    Status::invalid_argument(format!("of_kind: unknown JobKind discriminant {discriminant}"))
+                })?;
+                match proto_kind {
+                    ProtoJobKind::Unspecified => None,
+                    ProtoJobKind::Embed => Some(LibJobKind::Embed),
+                    ProtoJobKind::Extract => Some(LibJobKind::Extract),
+                    ProtoJobKind::Categorize => Some(LibJobKind::Categorize),
+                    ProtoJobKind::Reprocess => Some(LibJobKind::Reprocess),
+                    ProtoJobKind::RelationalExtract => Some(LibJobKind::RelationalExtract),
+                    ProtoJobKind::Synthesize => Some(LibJobKind::Synthesize),
+                }
+            }
+        };
+        Ok(Self {
+            of_kind,
+            dry_run: request.dry_run,
+        })
     }
 }
 
@@ -845,84 +946,206 @@ fn usize_to_i64_saturating(value: usize, field: &'static str) -> i64 {
 
 // ─── SearchBuilder filter conversions ──────────────────────────────────────
 
-/// Converts a wire `MemoryFilter` into the library shape.
+/// Wire form of a [`LibMemoryFilter`]. Build via `WireMemoryFilter::try_from(filter)`.
 ///
-/// `None` (proto3 unset) maps to `None` on the library side — the search
-/// path treats that as "no caller-supplied filter." A `Some` with all
-/// sections empty round-trips as an inert filter; memoir-core handles both
-/// the same way.
+/// A caller's unset filter (`None`) is the caller's concern — `.map().transpose()`
+/// the `Option` at the call site; this converts a present `ProtoMemoryFilter`. A
+/// filter with all sections empty round-trips as an inert filter; memoir-core
+/// handles that the same as no filter. The newtype anchors the impl on the
+/// foreign `ProtoMemoryFilter` message (same pattern as [`WireFailedJob`]).
 ///
 /// # Errors
 ///
 /// Returns [`Status::invalid_argument`] when any nested `FilterCondition`
 /// has an unset condition oneof, an empty `field`, a `MatchValue` whose
 /// `value` oneof is unset, or a `MatchValues` whose `values` oneof is unset.
-pub(crate) fn metadata_filter_from_proto(filter: Option<ProtoMemoryFilter>) -> Result<Option<LibMemoryFilter>, Status> {
-    let Some(filter) = filter else {
-        return Ok(None);
-    };
-    let must = translate_condition_list(filter.must)?;
-    let must_not = translate_condition_list(filter.must_not)?;
-    let should = translate_condition_list(filter.should)?;
-    Ok(Some(LibMemoryFilter { must, must_not, should }))
-}
+#[derive(Debug)]
+pub(crate) struct WireMemoryFilter(pub LibMemoryFilter);
 
-fn translate_condition_list(conditions: Vec<ProtoFilterCondition>) -> Result<Vec<LibFilterCondition>, Status> {
-    conditions.into_iter().map(filter_condition_from_proto).collect()
-}
+impl TryFrom<ProtoMemoryFilter> for WireMemoryFilter {
+    type Error = Status;
 
-fn filter_condition_from_proto(cond: ProtoFilterCondition) -> Result<LibFilterCondition, Status> {
-    if cond.field.is_empty() {
-        return Err(Status::invalid_argument(
-            "metadata_filter: condition.field must be non-empty",
-        ));
+    fn try_from(filter: ProtoMemoryFilter) -> Result<Self, Status> {
+        let translate = |conds: Vec<ProtoFilterCondition>| {
+            conds
+                .into_iter()
+                .map(|c| WireFilterCondition::try_from(c).map(WireFilterCondition::into_inner))
+                .collect::<Result<Vec<_>, _>>()
+        };
+        Ok(Self(LibMemoryFilter {
+            must: translate(filter.must)?,
+            must_not: translate(filter.must_not)?,
+            should: translate(filter.should)?,
+        }))
     }
-    let inner = cond
-        .condition
-        .ok_or_else(|| Status::invalid_argument("metadata_filter: condition.condition oneof must be set"))?;
-    Ok(match inner {
-        filter_condition::Condition::Equals(value) => LibFilterCondition::Equals {
-            field: cond.field,
-            value: match_value_from_proto(value)?,
-        },
-        filter_condition::Condition::InValues(values) => LibFilterCondition::In {
-            field: cond.field,
-            values: match_values_from_proto(values)?,
-        },
-        filter_condition::Condition::Range(range) => LibFilterCondition::Range {
-            field: cond.field,
-            range: numeric_range_from_proto(range),
-        },
-    })
 }
 
-fn match_value_from_proto(value: ProtoMatchValue) -> Result<LibMatchValue, Status> {
-    let inner = value
-        .value
-        .ok_or_else(|| Status::invalid_argument("metadata_filter: MatchValue.value oneof must be set"))?;
-    Ok(match inner {
-        match_value::Value::Keyword(s) => LibMatchValue::Keyword(s),
-        match_value::Value::Integer(i) => LibMatchValue::Integer(i),
-        match_value::Value::Boolean(b) => LibMatchValue::Bool(b),
-    })
+impl Deref for WireMemoryFilter {
+    type Target = LibMemoryFilter;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-fn match_values_from_proto(values: ProtoMatchValues) -> Result<LibMatchValues, Status> {
-    let inner = values
-        .values
-        .ok_or_else(|| Status::invalid_argument("metadata_filter: MatchValues.values oneof must be set"))?;
-    Ok(match inner {
-        match_values::Values::Keywords(list) => LibMatchValues::Keywords(list.values),
-        match_values::Values::Integers(list) => LibMatchValues::Integers(list.values),
-    })
+impl WireMemoryFilter {
+    /// Consumes the wrapper, yielding the inner library filter.
+    pub(crate) fn into_inner(self) -> LibMemoryFilter {
+        self.0
+    }
 }
 
-fn numeric_range_from_proto(range: ProtoNumericRange) -> LibNumericRange {
-    LibNumericRange {
-        lt: range.lt,
-        lte: range.lte,
-        gt: range.gt,
-        gte: range.gte,
+/// Wire form of a [`LibFilterCondition`]. Build via `WireFilterCondition::try_from(cond)`.
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when `field` is empty or the
+/// `condition` oneof is unset, or when a nested value fails to convert.
+struct WireFilterCondition(LibFilterCondition);
+
+impl TryFrom<ProtoFilterCondition> for WireFilterCondition {
+    type Error = Status;
+
+    fn try_from(cond: ProtoFilterCondition) -> Result<Self, Status> {
+        if cond.field.is_empty() {
+            return Err(Status::invalid_argument(
+                "metadata_filter: condition.field must be non-empty",
+            ));
+        }
+        let inner = cond
+            .condition
+            .ok_or_else(|| Status::invalid_argument("metadata_filter: condition.condition oneof must be set"))?;
+        Ok(Self(match inner {
+            filter_condition::Condition::Equals(value) => LibFilterCondition::Equals {
+                field: cond.field,
+                value: WireMatchValue::try_from(value)?.into_inner(),
+            },
+            filter_condition::Condition::InValues(values) => LibFilterCondition::In {
+                field: cond.field,
+                values: WireMatchValues::try_from(values)?.into_inner(),
+            },
+            filter_condition::Condition::Range(range) => LibFilterCondition::Range {
+                field: cond.field,
+                range: WireNumericRange::from(range).into_inner(),
+            },
+        }))
+    }
+}
+
+impl Deref for WireFilterCondition {
+    type Target = LibFilterCondition;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl WireFilterCondition {
+    /// Consumes the wrapper, yielding the inner library condition.
+    fn into_inner(self) -> LibFilterCondition {
+        self.0
+    }
+}
+
+/// Wire form of a [`LibMatchValue`]. Build via `WireMatchValue::try_from(value)`.
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when the `value` oneof is unset.
+struct WireMatchValue(LibMatchValue);
+
+impl TryFrom<ProtoMatchValue> for WireMatchValue {
+    type Error = Status;
+
+    fn try_from(value: ProtoMatchValue) -> Result<Self, Status> {
+        let inner = value
+            .value
+            .ok_or_else(|| Status::invalid_argument("metadata_filter: MatchValue.value oneof must be set"))?;
+        Ok(Self(match inner {
+            match_value::Value::Keyword(s) => LibMatchValue::Keyword(s),
+            match_value::Value::Integer(i) => LibMatchValue::Integer(i),
+            match_value::Value::Boolean(b) => LibMatchValue::Bool(b),
+        }))
+    }
+}
+
+impl Deref for WireMatchValue {
+    type Target = LibMatchValue;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl WireMatchValue {
+    /// Consumes the wrapper, yielding the inner library match value.
+    fn into_inner(self) -> LibMatchValue {
+        self.0
+    }
+}
+
+/// Wire form of a [`LibMatchValues`]. Build via `WireMatchValues::try_from(values)`.
+///
+/// # Errors
+///
+/// Returns [`Status::invalid_argument`] when the `values` oneof is unset.
+struct WireMatchValues(LibMatchValues);
+
+impl TryFrom<ProtoMatchValues> for WireMatchValues {
+    type Error = Status;
+
+    fn try_from(values: ProtoMatchValues) -> Result<Self, Status> {
+        let inner = values
+            .values
+            .ok_or_else(|| Status::invalid_argument("metadata_filter: MatchValues.values oneof must be set"))?;
+        Ok(Self(match inner {
+            match_values::Values::Keywords(list) => LibMatchValues::Keywords(list.values),
+            match_values::Values::Integers(list) => LibMatchValues::Integers(list.values),
+        }))
+    }
+}
+
+impl Deref for WireMatchValues {
+    type Target = LibMatchValues;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl WireMatchValues {
+    /// Consumes the wrapper, yielding the inner library match values.
+    fn into_inner(self) -> LibMatchValues {
+        self.0
+    }
+}
+
+/// Wire form of a [`LibNumericRange`]. Build via `WireNumericRange::from(range)`. Infallible.
+struct WireNumericRange(LibNumericRange);
+
+impl From<ProtoNumericRange> for WireNumericRange {
+    fn from(range: ProtoNumericRange) -> Self {
+        Self(LibNumericRange {
+            lt: range.lt,
+            lte: range.lte,
+            gt: range.gt,
+            gte: range.gte,
+        })
+    }
+}
+
+impl Deref for WireNumericRange {
+    type Target = LibNumericRange;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl WireNumericRange {
+    /// Consumes the wrapper, yielding the inner library range.
+    fn into_inner(self) -> LibNumericRange {
+        self.0
     }
 }
 
@@ -985,10 +1208,6 @@ mod tests {
 
     #[test]
     fn should_narrow_whole_number_doubles_to_integers() {
-        // The wire delivers `42` as the double `42.0` (proto3
-        // `google.protobuf.Value.number_value` is `double`). The boundary
-        // narrows whole numbers back to integers so a consumer's integer
-        // payload filter matches what was stored.
         let proto = proto_struct(serde_json::json!({ "conversation_id": 42 }));
         let result = Metadata::try_from(Some(proto)).unwrap();
         assert_eq!(*result, serde_json::json!({ "conversation_id": 42 }));
@@ -1008,8 +1227,6 @@ mod tests {
 
     #[test]
     fn should_leave_nested_numbers_unnarrowed() {
-        // Only top-level keys flatten into the Qdrant payload and become
-        // filterable, so only they are narrowed. A nested `1.0` stays a float.
         let proto = proto_struct(serde_json::json!({ "nested": { "count": 1 } }));
         let result = Metadata::try_from(Some(proto)).unwrap();
         assert!(result["nested"]["count"].is_f64(), "nested numbers are not narrowed",);
@@ -1104,35 +1321,51 @@ mod tests {
 
     // ─── Admin conversion tests ────────────────────────────────────────────
 
+    fn retry_args(of_kind: Option<i32>) -> Result<WireRetryArgs, Status> {
+        WireRetryArgs::try_from(RetryFailedJobsRequest {
+            of_kind,
+            dry_run: false,
+        })
+    }
+
     #[test]
     fn should_round_trip_job_kind_embed() {
         let proto = WireJobKind::from(LibJobKind::Embed).0;
-        let back = job_kind_filter_from_proto(Some(proto as i32)).unwrap();
-        assert_eq!(back, Some(LibJobKind::Embed));
+        let args = retry_args(Some(proto as i32)).unwrap();
+        assert_eq!(args.of_kind, Some(LibJobKind::Embed));
     }
 
     #[test]
     fn should_round_trip_job_kind_extract() {
         let proto = WireJobKind::from(LibJobKind::Extract).0;
-        let back = job_kind_filter_from_proto(Some(proto as i32)).unwrap();
-        assert_eq!(back, Some(LibJobKind::Extract));
+        let args = retry_args(Some(proto as i32)).unwrap();
+        assert_eq!(args.of_kind, Some(LibJobKind::Extract));
     }
 
     #[test]
     fn should_treat_unset_job_kind_filter_as_no_filter() {
-        assert_eq!(job_kind_filter_from_proto(None).unwrap(), None);
+        assert_eq!(retry_args(None).unwrap().of_kind, None);
     }
 
     #[test]
     fn should_treat_unspecified_job_kind_as_no_filter() {
-        // JOB_KIND_UNSPECIFIED == 0; library treats this as "no filter".
-        assert_eq!(job_kind_filter_from_proto(Some(0)).unwrap(), None);
+        assert_eq!(retry_args(Some(0)).unwrap().of_kind, None);
     }
 
     #[test]
     fn should_reject_unknown_job_kind_discriminant() {
-        let err = job_kind_filter_from_proto(Some(99)).unwrap_err();
+        let err = retry_args(Some(99)).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    }
+
+    #[test]
+    fn should_pass_dry_run_through_retry_args() {
+        let args = WireRetryArgs::try_from(RetryFailedJobsRequest {
+            of_kind: None,
+            dry_run: true,
+        })
+        .unwrap();
+        assert!(args.dry_run);
     }
 
     #[test]
@@ -1207,7 +1440,7 @@ mod tests {
             }],
             ..ProtoMemoryFilter::default()
         };
-        let err = metadata_filter_from_proto(Some(proto)).unwrap_err();
+        let err = WireMemoryFilter::try_from(proto).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
     }
 
@@ -1220,7 +1453,7 @@ mod tests {
             }],
             ..ProtoMemoryFilter::default()
         };
-        let err = metadata_filter_from_proto(Some(proto)).unwrap_err();
+        let err = WireMemoryFilter::try_from(proto).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
     }
 
@@ -1233,7 +1466,7 @@ mod tests {
             }],
             ..ProtoMemoryFilter::default()
         };
-        let err = metadata_filter_from_proto(Some(proto)).unwrap_err();
+        let err = WireMemoryFilter::try_from(proto).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
     }
 

@@ -20,6 +20,8 @@ mod synthesize;
 mod timeline;
 mod worker;
 
+#[cfg(feature = "knowledge-graph")]
+pub use admin::GraphInspectionBuilder;
 pub use admin::{ExtractionStatsBuilder, RetryBuilder};
 pub use edit::EditBuilder;
 pub use error::ClientError;
@@ -167,8 +169,7 @@ impl Client {
         #[cfg(feature = "knowledge-graph")]
         #[builder(into)]
         graph_name: Option<String>,
-        #[cfg(feature = "knowledge-graph")]
-        relational_llm: Option<LlmConfig>,
+        #[cfg(feature = "knowledge-graph")] relational_llm: Option<LlmConfig>,
     ) -> Result<Client, ClientError> {
         let schema = schema.unwrap_or_else(|| crate::migration::DEFAULT_SCHEMA.to_string());
 
@@ -849,6 +850,23 @@ impl Client {
     /// No LLM call. See [`ExtractionStatsBuilder`] for the builder methods.
     pub fn extraction_stats(&self) -> ExtractionStatsBuilder<'_> {
         ExtractionStatsBuilder::new(self)
+    }
+
+    /// Reads a whole-scope snapshot of the knowledge graph for admin inspection.
+    ///
+    /// Returns a [`GraphInspectionBuilder`]; its scope setters narrow the view
+    /// before awaiting, and `.limit(..)` caps the result. The admin "Knowledge
+    /// graph view" — every entity and relationship in scope, current and
+    /// superseded, with per-element provenance (`memory_pids`, timestamps). A
+    /// read-only graph traversal, no LLM call.
+    ///
+    /// Unlike the other scoped reads, an unset dimension widens *across* scopes:
+    /// the default (no setters) inspects every tenant. This is a privileged,
+    /// cross-scope operation — service-mode consumers gate it behind admin auth.
+    /// An unconfigured graph yields an empty snapshot, not an error.
+    #[cfg(feature = "knowledge-graph")]
+    pub fn inspect_graph(&self) -> GraphInspectionBuilder<'_> {
+        GraphInspectionBuilder::new(self)
     }
 }
 

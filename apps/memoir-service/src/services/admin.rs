@@ -41,16 +41,16 @@ use std::sync::Arc;
 use memoir_sdk::memoir::v1::admin_service_server::AdminService;
 use memoir_sdk::memoir::v1::{
     DeleteFailedJobRequest, DeleteFailedJobResponse, ExtractionStatsRequest, ExtractionStatsResponse,
-    ListFailedJobsRequest, ListFailedJobsResponse, PendingJobsCountRequest, PendingJobsCountResponse, ReconcileRequest,
-    ReconcileResponse, RetryFailedJobsRequest, RetryFailedJobsResponse, RetryJobRequest, RetryJobResponse,
-    UnsupersedeRequest, UnsupersedeResponse,
+    InspectGraphRequest, InspectGraphResponse, ListFailedJobsRequest, ListFailedJobsResponse, PendingJobsCountRequest,
+    PendingJobsCountResponse, ReconcileRequest, ReconcileResponse, RetryFailedJobsRequest, RetryFailedJobsResponse,
+    RetryJobRequest, RetryJobResponse, UnsupersedeRequest, UnsupersedeResponse,
 };
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
-    WireExtractionStat, WireFailedJob, WireReconcileResponse, WireStatsFilter, job_kind_filter_from_proto,
+    WireExtractionStat, WireFailedJob, WireInspectGraphResponse, WireReconcileResponse, WireRetryArgs, WireStatsFilter,
     u64_count_to_proto,
 };
 use crate::services::wire::WireError;
@@ -225,21 +225,19 @@ impl AdminService for Admin {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
         let admin_pid = principal_pid(&caller.principal).to_owned();
-        let RetryFailedJobsRequest { of_kind, dry_run } = request.into_inner();
-
-        let kind_filter = job_kind_filter_from_proto(of_kind)?;
+        let WireRetryArgs { of_kind, dry_run } = WireRetryArgs::try_from(request.into_inner())?;
 
         tracing::event!(
             name: "memoir.service.admin.retry_failed_jobs.invoked",
             tracing::Level::INFO,
             admin.pid = %admin_pid,
             dry_run = dry_run,
-            kind_filter = ?kind_filter,
+            kind_filter = ?of_kind,
             "AdminService.RetryFailedJobs invoked",
         );
 
         let mut builder = self.ctx.memoir.retry_failed_jobs();
-        if let Some(kind) = kind_filter {
+        if let Some(kind) = of_kind {
             builder = builder.of_kind(kind);
         }
         if dry_run {
@@ -371,6 +369,61 @@ impl AdminService for Admin {
             .map(|s| WireExtractionStat::try_from(s).map(|w| w.0))
             .collect::<Result<Vec<_>, Status>>()?;
         Ok(Response::new(ExtractionStatsResponse { stats: proto_stats }))
+    }
+
+    /// Returns a whole-scope snapshot of the knowledge graph.
+    ///
+    /// Read-only graph traversal, no LLM call. The request's optional scope
+    /// fields narrow the view (AND-combined); an unset field widens across that
+    /// dimension, so all-unset inspects every tenant — the cross-scope admin
+    /// view, gated here by `require_admin`. A `limit` of `0` uses the library
+    /// default; the library clamps to its maximum. An unconfigured graph yields
+    /// an empty snapshot.
+    async fn inspect_graph(
+        &self,
+        request: Request<InspectGraphRequest>,
+    ) -> Result<Response<InspectGraphResponse>, Status> {
+        let caller = self.auth().authenticate(&request).await?;
+        caller.require_admin()?;
+        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let InspectGraphRequest {
+            agent_id,
+            org_id,
+            user_id,
+            limit,
+        } = request.into_inner();
+
+        tracing::event!(
+            name: "memoir.service.admin.inspect_graph.invoked",
+            tracing::Level::INFO,
+            admin.pid = %admin_pid,
+            scope.agent_id = agent_id.is_some(),
+            scope.org_id = org_id.is_some(),
+            scope.user_id = user_id.is_some(),
+            limit = limit,
+            "AdminService.InspectGraph invoked",
+        );
+
+        let mut builder = self.ctx.memoir.inspect_graph();
+        if let Some(agent_id) = agent_id {
+            builder = builder.agent(agent_id);
+        }
+
+        if let Some(org_id) = org_id {
+            builder = builder.org(org_id);
+        }
+
+        if let Some(user_id) = user_id {
+            builder = builder.user(user_id);
+        }
+
+        if limit > 0 {
+            builder = builder.limit(limit as usize);
+        }
+
+        let snapshot = builder.await.map_err(WireError::into_status)?;
+
+        Ok(Response::new(WireInspectGraphResponse::from(snapshot).into_inner()))
     }
 }
 
