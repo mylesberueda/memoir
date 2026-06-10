@@ -7,7 +7,6 @@ use memoir_core::llm::{
     DEFAULT_ANTHROPIC_MODEL, DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_URL, DEFAULT_OPENAI_MODEL, LlmConfig,
 };
 use migration::{MigrationError as ServiceMigrationError, bootstrap_and_migrate};
-use qdrant_client::{Qdrant, QdrantError};
 use sea_orm::ConnectOptions;
 
 use crate::middleware::auth::Authenticator;
@@ -52,8 +51,8 @@ impl AppContext {
         let db = Db::init_service(&database_url, &service_schema).await?;
         Db::apply_service_migrations(&db, &service_schema).await?;
 
-        let qdrant = QdrantBootstrap::init()?;
-        let (memoir, memoir_worker) = Memoir::init(&database_url, qdrant, &memoir_schema).await?;
+        let qdrant_url = Env::get("QDRANT_URL")?;
+        let (memoir, memoir_worker) = Memoir::init(&database_url, &qdrant_url, &memoir_schema).await?;
 
         // JWT signer is constructed before any handler runs so misconfigured
         // secrets fail loudly at startup rather than on the first Login.
@@ -103,26 +102,12 @@ impl Db {
     }
 }
 
-struct QdrantBootstrap;
-
-impl QdrantBootstrap {
-    fn init() -> Result<Qdrant, AppContextError> {
-        let url = Env::get("QDRANT_URL")?;
-
-        tracing::info!("Connecting to Qdrant...");
-        let qdrant = Qdrant::from_url(&url).build().map_err(Box::new)?;
-        tracing::info!("Qdrant connected!");
-
-        Ok(qdrant)
-    }
-}
-
 struct Memoir;
 
 impl Memoir {
     async fn init(
         database_url: &str,
-        qdrant: Qdrant,
+        qdrant_url: &str,
         schema: &str,
     ) -> Result<(Arc<MemoirClient>, MemoirWorkerHandle), AppContextError> {
         let extraction_llm = Self::extraction_llm()?;
@@ -130,7 +115,7 @@ impl Memoir {
         tracing::info!("Building memoir client...");
         let client = MemoirClient::builder()
             .database_url(database_url.to_owned())
-            .qdrant(qdrant)
+            .qdrant(qdrant_url.to_owned())
             .schema(schema.to_owned())
             .maybe_extraction_llm(extraction_llm)
             .build()
@@ -209,8 +194,6 @@ pub(crate) enum AppContextError {
     Db(#[from] sea_orm::DbErr),
     #[error("environment variable missing: {0}")]
     EnvironmentVariableMissing(&'static str),
-    #[error("qdrant error: {0}")]
-    Qdrant(#[from] Box<QdrantError>),
     #[error("memoir error: {0}")]
     Memoir(#[from] MemoirClientError),
     #[error("memoir-service migration error: {0}")]

@@ -40,8 +40,8 @@ use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
     EditArgs, FeedbackArgs, Metadata, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs,
-    WireSupersessionEvent, forget_target_from_proto, metadata_filter_from_proto, query_response, recall_as_of_response,
-    scope_from_proto, timeline_response,
+    WireGraphEnrichment, WireMemoryFilter, WireSupersessionEvent, forget_target_from_proto, query_response,
+    recall_as_of_response, scope_from_proto, timeline_response,
 };
 use crate::services::wire::{WireError, WireMemory};
 
@@ -91,10 +91,15 @@ impl MemoryService for Memory {
             metadata_filter,
             min_similarity,
             kinds,
+            with_graph_enrichment,
+            graph_depth,
         } = request.into_inner();
 
         let scope = scope_from_proto(scope)?;
-        let metadata_filter = metadata_filter_from_proto(metadata_filter)?;
+        let metadata_filter = metadata_filter
+            .map(WireMemoryFilter::try_from)
+            .transpose()?
+            .map(WireMemoryFilter::into_inner);
 
         tracing::event!(
             name: "memoir.service.memory.search.invoked",
@@ -129,8 +134,15 @@ impl MemoryService for Memory {
                 builder = builder.semantic();
             }
         }
+        if with_graph_enrichment {
+            builder = builder.with_graph();
+            if graph_depth > 0 {
+                builder = builder.with_graph_depth(graph_depth as usize);
+            }
+        }
         let memories = builder.await.map_err(WireError::into_status)?;
 
+        let enrichment = WireGraphEnrichment::from(memories.graph()).into_inner();
         let hits = memories
             .list()
             .iter()
@@ -144,7 +156,7 @@ impl MemoryService for Memory {
             })
             .collect();
 
-        Ok(Response::new(SearchResponse { hits }))
+        Ok(Response::new(SearchResponse { hits, enrichment }))
     }
 
     /// Looks up a memory by pid at any lifecycle state.
@@ -385,6 +397,12 @@ impl MemoryService for Memory {
         }
         if let Some(t) = args.event_at_before {
             builder = builder.event_at_before(t);
+        }
+        if args.with_graph_enrichment {
+            builder = builder.with_graph();
+            if let Some(depth) = args.graph_depth {
+                builder = builder.with_graph_depth(depth);
+            }
         }
 
         let context = builder.await.map_err(WireError::into_status)?;

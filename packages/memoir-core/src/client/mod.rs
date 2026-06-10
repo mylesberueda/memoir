@@ -5,17 +5,23 @@ mod categorize;
 mod edit;
 mod embed;
 mod error;
-mod feedback;
 mod extract;
+mod feedback;
 mod query;
 mod recall_as_of;
 mod reconcile;
+#[cfg(feature = "knowledge-graph")]
+mod relational;
 mod remember;
 mod reprocess;
 mod search;
+#[cfg(feature = "knowledge-graph")]
+mod synthesize;
 mod timeline;
 mod worker;
 
+#[cfg(feature = "knowledge-graph")]
+pub use admin::GraphInspectionBuilder;
 pub use admin::{ExtractionStatsBuilder, RetryBuilder};
 pub use edit::EditBuilder;
 pub use error::ClientError;
@@ -37,10 +43,11 @@ pub use worker::{
 use std::sync::Arc;
 
 use bon::bon;
-use qdrant_client::Qdrant;
 use sea_orm::{ConnectOptions, Database};
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
+#[cfg(feature = "knowledge-graph")]
+use crate::graph::GraphStore;
 use crate::jobs::{MemoryJobsStore, PostgresJobsStore};
 use crate::llm::{LlmConfig, LlmRegistry, LlmRole};
 use crate::memory::{ForgetTarget, Memory, SupersessionEvent};
@@ -63,6 +70,23 @@ pub(crate) struct ClientInner {
     pub(crate) nli: Option<Arc<crate::nli::NliClassifier>>,
     pub(crate) schema: String,
     pub(crate) system_prompt: Option<String>,
+    /// Optional FalkorDB knowledge-graph store
+    ///
+    /// `None` when no FalkorDB connection was supplied — graph features are then
+    /// absent and recall returns only vector hits. Only present with the
+    /// `knowledge-graph` feature; vector-only builds omit the field entirely.
+    /// Behind `Arc` so the per-job relational catalogs can share one connection
+    /// without reconnecting.
+    #[cfg(feature = "knowledge-graph")]
+    pub(crate) graph: Option<std::sync::Arc<crate::graph::FalkorGraphStore>>,
+
+    /// Staging store for relational triples awaiting the synthesis fan-in.
+    ///
+    /// Worker-internal handoff between `relational_extract` (which stages) and
+    /// `synthesize` (which reads, commits, and clears). Present whenever the
+    /// `knowledge-graph` feature is built; unused when no graph is configured.
+    #[cfg(feature = "knowledge-graph")]
+    pub(crate) triple_staging: crate::graph::TripleStaging,
 }
 
 /// High-level facade composing the embedder, store, and vector index.
@@ -85,7 +109,7 @@ impl std::fmt::Debug for Client {
 
 #[bon]
 impl Client {
-    /// Builds a [`Client`] from a Postgres connection string + Qdrant handle.
+    /// Builds a [`Client`] from Postgres and Qdrant connection strings.
     ///
     /// memoir-core owns its own connection pool. The pool's `search_path` is
     /// pinned to the configured schema so memoir-core's tables and
@@ -108,11 +132,9 @@ impl Client {
     /// use memoir_core::client::Client;
     /// use memoir_core::llm::LlmConfig;
     ///
-    /// let qdrant = qdrant_client::Qdrant::from_url("http://localhost:6334").build()?;
-    ///
     /// let client = Client::builder()
     ///     .database_url("postgres://postgres:postgres@localhost:54321/my_app")
-    ///     .qdrant(qdrant)
+    ///     .qdrant("http://localhost:6334")
     ///     .schema("memoir")
     ///     .extraction_llm(LlmConfig::ollama("http://localhost:11434", "llama3.2"))
     ///     .build()
@@ -131,13 +153,20 @@ impl Client {
     #[builder(start_fn = builder, finish_fn = build)]
     pub async fn new(
         #[builder(into)] database_url: String,
-        qdrant: Qdrant,
+        #[builder(into)] qdrant: String,
         #[builder(into)] schema: Option<String>,
         #[builder(into)] system_prompt: Option<String>,
         #[builder(into)] collection: Option<String>,
         extraction_llm: Option<LlmConfig>,
         contradiction_llm: Option<LlmConfig>,
         categorize_model: Option<crate::nli::NliConfig>,
+        #[cfg(feature = "knowledge-graph")]
+        #[builder(into)]
+        falkor: Option<String>,
+        #[cfg(feature = "knowledge-graph")]
+        #[builder(into)]
+        graph_name: Option<String>,
+        #[cfg(feature = "knowledge-graph")] relational_llm: Option<LlmConfig>,
     ) -> Result<Client, ClientError> {
         let schema = schema.unwrap_or_else(|| crate::migration::DEFAULT_SCHEMA.to_string());
 
@@ -154,10 +183,12 @@ impl Client {
 
         let embedder = OnnxEmbedding::new()?;
         let store = PostgresStore::new(db.clone());
+        #[cfg(feature = "knowledge-graph")]
+        let triple_staging = crate::graph::TripleStaging::new(db.clone());
         let jobs = PostgresJobsStore::new(db);
         let index = match collection {
-            Some(name) => QdrantIndex::new(qdrant).with_collection(name),
-            None => QdrantIndex::new(qdrant),
+            Some(name) => QdrantIndex::connect(qdrant)?.with_collection(name),
+            None => QdrantIndex::connect(qdrant)?,
         };
 
         index.ensure_collection(embedder.dimensions()).await?;
@@ -168,6 +199,10 @@ impl Client {
         }
         if let Some(config) = contradiction_llm {
             llms.install(LlmRole::Contradiction, config)?;
+        }
+        #[cfg(feature = "knowledge-graph")]
+        if let Some(config) = relational_llm {
+            llms.install(LlmRole::Relational, config)?;
         }
 
         // Build the NLI classifier only when a model is configured — it
@@ -186,6 +221,20 @@ impl Client {
             None
         };
 
+        // A `graph_name` with no `falkor` connection is a misconfiguration, not
+        // a silent fallback to vector-only.
+        #[cfg(feature = "knowledge-graph")]
+        let graph = match (falkor, graph_name) {
+            (Some(url), name) => {
+                let name = name.unwrap_or_else(|| crate::graph::DEFAULT_GRAPH_NAME.to_string());
+                let store = crate::graph::FalkorGraphStore::connect(url, name).await?;
+                crate::graph::GraphStore::ensure_graph(&store).await?;
+                Some(std::sync::Arc::new(store))
+            }
+            (None, Some(_)) => return Err(ClientError::GraphNotConfigured),
+            (None, None) => None,
+        };
+
         Ok(Client {
             inner: Arc::new(ClientInner {
                 embedder: Arc::new(embedder),
@@ -196,6 +245,10 @@ impl Client {
                 nli,
                 schema,
                 system_prompt,
+                #[cfg(feature = "knowledge-graph")]
+                graph,
+                #[cfg(feature = "knowledge-graph")]
+                triple_staging,
             }),
         })
     }
@@ -485,6 +538,14 @@ impl Client {
     /// any empty field, and [`ClientError::Store`] wrapping
     /// [`crate::store::StoreError::Database`] for database failures.
     pub async fn forget(&self, target: ForgetTarget) -> Result<Vec<String>, ClientError> {
+        // A scope target wipes the whole scoped subgraph below, independent of
+        // the returned pid list; keep the scope before `target` is moved.
+        #[cfg(feature = "knowledge-graph")]
+        let forget_scope = match &target {
+            ForgetTarget::Scope(scope) => Some(scope.clone()),
+            ForgetTarget::Pid(_) => None,
+        };
+
         let deleted = self.inner.store.forget(target).await?;
 
         if deleted.is_empty() {
@@ -507,6 +568,27 @@ impl Client {
                 pid_count = deleted.len(),
                 "{{pid_count}} memories forgotten",
             );
+        }
+
+        // Remove the forgotten memories from the graph, best-effort: a failure
+        // is logged, not surfaced (the source-of-truth rows are already gone and
+        // reconciliation is the backstop). A scope target wipes the subgraph; a
+        // pid target reference-counts each forgotten pid out of the graph.
+        #[cfg(feature = "knowledge-graph")]
+        if let Some(graph) = self.inner.graph.as_deref() {
+            let graph_result = match &forget_scope {
+                Some(scope) => graph.forget_scope(scope).await,
+                None => graph.forget_pids(&pid_refs).await,
+            };
+            if let Err(err) = graph_result {
+                tracing::event!(
+                    name: "memoir.forget.graph_delete_failed",
+                    tracing::Level::WARN,
+                    pid_count = deleted.len(),
+                    error.message = %err,
+                    "graph delete failed for {{pid_count}} pid(s): {{error.message}} — reconciliation will clean up orphans",
+                );
+            }
         }
 
         Ok(deleted)
@@ -765,6 +847,23 @@ impl Client {
     /// No LLM call. See [`ExtractionStatsBuilder`] for the builder methods.
     pub fn extraction_stats(&self) -> ExtractionStatsBuilder<'_> {
         ExtractionStatsBuilder::new(self)
+    }
+
+    /// Reads a whole-scope snapshot of the knowledge graph for admin inspection.
+    ///
+    /// Returns a [`GraphInspectionBuilder`]; its scope setters narrow the view
+    /// before awaiting, and `.limit(..)` caps the result. The admin "Knowledge
+    /// graph view" — every entity and relationship in scope, current and
+    /// superseded, with per-element provenance (`memory_pids`, timestamps). A
+    /// read-only graph traversal, no LLM call.
+    ///
+    /// Unlike the other scoped reads, an unset dimension widens *across* scopes:
+    /// the default (no setters) inspects every tenant. This is a privileged,
+    /// cross-scope operation — service-mode consumers gate it behind admin auth.
+    /// An unconfigured graph yields an empty snapshot, not an error.
+    #[cfg(feature = "knowledge-graph")]
+    pub fn inspect_graph(&self) -> GraphInspectionBuilder<'_> {
+        GraphInspectionBuilder::new(self)
     }
 }
 

@@ -396,6 +396,17 @@ async fn dispatch(inner: &Arc<ClientInner>, job: Job, max_attempts: i32) {
             .map_err(|err| err.to_string()),
         JobKind::Categorize => inner.run_categorize(job.clone()).await.map_err(|err| err.to_string()),
         JobKind::Reprocess => inner.run_reprocess(job.clone()).await.map_err(|err| err.to_string()),
+        #[cfg(feature = "knowledge-graph")]
+        JobKind::RelationalExtract => inner
+            .run_relational_extract(job.clone())
+            .await
+            .map_err(|err| err.to_string()),
+        #[cfg(feature = "knowledge-graph")]
+        JobKind::Synthesize => inner.run_synthesize(job.clone()).await.map_err(|err| err.to_string()),
+        // A vector-only build never enqueues these kinds; a row written by a
+        // graph-enabled build is completed as a no-op rather than failing.
+        #[cfg(not(feature = "knowledge-graph"))]
+        JobKind::RelationalExtract | JobKind::Synthesize => Ok(()),
     };
 
     match result {

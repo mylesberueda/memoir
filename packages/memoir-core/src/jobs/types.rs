@@ -34,6 +34,26 @@ pub enum JobKind {
     /// (reason `rejected`) and episodic edits (reason `stale`); the reason and
     /// any correction text ride the job payload.
     Reprocess,
+
+    /// Derive relational triples from an episodic source (epic 0012).
+    ///
+    /// The graph derivation, parallel to [`JobKind::Extract`]: both fan out
+    /// from the same episodic write. Enqueued only when the `knowledge-graph`
+    /// feature is built; the variant itself is always present so a job row a
+    /// graph-enabled build wrote still deserializes in a vector-only build.
+    #[strum(serialize = "relational_extract")]
+    #[serde(rename = "relational_extract")]
+    RelationalExtract,
+
+    /// Reconcile a source's relational triples against its semantic facts and
+    /// commit the result to the graph (epic 0012).
+    ///
+    /// The fan-in of the two LLM-derived siblings ([`JobKind::Extract`] and
+    /// [`JobKind::RelationalExtract`]): enqueued exactly once per source, after
+    /// both succeed, by an atomic guarded insert. Enqueued only in
+    /// `knowledge-graph` builds; the variant is always present so a graph build's
+    /// job row still deserializes in a vector-only build.
+    Synthesize,
 }
 
 /// Lifecycle state of a `memory_jobs` row.
@@ -100,6 +120,8 @@ mod tests {
         assert_eq!(JobKind::Extract.as_ref(), "extract");
         assert_eq!(JobKind::Categorize.as_ref(), "categorize");
         assert_eq!(JobKind::Reprocess.as_ref(), "reprocess");
+        assert_eq!(JobKind::RelationalExtract.as_ref(), "relational_extract");
+        assert_eq!(JobKind::Synthesize.as_ref(), "synthesize");
     }
 
     #[test]
@@ -108,6 +130,8 @@ mod tests {
         assert_eq!(JobKind::Extract.to_string(), "extract");
         assert_eq!(JobKind::Categorize.to_string(), "categorize");
         assert_eq!(JobKind::Reprocess.to_string(), "reprocess");
+        assert_eq!(JobKind::RelationalExtract.to_string(), "relational_extract");
+        assert_eq!(JobKind::Synthesize.to_string(), "synthesize");
     }
 
     #[test]
@@ -116,6 +140,11 @@ mod tests {
         assert_eq!(serde_json::to_string(&JobKind::Extract).unwrap(), "\"extract\"");
         assert_eq!(serde_json::to_string(&JobKind::Categorize).unwrap(), "\"categorize\"");
         assert_eq!(serde_json::to_string(&JobKind::Reprocess).unwrap(), "\"reprocess\"");
+        assert_eq!(
+            serde_json::to_string(&JobKind::RelationalExtract).unwrap(),
+            "\"relational_extract\""
+        );
+        assert_eq!(serde_json::to_string(&JobKind::Synthesize).unwrap(), "\"synthesize\"");
     }
 
     #[test]
@@ -132,6 +161,14 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<JobKind>("\"reprocess\"").unwrap(),
             JobKind::Reprocess
+        );
+        assert_eq!(
+            serde_json::from_str::<JobKind>("\"relational_extract\"").unwrap(),
+            JobKind::RelationalExtract
+        );
+        assert_eq!(
+            serde_json::from_str::<JobKind>("\"synthesize\"").unwrap(),
+            JobKind::Synthesize
         );
         assert!(serde_json::from_str::<JobKind>("\"nonsense\"").is_err());
     }

@@ -4,4 +4,5 @@ pub mod prelude;
 
 pub mod api_keys;
 pub mod bootstrap_tokens;
+pub mod memoir_service_migrations;
 pub mod users;

@@ -43,7 +43,7 @@ const TEST_ID_ALPHABET: [char; 36] = [
 /// Qdrant collection. No LLM is configured; extract jobs (if any) skip
 /// gracefully with a WARN per `client/extract.rs:96`.
 pub async fn fresh_client() -> Result<TestClient> {
-    build_test_client(None).await
+    build_test_client(None, None).await
 }
 
 /// Like [`fresh_client`] but wires a real Ollama extraction LLM.
@@ -57,7 +57,39 @@ pub async fn fresh_client_with_extraction() -> Result<TestClient> {
         std::env::var("OLLAMA_URL").context("OLLAMA_URL env var must be set for extraction tests")?;
     let ollama_model = std::env::var("OLLAMA_MODEL")
         .context("OLLAMA_MODEL env var must be set for extraction tests")?;
-    build_test_client(Some(LlmConfig::ollama(ollama_url, ollama_model))).await
+    build_test_client(Some(LlmConfig::ollama(ollama_url, ollama_model)), None).await
+}
+
+/// Builds a `Client` wired to live Postgres + Qdrant + FalkorDB, with extraction.
+///
+/// Reads `FALKOR_URL`, `OLLAMA_URL`, and `OLLAMA_MODEL` from the environment;
+/// all must be set. The Ollama model drives both semantic extraction and
+/// relational triple extraction (the graph write path). The returned client
+/// writes to a per-test graph name under the shared FalkorDB instance, and its
+/// [`TestClient::fresh_scope`] hands out scopes that are wiped from the graph on
+/// drop — see [`TestClient`]'s cleanup contract.
+#[cfg(feature = "knowledge-graph")]
+pub async fn fresh_graph_client() -> Result<TestClient> {
+    let falkor_url =
+        std::env::var("FALKOR_URL").context("FALKOR_URL env var must be set for graph integration tests")?;
+    let ollama_url =
+        std::env::var("OLLAMA_URL").context("OLLAMA_URL env var must be set for graph integration tests")?;
+    let ollama_model = std::env::var("OLLAMA_MODEL")
+        .context("OLLAMA_MODEL env var must be set for graph integration tests")?;
+    let llm = LlmConfig::ollama(ollama_url, ollama_model);
+    build_test_client(Some(llm.clone()), Some(GraphConfig { falkor_url, llm })).await
+}
+
+/// Live-FalkorDB wiring for a graph-backed test client.
+///
+/// The graph name is minted per test inside [`build_test_client`] (a unique
+/// `test_<suffix>`) so suites share one FalkorDB instance without colliding;
+/// `llm` is the relational triple extractor the graph write path needs. Defined
+/// un-gated so `build_test_client`'s signature is valid in every feature state;
+/// only the wiring that consumes it is `knowledge-graph`-gated.
+struct GraphConfig {
+    falkor_url: String,
+    llm: LlmConfig,
 }
 
 static TRACING_INIT: Once = Once::new();
@@ -76,7 +108,8 @@ fn init_tracing() {
     });
 }
 
-async fn build_test_client(extraction: Option<LlmConfig>) -> Result<TestClient> {
+#[cfg_attr(not(feature = "knowledge-graph"), allow(unused_variables))]
+async fn build_test_client(extraction: Option<LlmConfig>, graph: Option<GraphConfig>) -> Result<TestClient> {
     init_tracing();
 
     let database_url =
@@ -96,17 +129,30 @@ async fn build_test_client(extraction: Option<LlmConfig>) -> Result<TestClient> 
     let db = Database::connect(&database_url)
         .await
         .context("connect to Postgres (cleanup pool)")?;
-    let qdrant = Qdrant::from_url(&qdrant_url).build().context("build Qdrant client")?;
+    // The Client builds its own Qdrant client from the URL; this separate handle
+    // exists only so `TestClient::drop` can delete the per-test collection at
+    // teardown (the Client's internal client isn't reachable for that).
+    let qdrant = Qdrant::from_url(&qdrant_url).build().context("build Qdrant cleanup client")?;
 
-    let client = Client::builder()
+    let builder = Client::builder()
         .database_url(database_url.clone())
-        .qdrant(qdrant.clone())
+        .qdrant(qdrant_url.clone())
         .schema(schema.clone())
         .collection(collection.clone())
-        .maybe_extraction_llm(extraction)
-        .build()
-        .await
-        .context("build memoir Client")?;
+        .maybe_extraction_llm(extraction);
+
+    // `maybe_*` setters keep the builder on one typestate path whether or not a
+    // graph is wired (a `match` that calls `.falkor()` on one arm only would
+    // give the arms different bon builder types). A per-test graph name keeps
+    // suites sharing one FalkorDB instance from colliding — isolation by name,
+    // mirroring the per-test schema/collection.
+    #[cfg(feature = "knowledge-graph")]
+    let builder = builder
+        .maybe_falkor(graph.as_ref().map(|cfg| cfg.falkor_url.clone()))
+        .maybe_graph_name(graph.as_ref().map(|_| format!("test_{suffix}")))
+        .maybe_relational_llm(graph.as_ref().map(|cfg| cfg.llm.clone()));
+
+    let client = builder.build().await.context("build memoir Client")?;
     client.migrate().await.context("apply memoir migrations")?;
 
     // Spawn a worker so the queue actually drains. Without this, every
@@ -134,17 +180,24 @@ async fn build_test_client(extraction: Option<LlmConfig>) -> Result<TestClient> 
         worker: Some(worker),
         cleanup_db: Some(db),
         cleanup_qdrant: Some(qdrant),
+        cleanup_scopes: Vec::new(),
         schema,
         collection,
     })
 }
 
 /// Test-scoped wrapper that owns the partition resources and cleans them up on drop.
+///
+/// Beyond the per-test Postgres schema and Qdrant collection (uniquely named, so
+/// a leak is inert), graph tests share one FalkorDB graph name. A scope minted
+/// via [`TestClient::fresh_scope`] is recorded here and wiped from that shared
+/// graph on drop — a leaked scope would otherwise pollute sibling tests.
 pub struct TestClient {
     client: Client,
     worker: Option<WorkerHandle>,
     cleanup_db: Option<DatabaseConnection>,
     cleanup_qdrant: Option<Qdrant>,
+    cleanup_scopes: Vec<Scope>,
     pub schema: String,
     pub collection: String,
 }
@@ -164,6 +217,10 @@ impl Drop for TestClient {
         let Some(db) = self.cleanup_db.take() else { return };
         let Some(qdrant) = self.cleanup_qdrant.take() else { return };
         let worker = self.worker.take();
+        #[cfg(feature = "knowledge-graph")]
+        let client = self.client.clone();
+        #[cfg(feature = "knowledge-graph")]
+        let scopes = std::mem::take(&mut self.cleanup_scopes);
 
         // Cleanup needs async; we synchronously block the current thread on a
         // fresh future. `block_in_place` is only safe inside a multi-thread
@@ -175,6 +232,20 @@ impl Drop for TestClient {
                 tokio::runtime::Handle::current().block_on(async {
                     if let Some(worker) = worker {
                         worker.shutdown().await;
+                    }
+
+                    // Graph scopes first: forget_scope routes through the
+                    // Client's own pool, which the schema drop below tears
+                    // down. A leak here pollutes the shared test graph, so the
+                    // failure is loud (eprintln per scope), not swallowed.
+                    #[cfg(feature = "knowledge-graph")]
+                    for scope in scopes {
+                        if let Err(err) = client
+                            .forget(memoir_core::memory::ForgetTarget::Scope(scope.clone()))
+                            .await
+                        {
+                            eprintln!("[TestClient::drop] forget graph scope {scope:?} failed: {err}");
+                        }
                     }
 
                     if let Err(err) = qdrant
@@ -201,6 +272,37 @@ impl Drop for TestClient {
 }
 
 impl TestClient {
+    /// Mints a fresh scope and records it for graph cleanup on drop.
+    ///
+    /// Graph tests must use this instead of the free [`fresh_scope`]: the
+    /// returned scope is wiped from the shared test graph when the
+    /// [`TestClient`] drops, so a test cannot leak nodes into a sibling's run.
+    /// Minting *is* registration, so cleanup cannot be forgotten. Requires
+    /// `&mut` to record the scope; bind the client `let mut`.
+    #[cfg(feature = "knowledge-graph")]
+    pub fn fresh_scope(&mut self) -> Scope {
+        let scope = fresh_scope();
+        self.cleanup_scopes.push(scope.clone());
+        scope
+    }
+
+    /// Mints a tracked scope under a caller-supplied `org_id`.
+    ///
+    /// Same cleanup contract as [`Self::fresh_scope`]; the fixed `org_id` lets a
+    /// test put two scopes in one org (e.g. to exercise a partial-scope,
+    /// org-wide graph inspect that must span both).
+    #[cfg(feature = "knowledge-graph")]
+    pub fn fresh_scope_in_org(&mut self, org_id: &str) -> Scope {
+        let suffix = nanoid::nanoid!(8, &TEST_ID_ALPHABET);
+        let scope = Scope {
+            agent_id: format!("agent_{suffix}"),
+            org_id: org_id.to_string(),
+            user_id: format!("user_{suffix}"),
+        };
+        self.cleanup_scopes.push(scope.clone());
+        scope
+    }
+
     /// Opens a fresh `DatabaseConnection` pinned to this test's schema.
     ///
     /// Used by migration-layer tests that need to issue raw SQL against
@@ -343,5 +445,41 @@ pub async fn wait_until_extracted(
     }
 
     anyhow::bail!("no semantic memories observed for source_pid {source_pid} within {timeout:?}")
+}
+
+/// Polls the graph for `scope` until `ready` accepts the snapshot, or times out.
+///
+/// Graph commit is asynchronous: the worker drains `RelationalExtract` → stage →
+/// `Synthesize` → commit. A test that writes then immediately reads races the
+/// worker, so it waits on the end state instead — reading the live graph via
+/// [`Client::inspect_graph`] each iteration and handing the snapshot to `ready`
+/// (e.g. "an `Alice -WORKS_AT-> Acme` edge exists"). Returns the accepted
+/// snapshot for follow-up assertions, or an error on timeout.
+#[cfg(feature = "knowledge-graph")]
+pub async fn wait_until_graph_committed(
+    client: &Client,
+    scope: &Scope,
+    timeout: Duration,
+    ready: impl Fn(&memoir_core::graph::GraphSnapshot) -> bool,
+) -> Result<memoir_core::graph::GraphSnapshot> {
+    let deadline = Instant::now() + timeout;
+    let mut delay = Duration::from_millis(200);
+
+    while Instant::now() < deadline {
+        let snapshot = client
+            .inspect_graph()
+            .agent(scope.agent_id.clone())
+            .org(scope.org_id.clone())
+            .user(scope.user_id.clone())
+            .await
+            .context("inspect_graph probe failed")?;
+        if ready(&snapshot) {
+            return Ok(snapshot);
+        }
+        tokio::time::sleep(delay).await;
+        delay = (delay * 2).min(Duration::from_secs(2));
+    }
+
+    anyhow::bail!("graph did not reach the expected state for scope {scope:?} within {timeout:?}")
 }
 

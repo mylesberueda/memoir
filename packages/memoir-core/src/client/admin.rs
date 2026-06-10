@@ -17,6 +17,8 @@ use std::pin::Pin;
 
 use tracing::{Level, event};
 
+#[cfg(feature = "knowledge-graph")]
+use crate::graph::{GraphSnapshot, GraphStore};
 use crate::jobs::{JobKind, MemoryJobsStore};
 use crate::memory::{ExtractionStat, StatsFilter};
 use crate::store::MemoryStore;
@@ -82,29 +84,23 @@ impl<'a> IntoFuture for RetryBuilder<'a> {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'a>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(execute(self))
+        Box::pin(async move {
+            let Self { client, kind, dry_run } = self;
+
+            let affected = client.inner.jobs.bulk_retry(kind, dry_run).await?;
+
+            event!(
+                name: "memoir.admin.bulk_retry",
+                Level::INFO,
+                affected = affected,
+                dry_run = dry_run,
+                kind = kind.as_ref().map(|k| k.as_ref()).unwrap_or("any"),
+                "bulk retry affected={{affected}} dry_run={{dry_run}} kind={{kind}}",
+            );
+
+            Ok(affected)
+        })
     }
-}
-
-async fn execute(builder: RetryBuilder<'_>) -> Result<u64, ClientError> {
-    let RetryBuilder { client, kind, dry_run } = builder;
-
-    let affected = client
-        .inner
-        .jobs
-        .bulk_retry(kind, dry_run)
-        .await?;
-
-    event!(
-        name: "memoir.admin.bulk_retry",
-        Level::INFO,
-        affected = affected,
-        dry_run = dry_run,
-        kind = kind.as_ref().map(|k| k.as_ref()).unwrap_or("any"),
-        "bulk retry affected={{affected}} dry_run={{dry_run}} kind={{kind}}",
-    );
-
-    Ok(affected)
 }
 
 /// Per-call builder returned by [`Client::extraction_stats`].
@@ -170,11 +166,126 @@ impl<'a> IntoFuture for ExtractionStatsBuilder<'a> {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'a>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(execute_stats(self))
+        Box::pin(async move {
+            let Self { client, filter } = self;
+            Ok(client.inner.store.extraction_stats(filter).await?)
+        })
     }
 }
 
-async fn execute_stats(builder: ExtractionStatsBuilder<'_>) -> Result<Vec<ExtractionStat>, ClientError> {
-    let ExtractionStatsBuilder { client, filter } = builder;
-    Ok(client.inner.store.extraction_stats(filter).await?)
+/// Per-call builder returned by [`Client::inspect_graph`].
+///
+/// Awaiting the builder reads a whole-scope snapshot of the knowledge graph —
+/// the admin "Knowledge graph view": every entity and relationship, current and
+/// superseded, for an operator to inspect or render. A read-only FalkorDB
+/// traversal, no LLM call.
+///
+/// The scope setters narrow the view and are AND-combined; an unset dimension
+/// imposes no constraint, so the default (no setters) inspects across every
+/// agent, user, and org. This is the one cross-scope read in memoir — a privileged
+/// operation gated by the consumer's auth layer (memoir-service requires admin);
+/// the write, forget, and enrichment paths keep full-scope-tuple isolation.
+///
+/// `.limit(..)` caps the nodes and the edges returned (default
+/// [`DEFAULT_INSPECTION_LIMIT`](crate::graph::DEFAULT_INSPECTION_LIMIT), clamped
+/// to [`MAX_INSPECTION_LIMIT`](crate::graph::MAX_INSPECTION_LIMIT)); the snapshot's
+/// `truncated` flag marks when a cap was hit.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use memoir_core::client::Client;
+/// # async fn example(client: &Client) -> Result<(), Box<dyn std::error::Error>> {
+/// let snapshot = client.inspect_graph().org("acme").limit(200).await?;
+/// for edge in &snapshot.edges {
+///     println!("{} -{}-> {} (valid_to: {:?})", edge.subject, edge.relation, edge.object, edge.valid_to);
+/// }
+/// # Ok(())
+/// # }
+/// ```
+#[cfg(feature = "knowledge-graph")]
+#[must_use = "inspect_graph() returns a builder that must be awaited"]
+pub struct GraphInspectionBuilder<'a> {
+    client: &'a Client,
+    agent_id: Option<String>,
+    org_id: Option<String>,
+    user_id: Option<String>,
+    limit: usize,
+}
+
+#[cfg(feature = "knowledge-graph")]
+impl<'a> GraphInspectionBuilder<'a> {
+    pub(super) fn new(client: &'a Client) -> Self {
+        Self {
+            client,
+            agent_id: None,
+            org_id: None,
+            user_id: None,
+            limit: crate::graph::DEFAULT_INSPECTION_LIMIT,
+        }
+    }
+
+    /// Narrows the view to one agent id. Default: all agents.
+    pub fn agent(mut self, agent_id: impl Into<String>) -> Self {
+        self.agent_id = Some(agent_id.into());
+        self
+    }
+
+    /// Narrows the view to one org id. Default: all orgs.
+    pub fn org(mut self, org_id: impl Into<String>) -> Self {
+        self.org_id = Some(org_id.into());
+        self
+    }
+
+    /// Narrows the view to one user id. Default: all users.
+    pub fn user(mut self, user_id: impl Into<String>) -> Self {
+        self.user_id = Some(user_id.into());
+        self
+    }
+
+    /// Caps the nodes and edges returned. Clamped to the inspection bounds.
+    pub fn limit(mut self, limit: usize) -> Self {
+        self.limit = limit;
+        self
+    }
+}
+
+#[cfg(feature = "knowledge-graph")]
+impl<'a> IntoFuture for GraphInspectionBuilder<'a> {
+    type Output = Result<GraphSnapshot, ClientError>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'a>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            let Self {
+                client,
+                agent_id,
+                org_id,
+                user_id,
+                limit,
+            } = self;
+
+            let Some(graph) = client.inner.graph.as_deref() else {
+                return Ok(GraphSnapshot::default());
+            };
+
+            let snapshot = graph
+                .inspect_scope(agent_id.as_deref(), org_id.as_deref(), user_id.as_deref(), limit)
+                .await?;
+
+            event!(
+                name: "memoir.admin.inspect_graph",
+                Level::INFO,
+                agent_id = agent_id.as_deref().unwrap_or("*"),
+                org_id = org_id.as_deref().unwrap_or("*"),
+                user_id = user_id.as_deref().unwrap_or("*"),
+                nodes = snapshot.nodes.len(),
+                edges = snapshot.edges.len(),
+                truncated = snapshot.truncated,
+                "inspected graph snapshot",
+            );
+
+            Ok(snapshot)
+        })
+    }
 }

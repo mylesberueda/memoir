@@ -17,6 +17,9 @@ mod m20000000_000005_create_supersession_events;
 mod m20000000_000006_add_confidence_category_retirement;
 mod m20000000_000007_add_categorize_job_kind;
 mod m20000000_000008_add_reprocess_job_kind;
+mod m20000000_000009_add_relational_extract_job_kind;
+mod m20000000_000010_add_synthesize_job_kind;
+mod m20000000_000011_create_graph_triple_staging;
 
 /// Default Postgres schema for memoir-core's tables.
 pub const DEFAULT_SCHEMA: &str = "memoir";
@@ -59,6 +62,9 @@ impl MigratorTrait for Migrator {
             Box::new(m20000000_000006_add_confidence_category_retirement::Migration),
             Box::new(m20000000_000007_add_categorize_job_kind::Migration),
             Box::new(m20000000_000008_add_reprocess_job_kind::Migration),
+            Box::new(m20000000_000009_add_relational_extract_job_kind::Migration),
+            Box::new(m20000000_000010_add_synthesize_job_kind::Migration),
+            Box::new(m20000000_000011_create_graph_triple_staging::Migration),
         ]
     }
 }

@@ -3691,6 +3691,674 @@ impl<'de> serde::Deserialize<'de> for GetUserResponse {
         deserializer.deserialize_struct("memoir.v1.GetUserResponse", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for GraphEdge {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.subject.is_empty() {
+            len += 1;
+        }
+        if !self.relation.is_empty() {
+            len += 1;
+        }
+        if !self.object.is_empty() {
+            len += 1;
+        }
+        if self.confidence != 0. {
+            len += 1;
+        }
+        if self.valid_from.is_some() {
+            len += 1;
+        }
+        if self.valid_to.is_some() {
+            len += 1;
+        }
+        if !self.memory_pids.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.GraphEdge", len)?;
+        if !self.subject.is_empty() {
+            struct_ser.serialize_field("subject", &self.subject)?;
+        }
+        if !self.relation.is_empty() {
+            struct_ser.serialize_field("relation", &self.relation)?;
+        }
+        if !self.object.is_empty() {
+            struct_ser.serialize_field("object", &self.object)?;
+        }
+        if self.confidence != 0. {
+            struct_ser.serialize_field("confidence", &self.confidence)?;
+        }
+        if let Some(v) = self.valid_from.as_ref() {
+            struct_ser.serialize_field("validFrom", v)?;
+        }
+        if let Some(v) = self.valid_to.as_ref() {
+            struct_ser.serialize_field("validTo", v)?;
+        }
+        if !self.memory_pids.is_empty() {
+            struct_ser.serialize_field("memoryPids", &self.memory_pids)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GraphEdge {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "subject",
+            "relation",
+            "object",
+            "confidence",
+            "valid_from",
+            "validFrom",
+            "valid_to",
+            "validTo",
+            "memory_pids",
+            "memoryPids",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Subject,
+            Relation,
+            Object,
+            Confidence,
+            ValidFrom,
+            ValidTo,
+            MemoryPids,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "subject" => Ok(GeneratedField::Subject),
+                            "relation" => Ok(GeneratedField::Relation),
+                            "object" => Ok(GeneratedField::Object),
+                            "confidence" => Ok(GeneratedField::Confidence),
+                            "validFrom" | "valid_from" => Ok(GeneratedField::ValidFrom),
+                            "validTo" | "valid_to" => Ok(GeneratedField::ValidTo),
+                            "memoryPids" | "memory_pids" => Ok(GeneratedField::MemoryPids),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GraphEdge;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.GraphEdge")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GraphEdge, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut subject__ = None;
+                let mut relation__ = None;
+                let mut object__ = None;
+                let mut confidence__ = None;
+                let mut valid_from__ = None;
+                let mut valid_to__ = None;
+                let mut memory_pids__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Subject => {
+                            if subject__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("subject"));
+                            }
+                            subject__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Relation => {
+                            if relation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("relation"));
+                            }
+                            relation__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Object => {
+                            if object__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("object"));
+                            }
+                            object__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Confidence => {
+                            if confidence__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("confidence"));
+                            }
+                            confidence__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                        GeneratedField::ValidFrom => {
+                            if valid_from__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("validFrom"));
+                            }
+                            valid_from__ = map_.next_value()?;
+                        }
+                        GeneratedField::ValidTo => {
+                            if valid_to__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("validTo"));
+                            }
+                            valid_to__ = map_.next_value()?;
+                        }
+                        GeneratedField::MemoryPids => {
+                            if memory_pids__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("memoryPids"));
+                            }
+                            memory_pids__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(GraphEdge {
+                    subject: subject__.unwrap_or_default(),
+                    relation: relation__.unwrap_or_default(),
+                    object: object__.unwrap_or_default(),
+                    confidence: confidence__.unwrap_or_default(),
+                    valid_from: valid_from__,
+                    valid_to: valid_to__,
+                    memory_pids: memory_pids__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.GraphEdge", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GraphEnrichment {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.entities.is_empty() {
+            len += 1;
+        }
+        if !self.relationships.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.GraphEnrichment", len)?;
+        if !self.entities.is_empty() {
+            struct_ser.serialize_field("entities", &self.entities)?;
+        }
+        if !self.relationships.is_empty() {
+            struct_ser.serialize_field("relationships", &self.relationships)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GraphEnrichment {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "entities",
+            "relationships",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Entities,
+            Relationships,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "entities" => Ok(GeneratedField::Entities),
+                            "relationships" => Ok(GeneratedField::Relationships),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GraphEnrichment;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.GraphEnrichment")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GraphEnrichment, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut entities__ = None;
+                let mut relationships__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Entities => {
+                            if entities__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("entities"));
+                            }
+                            entities__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Relationships => {
+                            if relationships__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("relationships"));
+                            }
+                            relationships__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(GraphEnrichment {
+                    entities: entities__.unwrap_or_default(),
+                    relationships: relationships__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.GraphEnrichment", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GraphEntity {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.name.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.GraphEntity", len)?;
+        if !self.name.is_empty() {
+            struct_ser.serialize_field("name", &self.name)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GraphEntity {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "name",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Name,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "name" => Ok(GeneratedField::Name),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GraphEntity;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.GraphEntity")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GraphEntity, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut name__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Name => {
+                            if name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("name"));
+                            }
+                            name__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(GraphEntity {
+                    name: name__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.GraphEntity", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GraphNode {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.name.is_empty() {
+            len += 1;
+        }
+        if !self.memory_pids.is_empty() {
+            len += 1;
+        }
+        if self.first_seen_at.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.GraphNode", len)?;
+        if !self.name.is_empty() {
+            struct_ser.serialize_field("name", &self.name)?;
+        }
+        if !self.memory_pids.is_empty() {
+            struct_ser.serialize_field("memoryPids", &self.memory_pids)?;
+        }
+        if let Some(v) = self.first_seen_at.as_ref() {
+            struct_ser.serialize_field("firstSeenAt", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GraphNode {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "name",
+            "memory_pids",
+            "memoryPids",
+            "first_seen_at",
+            "firstSeenAt",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Name,
+            MemoryPids,
+            FirstSeenAt,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "name" => Ok(GeneratedField::Name),
+                            "memoryPids" | "memory_pids" => Ok(GeneratedField::MemoryPids),
+                            "firstSeenAt" | "first_seen_at" => Ok(GeneratedField::FirstSeenAt),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GraphNode;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.GraphNode")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GraphNode, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut name__ = None;
+                let mut memory_pids__ = None;
+                let mut first_seen_at__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Name => {
+                            if name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("name"));
+                            }
+                            name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::MemoryPids => {
+                            if memory_pids__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("memoryPids"));
+                            }
+                            memory_pids__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::FirstSeenAt => {
+                            if first_seen_at__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("firstSeenAt"));
+                            }
+                            first_seen_at__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(GraphNode {
+                    name: name__.unwrap_or_default(),
+                    memory_pids: memory_pids__.unwrap_or_default(),
+                    first_seen_at: first_seen_at__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.GraphNode", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for GraphRelationship {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.subject.is_empty() {
+            len += 1;
+        }
+        if !self.relation.is_empty() {
+            len += 1;
+        }
+        if !self.object.is_empty() {
+            len += 1;
+        }
+        if self.confidence != 0. {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.GraphRelationship", len)?;
+        if !self.subject.is_empty() {
+            struct_ser.serialize_field("subject", &self.subject)?;
+        }
+        if !self.relation.is_empty() {
+            struct_ser.serialize_field("relation", &self.relation)?;
+        }
+        if !self.object.is_empty() {
+            struct_ser.serialize_field("object", &self.object)?;
+        }
+        if self.confidence != 0. {
+            struct_ser.serialize_field("confidence", &self.confidence)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for GraphRelationship {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "subject",
+            "relation",
+            "object",
+            "confidence",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Subject,
+            Relation,
+            Object,
+            Confidence,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "subject" => Ok(GeneratedField::Subject),
+                            "relation" => Ok(GeneratedField::Relation),
+                            "object" => Ok(GeneratedField::Object),
+                            "confidence" => Ok(GeneratedField::Confidence),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = GraphRelationship;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.GraphRelationship")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<GraphRelationship, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut subject__ = None;
+                let mut relation__ = None;
+                let mut object__ = None;
+                let mut confidence__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Subject => {
+                            if subject__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("subject"));
+                            }
+                            subject__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Relation => {
+                            if relation__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("relation"));
+                            }
+                            relation__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Object => {
+                            if object__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("object"));
+                            }
+                            object__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Confidence => {
+                            if confidence__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("confidence"));
+                            }
+                            confidence__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(GraphRelationship {
+                    subject: subject__.unwrap_or_default(),
+                    relation: relation__.unwrap_or_default(),
+                    object: object__.unwrap_or_default(),
+                    confidence: confidence__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.GraphRelationship", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for Hybrid {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -3801,6 +4469,278 @@ impl<'de> serde::Deserialize<'de> for Hybrid {
         deserializer.deserialize_struct("memoir.v1.Hybrid", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for InspectGraphRequest {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.agent_id.is_some() {
+            len += 1;
+        }
+        if self.org_id.is_some() {
+            len += 1;
+        }
+        if self.user_id.is_some() {
+            len += 1;
+        }
+        if self.limit != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.InspectGraphRequest", len)?;
+        if let Some(v) = self.agent_id.as_ref() {
+            struct_ser.serialize_field("agentId", v)?;
+        }
+        if let Some(v) = self.org_id.as_ref() {
+            struct_ser.serialize_field("orgId", v)?;
+        }
+        if let Some(v) = self.user_id.as_ref() {
+            struct_ser.serialize_field("userId", v)?;
+        }
+        if self.limit != 0 {
+            struct_ser.serialize_field("limit", &self.limit)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for InspectGraphRequest {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "agent_id",
+            "agentId",
+            "org_id",
+            "orgId",
+            "user_id",
+            "userId",
+            "limit",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            AgentId,
+            OrgId,
+            UserId,
+            Limit,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "agentId" | "agent_id" => Ok(GeneratedField::AgentId),
+                            "orgId" | "org_id" => Ok(GeneratedField::OrgId),
+                            "userId" | "user_id" => Ok(GeneratedField::UserId),
+                            "limit" => Ok(GeneratedField::Limit),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = InspectGraphRequest;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.InspectGraphRequest")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<InspectGraphRequest, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut agent_id__ = None;
+                let mut org_id__ = None;
+                let mut user_id__ = None;
+                let mut limit__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::AgentId => {
+                            if agent_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("agentId"));
+                            }
+                            agent_id__ = map_.next_value()?;
+                        }
+                        GeneratedField::OrgId => {
+                            if org_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("orgId"));
+                            }
+                            org_id__ = map_.next_value()?;
+                        }
+                        GeneratedField::UserId => {
+                            if user_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("userId"));
+                            }
+                            user_id__ = map_.next_value()?;
+                        }
+                        GeneratedField::Limit => {
+                            if limit__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("limit"));
+                            }
+                            limit__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
+                    }
+                }
+                Ok(InspectGraphRequest {
+                    agent_id: agent_id__,
+                    org_id: org_id__,
+                    user_id: user_id__,
+                    limit: limit__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.InspectGraphRequest", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for InspectGraphResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.nodes.is_empty() {
+            len += 1;
+        }
+        if !self.edges.is_empty() {
+            len += 1;
+        }
+        if self.truncated {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("memoir.v1.InspectGraphResponse", len)?;
+        if !self.nodes.is_empty() {
+            struct_ser.serialize_field("nodes", &self.nodes)?;
+        }
+        if !self.edges.is_empty() {
+            struct_ser.serialize_field("edges", &self.edges)?;
+        }
+        if self.truncated {
+            struct_ser.serialize_field("truncated", &self.truncated)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for InspectGraphResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "nodes",
+            "edges",
+            "truncated",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Nodes,
+            Edges,
+            Truncated,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "nodes" => Ok(GeneratedField::Nodes),
+                            "edges" => Ok(GeneratedField::Edges),
+                            "truncated" => Ok(GeneratedField::Truncated),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = InspectGraphResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct memoir.v1.InspectGraphResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<InspectGraphResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut nodes__ = None;
+                let mut edges__ = None;
+                let mut truncated__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Nodes => {
+                            if nodes__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodes"));
+                            }
+                            nodes__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Edges => {
+                            if edges__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("edges"));
+                            }
+                            edges__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Truncated => {
+                            if truncated__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("truncated"));
+                            }
+                            truncated__ = Some(map_.next_value()?);
+                        }
+                    }
+                }
+                Ok(InspectGraphResponse {
+                    nodes: nodes__.unwrap_or_default(),
+                    edges: edges__.unwrap_or_default(),
+                    truncated: truncated__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("memoir.v1.InspectGraphResponse", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for IntegerList {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -3907,6 +4847,8 @@ impl serde::Serialize for JobKind {
             Self::Extract => "JOB_KIND_EXTRACT",
             Self::Categorize => "JOB_KIND_CATEGORIZE",
             Self::Reprocess => "JOB_KIND_REPROCESS",
+            Self::RelationalExtract => "JOB_KIND_RELATIONAL_EXTRACT",
+            Self::Synthesize => "JOB_KIND_SYNTHESIZE",
         };
         serializer.serialize_str(variant)
     }
@@ -3923,6 +4865,8 @@ impl<'de> serde::Deserialize<'de> for JobKind {
             "JOB_KIND_EXTRACT",
             "JOB_KIND_CATEGORIZE",
             "JOB_KIND_REPROCESS",
+            "JOB_KIND_RELATIONAL_EXTRACT",
+            "JOB_KIND_SYNTHESIZE",
         ];
 
         struct GeneratedVisitor;
@@ -3968,6 +4912,8 @@ impl<'de> serde::Deserialize<'de> for JobKind {
                     "JOB_KIND_EXTRACT" => Ok(JobKind::Extract),
                     "JOB_KIND_CATEGORIZE" => Ok(JobKind::Categorize),
                     "JOB_KIND_REPROCESS" => Ok(JobKind::Reprocess),
+                    "JOB_KIND_RELATIONAL_EXTRACT" => Ok(JobKind::RelationalExtract),
+                    "JOB_KIND_SYNTHESIZE" => Ok(JobKind::Synthesize),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -6495,6 +7441,12 @@ impl serde::Serialize for QueryRequest {
         if self.ranking.is_some() {
             len += 1;
         }
+        if self.with_graph_enrichment {
+            len += 1;
+        }
+        if self.graph_depth != 0 {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.QueryRequest", len)?;
         if let Some(v) = self.scope.as_ref() {
             struct_ser.serialize_field("scope", v)?;
@@ -6529,6 +7481,12 @@ impl serde::Serialize for QueryRequest {
         if let Some(v) = self.ranking.as_ref() {
             struct_ser.serialize_field("ranking", v)?;
         }
+        if self.with_graph_enrichment {
+            struct_ser.serialize_field("withGraphEnrichment", &self.with_graph_enrichment)?;
+        }
+        if self.graph_depth != 0 {
+            struct_ser.serialize_field("graphDepth", &self.graph_depth)?;
+        }
         struct_ser.end()
     }
 }
@@ -6556,6 +7514,10 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
             "event_at_before",
             "eventAtBefore",
             "ranking",
+            "with_graph_enrichment",
+            "withGraphEnrichment",
+            "graph_depth",
+            "graphDepth",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -6571,6 +7533,8 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
             EventAtAfter,
             EventAtBefore,
             Ranking,
+            WithGraphEnrichment,
+            GraphDepth,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -6603,6 +7567,8 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
                             "eventAtAfter" | "event_at_after" => Ok(GeneratedField::EventAtAfter),
                             "eventAtBefore" | "event_at_before" => Ok(GeneratedField::EventAtBefore),
                             "ranking" => Ok(GeneratedField::Ranking),
+                            "withGraphEnrichment" | "with_graph_enrichment" => Ok(GeneratedField::WithGraphEnrichment),
+                            "graphDepth" | "graph_depth" => Ok(GeneratedField::GraphDepth),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -6633,6 +7599,8 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
                 let mut event_at_after__ = None;
                 let mut event_at_before__ = None;
                 let mut ranking__ = None;
+                let mut with_graph_enrichment__ = None;
+                let mut graph_depth__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Scope => {
@@ -6705,6 +7673,20 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
                             }
                             ranking__ = map_.next_value()?;
                         }
+                        GeneratedField::WithGraphEnrichment => {
+                            if with_graph_enrichment__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("withGraphEnrichment"));
+                            }
+                            with_graph_enrichment__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::GraphDepth => {
+                            if graph_depth__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("graphDepth"));
+                            }
+                            graph_depth__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
                     }
                 }
                 Ok(QueryRequest {
@@ -6719,6 +7701,8 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
                     event_at_after: event_at_after__,
                     event_at_before: event_at_before__,
                     ranking: ranking__,
+                    with_graph_enrichment: with_graph_enrichment__.unwrap_or_default(),
+                    graph_depth: graph_depth__.unwrap_or_default(),
                 })
             }
         }
@@ -6739,12 +7723,18 @@ impl serde::Serialize for QueryResponse {
         if self.ranking_used.is_some() {
             len += 1;
         }
+        if self.enrichment.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.QueryResponse", len)?;
         if !self.hits.is_empty() {
             struct_ser.serialize_field("hits", &self.hits)?;
         }
         if let Some(v) = self.ranking_used.as_ref() {
             struct_ser.serialize_field("rankingUsed", v)?;
+        }
+        if let Some(v) = self.enrichment.as_ref() {
+            struct_ser.serialize_field("enrichment", v)?;
         }
         struct_ser.end()
     }
@@ -6759,12 +7749,14 @@ impl<'de> serde::Deserialize<'de> for QueryResponse {
             "hits",
             "ranking_used",
             "rankingUsed",
+            "enrichment",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             Hits,
             RankingUsed,
+            Enrichment,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -6788,6 +7780,7 @@ impl<'de> serde::Deserialize<'de> for QueryResponse {
                         match value {
                             "hits" => Ok(GeneratedField::Hits),
                             "rankingUsed" | "ranking_used" => Ok(GeneratedField::RankingUsed),
+                            "enrichment" => Ok(GeneratedField::Enrichment),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -6809,6 +7802,7 @@ impl<'de> serde::Deserialize<'de> for QueryResponse {
             {
                 let mut hits__ = None;
                 let mut ranking_used__ = None;
+                let mut enrichment__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Hits => {
@@ -6823,11 +7817,18 @@ impl<'de> serde::Deserialize<'de> for QueryResponse {
                             }
                             ranking_used__ = map_.next_value()?;
                         }
+                        GeneratedField::Enrichment => {
+                            if enrichment__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("enrichment"));
+                            }
+                            enrichment__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(QueryResponse {
                     hits: hits__.unwrap_or_default(),
                     ranking_used: ranking_used__,
+                    enrichment: enrichment__,
                 })
             }
         }
@@ -9118,6 +10119,12 @@ impl serde::Serialize for SearchRequest {
         if self.kinds.is_some() {
             len += 1;
         }
+        if self.with_graph_enrichment {
+            len += 1;
+        }
+        if self.graph_depth != 0 {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.SearchRequest", len)?;
         if let Some(v) = self.scope.as_ref() {
             struct_ser.serialize_field("scope", v)?;
@@ -9137,6 +10144,12 @@ impl serde::Serialize for SearchRequest {
         if let Some(v) = self.kinds.as_ref() {
             struct_ser.serialize_field("kinds", v)?;
         }
+        if self.with_graph_enrichment {
+            struct_ser.serialize_field("withGraphEnrichment", &self.with_graph_enrichment)?;
+        }
+        if self.graph_depth != 0 {
+            struct_ser.serialize_field("graphDepth", &self.graph_depth)?;
+        }
         struct_ser.end()
     }
 }
@@ -9155,6 +10168,10 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
             "min_similarity",
             "minSimilarity",
             "kinds",
+            "with_graph_enrichment",
+            "withGraphEnrichment",
+            "graph_depth",
+            "graphDepth",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -9165,6 +10182,8 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
             MetadataFilter,
             MinSimilarity,
             Kinds,
+            WithGraphEnrichment,
+            GraphDepth,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -9192,6 +10211,8 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                             "metadataFilter" | "metadata_filter" => Ok(GeneratedField::MetadataFilter),
                             "minSimilarity" | "min_similarity" => Ok(GeneratedField::MinSimilarity),
                             "kinds" => Ok(GeneratedField::Kinds),
+                            "withGraphEnrichment" | "with_graph_enrichment" => Ok(GeneratedField::WithGraphEnrichment),
+                            "graphDepth" | "graph_depth" => Ok(GeneratedField::GraphDepth),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -9217,6 +10238,8 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                 let mut metadata_filter__ = None;
                 let mut min_similarity__ = None;
                 let mut kinds__ = None;
+                let mut with_graph_enrichment__ = None;
+                let mut graph_depth__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Scope => {
@@ -9259,6 +10282,20 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                             }
                             kinds__ = map_.next_value()?;
                         }
+                        GeneratedField::WithGraphEnrichment => {
+                            if with_graph_enrichment__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("withGraphEnrichment"));
+                            }
+                            with_graph_enrichment__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::GraphDepth => {
+                            if graph_depth__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("graphDepth"));
+                            }
+                            graph_depth__ = 
+                                Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
+                            ;
+                        }
                     }
                 }
                 Ok(SearchRequest {
@@ -9268,6 +10305,8 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                     metadata_filter: metadata_filter__,
                     min_similarity: min_similarity__,
                     kinds: kinds__,
+                    with_graph_enrichment: with_graph_enrichment__.unwrap_or_default(),
+                    graph_depth: graph_depth__.unwrap_or_default(),
                 })
             }
         }
@@ -9285,9 +10324,15 @@ impl serde::Serialize for SearchResponse {
         if !self.hits.is_empty() {
             len += 1;
         }
+        if self.enrichment.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.SearchResponse", len)?;
         if !self.hits.is_empty() {
             struct_ser.serialize_field("hits", &self.hits)?;
+        }
+        if let Some(v) = self.enrichment.as_ref() {
+            struct_ser.serialize_field("enrichment", v)?;
         }
         struct_ser.end()
     }
@@ -9300,11 +10345,13 @@ impl<'de> serde::Deserialize<'de> for SearchResponse {
     {
         const FIELDS: &[&str] = &[
             "hits",
+            "enrichment",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             Hits,
+            Enrichment,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -9327,6 +10374,7 @@ impl<'de> serde::Deserialize<'de> for SearchResponse {
                     {
                         match value {
                             "hits" => Ok(GeneratedField::Hits),
+                            "enrichment" => Ok(GeneratedField::Enrichment),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -9347,6 +10395,7 @@ impl<'de> serde::Deserialize<'de> for SearchResponse {
                     V: serde::de::MapAccess<'de>,
             {
                 let mut hits__ = None;
+                let mut enrichment__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Hits => {
@@ -9355,10 +10404,17 @@ impl<'de> serde::Deserialize<'de> for SearchResponse {
                             }
                             hits__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::Enrichment => {
+                            if enrichment__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("enrichment"));
+                            }
+                            enrichment__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(SearchResponse {
                     hits: hits__.unwrap_or_default(),
+                    enrichment: enrichment__,
                 })
             }
         }

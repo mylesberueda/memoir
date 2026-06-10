@@ -1,3 +1,8 @@
+// Raised from the default 128 so the compiler can finish proving the worker's
+// spawned future is `Send`: that proof recurses through the falkordb -> redis ->
+// mio TcpStream type tree, which is deep but valid. The future is genuinely
+// `Send`; only the proof depth exceeds the default.
+#![recursion_limit = "256"]
 //! Memoir memory substrate as an embeddable Rust library.
 //!
 //! Memoir stores what an agent is told and derives durable facts from it. A
@@ -41,6 +46,7 @@
 
 pub mod client;
 pub mod embedding;
+pub mod graph;
 pub mod jobs;
 pub mod llm;
 pub mod memory;

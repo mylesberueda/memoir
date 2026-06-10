@@ -407,12 +407,27 @@ pub enum ForgetTarget {
 pub struct Memories {
     list: Vec<Memory>,
     system_prompt: Option<String>,
+    graph: crate::graph::GraphContext,
 }
 
 impl Memories {
     /// Builds a `Memories` from a list and an optional system prompt section.
+    ///
+    /// The graph context starts empty; populate it with
+    /// [`Self::with_graph_context`] when a search opts into enrichment.
     pub fn new(list: Vec<Memory>, system_prompt: Option<String>) -> Self {
-        Self { list, system_prompt }
+        Self {
+            list,
+            system_prompt,
+            graph: crate::graph::GraphContext::default(),
+        }
+    }
+
+    /// Attaches the graph neighborhood produced by an enriched search.
+    #[must_use]
+    pub fn with_graph_context(mut self, graph: crate::graph::GraphContext) -> Self {
+        self.graph = graph;
+        self
     }
 
     /// Returns the contained memories as a slice.
@@ -423,6 +438,17 @@ impl Memories {
     /// Returns the configured system-prompt section, if any.
     pub fn system_prompt(&self) -> Option<&str> {
         self.system_prompt.as_deref()
+    }
+
+    /// Returns the graph neighborhood from an enriched search.
+    ///
+    /// Empty unless the search opted in via `.with_graph()`. This is read-only
+    /// context for the consumer to format as they choose; [`Display`] renders
+    /// only the memories, leaving graph-context injection to the caller.
+    ///
+    /// [`Display`]: std::fmt::Display
+    pub fn graph(&self) -> &crate::graph::GraphContext {
+        &self.graph
     }
 }
 

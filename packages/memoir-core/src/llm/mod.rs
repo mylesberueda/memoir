@@ -11,6 +11,7 @@ mod config;
 mod error;
 pub mod extraction;
 mod inner;
+mod json_reply;
 mod ollama;
 mod openai;
 mod role;
@@ -24,6 +25,8 @@ pub use extraction::{
     MAX_CONTENT_CHARS, build_extraction_content, parse_extraction,
 };
 pub use role::{LlmRegistry, LlmRole};
+
+pub(crate) use json_reply::locate_json_object;
 
 use std::future::Future;
 use std::sync::Arc;

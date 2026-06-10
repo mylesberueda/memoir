@@ -171,6 +171,77 @@ pub struct ExtractionStatsResponse {
     #[prost(message, repeated, tag="1")]
     pub stats: ::prost::alloc::vec::Vec<ExtractionStat>,
 }
+// ─── InspectGraph RPC ───────────────────────────────────────────────────────
+
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct InspectGraphRequest {
+    /// Optional scope-subset filters. Each set field narrows the view; an unset
+    /// field widens across that dimension. All three unset inspects every tenant
+    /// — the cross-scope admin view. Maps to memoir-core's partial-scope
+    /// `Client::inspect_graph` setters.
+    #[prost(string, optional, tag="1")]
+    pub agent_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag="2")]
+    pub org_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag="3")]
+    pub user_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Maximum nodes and maximum edges to return (applied independently). `0`
+    /// means "use library default"; the library clamps to its hard maximum. When
+    /// a cap is hit, the response's `truncated` flag is set.
+    #[prost(uint32, tag="4")]
+    pub limit: u32,
+}
+/// One entity node in an admin graph snapshot. Mirrors
+/// `memoir_core::graph::GraphNode`. Untyped in v1 (the node carries only its
+/// canonical name for identity) plus the provenance the admin view renders.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GraphNode {
+    /// Canonical entity name (identity within a scope).
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+    /// Memories that contributed this entity.
+    #[prost(string, repeated, tag="2")]
+    pub memory_pids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// RFC 3339; absent if the node lacks it.
+    #[prost(string, optional, tag="3")]
+    pub first_seen_at: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// One relationship edge in an admin graph snapshot. Mirrors
+/// `memoir_core::graph::GraphEdge`. Carries the full temporal state so the UI can
+/// render history: `valid_to` is absent for a current edge, set for a superseded
+/// one.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GraphEdge {
+    #[prost(string, tag="1")]
+    pub subject: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub relation: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub object: ::prost::alloc::string::String,
+    /// \[0.0, 1.0\].
+    #[prost(float, tag="4")]
+    pub confidence: f32,
+    /// RFC 3339; when the fact became true.
+    #[prost(string, optional, tag="5")]
+    pub valid_from: ::core::option::Option<::prost::alloc::string::String>,
+    /// RFC 3339; when superseded. Absent = current.
+    #[prost(string, optional, tag="6")]
+    pub valid_to: ::core::option::Option<::prost::alloc::string::String>,
+    /// Memories that contributed this edge.
+    #[prost(string, repeated, tag="7")]
+    pub memory_pids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InspectGraphResponse {
+    #[prost(message, repeated, tag="1")]
+    pub nodes: ::prost::alloc::vec::Vec<GraphNode>,
+    #[prost(message, repeated, tag="2")]
+    pub edges: ::prost::alloc::vec::Vec<GraphEdge>,
+    /// Whether the node or edge list was capped at the limit — the view is
+    /// partial, not the scope small.
+    #[prost(bool, tag="3")]
+    pub truncated: bool,
+}
 // ─── Core types ─────────────────────────────────────────────────────────────
 
 /// JobKind mirrors `memoir_core::jobs::JobKind`. The set is closed by the
@@ -188,6 +259,10 @@ pub enum JobKind {
     Categorize = 3,
     /// Re-derive semantic rows from a corrected episodic source.
     Reprocess = 4,
+    /// Derive relational triples from an episodic memory (knowledge graph).
+    RelationalExtract = 5,
+    /// Reconcile triples against semantic facts + commit to the graph.
+    Synthesize = 6,
 }
 impl JobKind {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -201,6 +276,8 @@ impl JobKind {
             Self::Extract => "JOB_KIND_EXTRACT",
             Self::Categorize => "JOB_KIND_CATEGORIZE",
             Self::Reprocess => "JOB_KIND_REPROCESS",
+            Self::RelationalExtract => "JOB_KIND_RELATIONAL_EXTRACT",
+            Self::Synthesize => "JOB_KIND_SYNTHESIZE",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -211,6 +288,8 @@ impl JobKind {
             "JOB_KIND_EXTRACT" => Some(Self::Extract),
             "JOB_KIND_CATEGORIZE" => Some(Self::Categorize),
             "JOB_KIND_REPROCESS" => Some(Self::Reprocess),
+            "JOB_KIND_RELATIONAL_EXTRACT" => Some(Self::RelationalExtract),
+            "JOB_KIND_SYNTHESIZE" => Some(Self::Synthesize),
             _ => None,
         }
     }
@@ -575,6 +654,37 @@ pub struct SearchHit {
     #[prost(float, tag="2")]
     pub score: f32,
 }
+/// One entity in a graph-enrichment neighborhood. Untyped in v0.1 (carries only
+/// the canonical name); an entity-type field may be added later.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GraphEntity {
+    #[prost(string, tag="1")]
+    pub name: ::prost::alloc::string::String,
+}
+/// One current relationship in a graph-enrichment neighborhood.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GraphRelationship {
+    #[prost(string, tag="1")]
+    pub subject: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub relation: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub object: ::prost::alloc::string::String,
+    /// The extractor's certainty, \[0.0, 1.0\].
+    #[prost(float, tag="4")]
+    pub confidence: f32,
+}
+/// The graph neighborhood around a search/query's hits, returned only when the
+/// request opted in via `with_graph_enrichment`. Flat, deduplicated lists; empty
+/// when enrichment was not requested or no graph backend is configured. A
+/// property of the whole result, not of any single hit.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GraphEnrichment {
+    #[prost(message, repeated, tag="1")]
+    pub entities: ::prost::alloc::vec::Vec<GraphEntity>,
+    #[prost(message, repeated, tag="2")]
+    pub relationships: ::prost::alloc::vec::Vec<GraphRelationship>,
+}
 // ─── RPCs ───────────────────────────────────────────────────────────────────
 
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -605,6 +715,17 @@ pub struct SearchRequest {
     /// `SearchBuilder::episodic` / `::semantic` toggles.
     #[prost(message, optional, tag="6")]
     pub kinds: ::core::option::Option<KindSelector>,
+    /// Opt into graph enrichment: after the vector search, traverse the knowledge
+    /// graph from the hits' entities and return the neighborhood in
+    /// `SearchResponse.enrichment`. Off (false) by default. Maps to the library's
+    /// `SearchBuilder::with_graph`. A no-op when the service has no graph backend.
+    #[prost(bool, tag="7")]
+    pub with_graph_enrichment: bool,
+    /// Traversal depth for `with_graph_enrichment`, in hops. 0 = library default
+    /// (1); values are clamped to the library maximum (2). Maps to
+    /// `SearchBuilder::with_graph_depth`. Ignored when enrichment is off.
+    #[prost(uint32, tag="8")]
+    pub graph_depth: u32,
 }
 /// Caller-supplied filter applied at search time. Mirrors Qdrant's payload
 /// filter structure one-to-one but is a memoir-owned type so consumers do not
@@ -708,6 +829,10 @@ pub struct NumericRange {
 pub struct SearchResponse {
     #[prost(message, repeated, tag="1")]
     pub hits: ::prost::alloc::vec::Vec<SearchHit>,
+    /// The graph neighborhood around the hits, present only when the request set
+    /// `with_graph_enrichment`. Empty/absent otherwise.
+    #[prost(message, optional, tag="2")]
+    pub enrichment: ::core::option::Option<GraphEnrichment>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct RecallRequest {
@@ -983,6 +1108,16 @@ pub struct QueryRequest {
     /// pre-1.0; pin an explicit Ranking for stable behavior).
     #[prost(message, optional, tag="11")]
     pub ranking: ::core::option::Option<Ranking>,
+    /// Opt into graph enrichment: traverse the knowledge graph from the hits'
+    /// entities and return the neighborhood in `QueryResponse.enrichment`. Off by
+    /// default. Maps to `QueryBuilder::with_graph`. No-op without a graph backend.
+    #[prost(bool, tag="12")]
+    pub with_graph_enrichment: bool,
+    /// Traversal depth for `with_graph_enrichment`, in hops. 0 = library default
+    /// (1); clamped to the library maximum (2). Maps to
+    /// `QueryBuilder::with_graph_depth`. Ignored when enrichment is off.
+    #[prost(uint32, tag="13")]
+    pub graph_depth: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct QueryResponse {
@@ -994,6 +1129,10 @@ pub struct QueryResponse {
     /// `MemoryContext::strategy_used()`.
     #[prost(message, optional, tag="2")]
     pub ranking_used: ::core::option::Option<Ranking>,
+    /// The graph neighborhood around the hits, present only when the request set
+    /// `with_graph_enrichment`. Empty/absent otherwise.
+    #[prost(message, optional, tag="3")]
+    pub enrichment: ::core::option::Option<GraphEnrichment>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EditRequest {

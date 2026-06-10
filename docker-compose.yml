@@ -3,6 +3,7 @@ name: "memoir"
 volumes:
   memoir-postgres: {}
   memoir-qdrant: {}
+  memoir-falkordb: {}
 
 services:
   # To run all services, use `docker compose --profile dev up -d`
@@ -45,6 +46,29 @@ services:
         limits:
           memory: 64M
     command: redis-server --appendonly yes
+    networks:
+      - default
+      - kind
+
+  falkordb:
+    container_name: memoir-falkordb
+    image: falkordb/falkordb:latest # Currently @ v4
+    profiles:
+      - "knowledge-graph"
+    ports:
+      - "$FALKOR_PORT:6379"
+    volumes:
+      - memoir-falkordb:/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: "10s"
+      timeout: "5s"
+      retries: 5
+      start_period: "10s"
     networks:
       - default
       - kind

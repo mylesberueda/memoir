@@ -38,6 +38,35 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
         payload: serde_json::Value,
     ) -> impl Future<Output = Result<i64, JobsError>> + Send;
 
+    /// Atomically enqueues a `synthesize` job for `source_pid`, but only once
+    /// both LLM-derived siblings have succeeded.
+    ///
+    /// The two-parent fan-in of the knowledge-graph pipeline, resolved without a
+    /// job-dependency system: a `synthesize` row is inserted iff no *other*
+    /// `extract` or `relational_extract` row for `source_pid` still exists.
+    /// Because a succeeded job deletes its row ([`Self::complete`]) while a
+    /// failed or in-flight one retains it, "no sibling row" means "both siblings
+    /// succeeded."
+    ///
+    /// `caller_job_id` is the id of the calling sibling's own job row, which is
+    /// still present (claimed, not yet completed) at call time — each handler
+    /// fires this from inside its own dispatch, before the worker completes it.
+    /// It is excluded from the sibling check so a job does not see *itself* as a
+    /// still-running sibling and block synthesis forever. The check and the
+    /// insert MUST share one atomic statement so two concurrent sibling
+    /// completions cannot both insert. Returns whether a row was inserted
+    /// (`false` when another sibling is still present, or a `synthesize` row
+    /// already exists).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`JobsError::Database`] for database failures.
+    fn enqueue_synthesis_if_ready(
+        &self,
+        source_pid: &str,
+        caller_job_id: i64,
+    ) -> impl Future<Output = Result<bool, JobsError>> + Send;
+
     /// Atomically claims the oldest pending job and returns it, or `None`.
     ///
     /// Uses `SELECT FOR UPDATE SKIP LOCKED` (or equivalent) so concurrent
@@ -47,10 +76,7 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`JobsError::Database`] for database failures.
-    fn claim(
-        &self,
-        claimed_by: Option<&str>,
-    ) -> impl Future<Output = Result<Option<Job>, JobsError>> + Send;
+    fn claim(&self, claimed_by: Option<&str>) -> impl Future<Output = Result<Option<Job>, JobsError>> + Send;
 
     /// Marks a claimed job as completed (deletes the row).
     ///
@@ -75,12 +101,7 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     ///
     /// Returns [`JobsError::NotFound`] when no claimed job matches `id`,
     /// [`JobsError::Database`] for database failures.
-    fn fail(
-        &self,
-        id: i64,
-        reason: String,
-        max_attempts: i32,
-    ) -> impl Future<Output = Result<(), JobsError>> + Send;
+    fn fail(&self, id: i64, reason: String, max_attempts: i32) -> impl Future<Output = Result<(), JobsError>> + Send;
 
     /// Re-pends every claimed job whose lease has expired.
     ///
@@ -91,10 +112,7 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`JobsError::Database`] for database failures.
-    fn reset_expired_leases(
-        &self,
-        lease: std::time::Duration,
-    ) -> impl Future<Output = Result<u64, JobsError>> + Send;
+    fn reset_expired_leases(&self, lease: std::time::Duration) -> impl Future<Output = Result<u64, JobsError>> + Send;
 
     /// Returns up to `limit` failed jobs, newest-first by `updated_at`.
     ///
@@ -104,10 +122,7 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`JobsError::Database`] for database failures.
-    fn list_failed(
-        &self,
-        limit: usize,
-    ) -> impl Future<Output = Result<Vec<FailedJob>, JobsError>> + Send;
+    fn list_failed(&self, limit: usize) -> impl Future<Output = Result<Vec<FailedJob>, JobsError>> + Send;
 
     /// Flips one failed job back to `pending` and clears the attempt counter.
     ///
@@ -133,11 +148,7 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`JobsError::Database`] for database failures.
-    fn bulk_retry(
-        &self,
-        kind: Option<JobKind>,
-        dry_run: bool,
-    ) -> impl Future<Output = Result<u64, JobsError>> + Send;
+    fn bulk_retry(&self, kind: Option<JobKind>, dry_run: bool) -> impl Future<Output = Result<u64, JobsError>> + Send;
 
     /// Permanently deletes one failed job. The referenced memory is untouched.
     ///
@@ -215,6 +226,41 @@ mod tests {
             Ok(id)
         }
 
+        async fn enqueue_synthesis_if_ready(&self, source_pid: &str, caller_job_id: i64) -> Result<bool, JobsError> {
+            let mut rows = self.rows.lock().unwrap();
+            let blocked = rows.iter().any(|r| {
+                r.id != caller_job_id
+                    && r.source_pid == source_pid
+                    && matches!(
+                        r.kind,
+                        JobKind::Extract | JobKind::RelationalExtract | JobKind::Synthesize
+                    )
+            });
+            if blocked {
+                return Ok(false);
+            }
+            let id = {
+                let mut guard = self.next_id.lock().unwrap();
+                *guard += 1;
+                *guard
+            };
+            let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
+            rows.push(Job {
+                id,
+                source_pid: source_pid.to_owned(),
+                kind: JobKind::Synthesize,
+                state: JobState::Pending,
+                payload: serde_json::json!({}),
+                attempts: 0,
+                failure_reason: None,
+                claimed_at: None,
+                claimed_by: None,
+                created_at: now,
+                updated_at: now,
+            });
+            Ok(true)
+        }
+
         async fn claim(&self, claimed_by: Option<&str>) -> Result<Option<Job>, JobsError> {
             let mut rows = self.rows.lock().unwrap();
             let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
@@ -240,15 +286,18 @@ mod tests {
 
         async fn fail(&self, id: i64, reason: String, max_attempts: i32) -> Result<(), JobsError> {
             let mut rows = self.rows.lock().unwrap();
-            let Some(row) = rows.iter_mut().find(|r| r.id == id && r.state == JobState::Claimed)
-            else {
+            let Some(row) = rows.iter_mut().find(|r| r.id == id && r.state == JobState::Claimed) else {
                 return Err(JobsError::NotFound(id.to_string()));
             };
             row.attempts += 1;
             row.failure_reason = Some(reason);
             row.claimed_at = None;
             row.claimed_by = None;
-            row.state = if row.attempts >= max_attempts { JobState::Failed } else { JobState::Pending };
+            row.state = if row.attempts >= max_attempts {
+                JobState::Failed
+            } else {
+                JobState::Pending
+            };
             row.updated_at = Utc::now().into();
             Ok(())
         }
@@ -296,8 +345,7 @@ mod tests {
 
         async fn retry_job(&self, id: i64) -> Result<(), JobsError> {
             let mut rows = self.rows.lock().unwrap();
-            let Some(row) = rows.iter_mut().find(|r| r.id == id && r.state == JobState::Failed)
-            else {
+            let Some(row) = rows.iter_mut().find(|r| r.id == id && r.state == JobState::Failed) else {
                 return Err(JobsError::NotFound(id.to_string()));
             };
             row.state = JobState::Pending;
@@ -309,11 +357,7 @@ mod tests {
             Ok(())
         }
 
-        async fn bulk_retry(
-            &self,
-            kind: Option<JobKind>,
-            dry_run: bool,
-        ) -> Result<u64, JobsError> {
+        async fn bulk_retry(&self, kind: Option<JobKind>, dry_run: bool) -> Result<u64, JobsError> {
             let mut rows = self.rows.lock().unwrap();
             let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
             let mut affected = 0u64;
@@ -473,7 +517,11 @@ mod tests {
         store.fail(id, "boom".to_string(), 1).await.unwrap();
 
         store.retry_job(id).await.unwrap();
-        let claimed = store.claim(None).await.unwrap().expect("retried job should be claimable");
+        let claimed = store
+            .claim(None)
+            .await
+            .unwrap()
+            .expect("retried job should be claimable");
         assert_eq!(claimed.id, id);
         assert_eq!(claimed.attempts, 0, "retry resets attempts to zero");
         assert!(claimed.failure_reason.is_none(), "retry clears failure reason");
@@ -570,6 +618,116 @@ mod tests {
         store.claim(None).await.unwrap();
         // After claim: 1 pending + 1 claimed.
         assert_eq!(store.pending_count().await.unwrap(), 1);
+    }
+
+    /// A job id no staged row uses, for tests where the caller's own row is
+    /// irrelevant — the exclusion is then a no-op and only sibling rows matter.
+    const NO_CALLER: i64 = 0;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_enqueue_synthesis_when_no_siblings_remain() {
+        let store = StubJobsStore::default();
+        let inserted = store.enqueue_synthesis_if_ready("pid_done", NO_CALLER).await.unwrap();
+        assert!(inserted, "no sibling rows -> synthesis fires");
+        let claimed = store.claim(None).await.unwrap().expect("synthesize row");
+        assert_eq!(claimed.kind, JobKind::Synthesize);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_enqueue_synthesis_when_only_the_callers_own_row_remains() {
+        // The real worker fires this guard from inside the calling sibling's
+        // handler, before the worker completes (deletes) that row. So the
+        // caller's own row is always present at call time; it must be excluded
+        // or synthesis can never fire. Regression for the fan-in never firing.
+        let store = StubJobsStore::default();
+        let caller_id = store
+            .enqueue(JobKind::RelationalExtract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", caller_id).await.unwrap();
+        assert!(inserted, "only the caller's own row remains -> synthesis fires");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_not_enqueue_synthesis_while_extract_sibling_present() {
+        let store = StubJobsStore::default();
+        store
+            .enqueue(JobKind::Extract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
+        assert!(!inserted, "extract sibling still present -> no synthesis");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_not_enqueue_synthesis_while_relational_sibling_present() {
+        let store = StubJobsStore::default();
+        store
+            .enqueue(JobKind::RelationalExtract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
+        assert!(!inserted, "relational sibling still present -> no synthesis");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_not_enqueue_synthesis_while_a_sibling_is_terminally_failed() {
+        // A half-failed pipeline must never synthesize. A failed job's row is
+        // RETAINED (not deleted like a completed one), so the guard sees it and
+        // refuses. Drive the real lifecycle to the failed state — enqueue, claim,
+        // fail at max_attempts — rather than hand-setting the field.
+        let store = StubJobsStore::default();
+        let relational = store
+            .enqueue(JobKind::RelationalExtract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        store.claim(None).await.unwrap().expect("the relational row is claimable");
+        store.fail(relational, "boom".to_string(), 1).await.unwrap();
+
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
+        assert!(!inserted, "a terminally-failed sibling still blocks synthesis");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_not_enqueue_synthesis_when_a_real_sibling_outlives_the_caller() {
+        // Caller's own row excluded, but a genuine *other* sibling still present.
+        let store = StubJobsStore::default();
+        let caller_id = store
+            .enqueue(JobKind::RelationalExtract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        store
+            .enqueue(JobKind::Extract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", caller_id).await.unwrap();
+        assert!(!inserted, "a real other sibling outlives the caller -> no synthesis");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_enqueue_synthesis_exactly_once_regardless_of_order() {
+        // Two sibling completions both call the guard; exactly one inserts.
+        let store = StubJobsStore::default();
+        let first = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
+        let second = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
+        assert!(first, "first call inserts");
+        assert!(!second, "second call sees the existing synthesize row -> no duplicate");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_ignore_unrelated_kinds_when_checking_readiness() {
+        // A pending embed/categorize for the same source must NOT block synthesis.
+        let store = StubJobsStore::default();
+        store
+            .enqueue(JobKind::Embed, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        store
+            .enqueue(JobKind::Categorize, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
+        assert!(inserted, "embed/categorize are not synthesis parents -> synthesis fires");
     }
 
     #[tokio::test(flavor = "current_thread")]

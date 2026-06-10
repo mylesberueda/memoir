@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file memoir/v1/admin.proto.
  */
 export const file_memoir_v1_admin: GenFile = /*@__PURE__*/
-  fileDesc("ChVtZW1vaXIvdjEvYWRtaW4ucHJvdG8SCW1lbW9pci52MSK/AQoJRmFpbGVkSm9iEgoKAmlkGAEgASgDEhIKCnNvdXJjZV9waWQYAiABKAkSIAoEa2luZBgDIAEoDjISLm1lbW9pci52MS5Kb2JLaW5kEhAKCGF0dGVtcHRzGAQgASgFEhsKDmZhaWx1cmVfcmVhc29uGAUgASgJSACIAQESLgoKdXBkYXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCEQoPX2ZhaWx1cmVfcmVhc29uIiYKFUxpc3RGYWlsZWRKb2JzUmVxdWVzdBINCgVsaW1pdBgBIAEoBSI8ChZMaXN0RmFpbGVkSm9ic1Jlc3BvbnNlEiIKBGpvYnMYASADKAsyFC5tZW1vaXIudjEuRmFpbGVkSm9iIhkKF1BlbmRpbmdKb2JzQ291bnRSZXF1ZXN0IikKGFBlbmRpbmdKb2JzQ291bnRSZXNwb25zZRINCgVjb3VudBgBIAEoAyIdCg9SZXRyeUpvYlJlcXVlc3QSCgoCaWQYASABKAMiEgoQUmV0cnlKb2JSZXNwb25zZSIkChZEZWxldGVGYWlsZWRKb2JSZXF1ZXN0EgoKAmlkGAEgASgDIhkKF0RlbGV0ZUZhaWxlZEpvYlJlc3BvbnNlIl8KFlJldHJ5RmFpbGVkSm9ic1JlcXVlc3QSKAoHb2Zfa2luZBgBIAEoDjISLm1lbW9pci52MS5Kb2JLaW5kSACIAQESDwoHZHJ5X3J1bhgCIAEoCEIKCghfb2Zfa2luZCI8ChdSZXRyeUZhaWxlZEpvYnNSZXNwb25zZRIQCghhZmZlY3RlZBgBIAEoAxIPCgdkcnlfcnVuGAIgASgIIiEKElVuc3VwZXJzZWRlUmVxdWVzdBILCgNwaWQYASABKAkiFQoTVW5zdXBlcnNlZGVSZXNwb25zZSJJChBSZWNvbmNpbGVSZXF1ZXN0EhkKEW9ubHlfcmV0cnlfZmFpbGVkGAEgASgIEhoKEm9ubHlfY2xlYW5fb3JwaGFucxgCIAEoCCJeChFSZWNvbmNpbGVSZXNwb25zZRIWCg5mYWlsZWRfcmV0cmllZBgBIAEoAxIYChBmYWlsZWRfcmVjb3ZlcmVkGAIgASgDEhcKD29ycGhhbnNfZGVsZXRlZBgDIAEoAyJ+ChZFeHRyYWN0aW9uU3RhdHNSZXF1ZXN0EhUKCGFnZW50X2lkGAEgASgJSACIAQESEwoGb3JnX2lkGAIgASgJSAGIAQESFAoHdXNlcl9pZBgDIAEoCUgCiAEBQgsKCV9hZ2VudF9pZEIJCgdfb3JnX2lkQgoKCF91c2VyX2lkImQKDkV4dHJhY3Rpb25TdGF0EhAKCHByb3ZpZGVyGAEgASgJEg0KBW1vZGVsGAIgASgJEg0KBXRvdGFsGAMgASgDEhAKCHJlamVjdGVkGAQgASgDEhAKCGFjY3VyYWN5GAUgASgBIkMKF0V4dHJhY3Rpb25TdGF0c1Jlc3BvbnNlEigKBXN0YXRzGAEgAygLMhkubWVtb2lyLnYxLkV4dHJhY3Rpb25TdGF0Kn4KB0pvYktpbmQSGAoUSk9CX0tJTkRfVU5TUEVDSUZJRUQQABISCg5KT0JfS0lORF9FTUJFRBABEhQKEEpPQl9LSU5EX0VYVFJBQ1QQAhIXChNKT0JfS0lORF9DQVRFR09SSVpFEAMSFgoSSk9CX0tJTkRfUkVQUk9DRVNTEAQyqwUKDEFkbWluU2VydmljZRJVCg5MaXN0RmFpbGVkSm9icxIgLm1lbW9pci52MS5MaXN0RmFpbGVkSm9ic1JlcXVlc3QaIS5tZW1vaXIudjEuTGlzdEZhaWxlZEpvYnNSZXNwb25zZRJbChBQZW5kaW5nSm9ic0NvdW50EiIubWVtb2lyLnYxLlBlbmRpbmdKb2JzQ291bnRSZXF1ZXN0GiMubWVtb2lyLnYxLlBlbmRpbmdKb2JzQ291bnRSZXNwb25zZRJDCghSZXRyeUpvYhIaLm1lbW9pci52MS5SZXRyeUpvYlJlcXVlc3QaGy5tZW1vaXIudjEuUmV0cnlKb2JSZXNwb25zZRJYCg9EZWxldGVGYWlsZWRKb2ISIS5tZW1vaXIudjEuRGVsZXRlRmFpbGVkSm9iUmVxdWVzdBoiLm1lbW9pci52MS5EZWxldGVGYWlsZWRKb2JSZXNwb25zZRJYCg9SZXRyeUZhaWxlZEpvYnMSIS5tZW1vaXIudjEuUmV0cnlGYWlsZWRKb2JzUmVxdWVzdBoiLm1lbW9pci52MS5SZXRyeUZhaWxlZEpvYnNSZXNwb25zZRJMCgtVbnN1cGVyc2VkZRIdLm1lbW9pci52MS5VbnN1cGVyc2VkZVJlcXVlc3QaHi5tZW1vaXIudjEuVW5zdXBlcnNlZGVSZXNwb25zZRJGCglSZWNvbmNpbGUSGy5tZW1vaXIudjEuUmVjb25jaWxlUmVxdWVzdBocLm1lbW9pci52MS5SZWNvbmNpbGVSZXNwb25zZRJYCg9FeHRyYWN0aW9uU3RhdHMSIS5tZW1vaXIudjEuRXh0cmFjdGlvblN0YXRzUmVxdWVzdBoiLm1lbW9pci52MS5FeHRyYWN0aW9uU3RhdHNSZXNwb25zZWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("ChVtZW1vaXIvdjEvYWRtaW4ucHJvdG8SCW1lbW9pci52MSK/AQoJRmFpbGVkSm9iEgoKAmlkGAEgASgDEhIKCnNvdXJjZV9waWQYAiABKAkSIAoEa2luZBgDIAEoDjISLm1lbW9pci52MS5Kb2JLaW5kEhAKCGF0dGVtcHRzGAQgASgFEhsKDmZhaWx1cmVfcmVhc29uGAUgASgJSACIAQESLgoKdXBkYXRlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCEQoPX2ZhaWx1cmVfcmVhc29uIiYKFUxpc3RGYWlsZWRKb2JzUmVxdWVzdBINCgVsaW1pdBgBIAEoBSI8ChZMaXN0RmFpbGVkSm9ic1Jlc3BvbnNlEiIKBGpvYnMYASADKAsyFC5tZW1vaXIudjEuRmFpbGVkSm9iIhkKF1BlbmRpbmdKb2JzQ291bnRSZXF1ZXN0IikKGFBlbmRpbmdKb2JzQ291bnRSZXNwb25zZRINCgVjb3VudBgBIAEoAyIdCg9SZXRyeUpvYlJlcXVlc3QSCgoCaWQYASABKAMiEgoQUmV0cnlKb2JSZXNwb25zZSIkChZEZWxldGVGYWlsZWRKb2JSZXF1ZXN0EgoKAmlkGAEgASgDIhkKF0RlbGV0ZUZhaWxlZEpvYlJlc3BvbnNlIl8KFlJldHJ5RmFpbGVkSm9ic1JlcXVlc3QSKAoHb2Zfa2luZBgBIAEoDjISLm1lbW9pci52MS5Kb2JLaW5kSACIAQESDwoHZHJ5X3J1bhgCIAEoCEIKCghfb2Zfa2luZCI8ChdSZXRyeUZhaWxlZEpvYnNSZXNwb25zZRIQCghhZmZlY3RlZBgBIAEoAxIPCgdkcnlfcnVuGAIgASgIIiEKElVuc3VwZXJzZWRlUmVxdWVzdBILCgNwaWQYASABKAkiFQoTVW5zdXBlcnNlZGVSZXNwb25zZSJJChBSZWNvbmNpbGVSZXF1ZXN0EhkKEW9ubHlfcmV0cnlfZmFpbGVkGAEgASgIEhoKEm9ubHlfY2xlYW5fb3JwaGFucxgCIAEoCCJeChFSZWNvbmNpbGVSZXNwb25zZRIWCg5mYWlsZWRfcmV0cmllZBgBIAEoAxIYChBmYWlsZWRfcmVjb3ZlcmVkGAIgASgDEhcKD29ycGhhbnNfZGVsZXRlZBgDIAEoAyJ+ChZFeHRyYWN0aW9uU3RhdHNSZXF1ZXN0EhUKCGFnZW50X2lkGAEgASgJSACIAQESEwoGb3JnX2lkGAIgASgJSAGIAQESFAoHdXNlcl9pZBgDIAEoCUgCiAEBQgsKCV9hZ2VudF9pZEIJCgdfb3JnX2lkQgoKCF91c2VyX2lkImQKDkV4dHJhY3Rpb25TdGF0EhAKCHByb3ZpZGVyGAEgASgJEg0KBW1vZGVsGAIgASgJEg0KBXRvdGFsGAMgASgDEhAKCHJlamVjdGVkGAQgASgDEhAKCGFjY3VyYWN5GAUgASgBIkMKF0V4dHJhY3Rpb25TdGF0c1Jlc3BvbnNlEigKBXN0YXRzGAEgAygLMhkubWVtb2lyLnYxLkV4dHJhY3Rpb25TdGF0IooBChNJbnNwZWN0R3JhcGhSZXF1ZXN0EhUKCGFnZW50X2lkGAEgASgJSACIAQESEwoGb3JnX2lkGAIgASgJSAGIAQESFAoHdXNlcl9pZBgDIAEoCUgCiAEBEg0KBWxpbWl0GAQgASgNQgsKCV9hZ2VudF9pZEIJCgdfb3JnX2lkQgoKCF91c2VyX2lkIlwKCUdyYXBoTm9kZRIMCgRuYW1lGAEgASgJEhMKC21lbW9yeV9waWRzGAIgAygJEhoKDWZpcnN0X3NlZW5fYXQYAyABKAlIAIgBAUIQCg5fZmlyc3Rfc2Vlbl9hdCKzAQoJR3JhcGhFZGdlEg8KB3N1YmplY3QYASABKAkSEAoIcmVsYXRpb24YAiABKAkSDgoGb2JqZWN0GAMgASgJEhIKCmNvbmZpZGVuY2UYBCABKAISFwoKdmFsaWRfZnJvbRgFIAEoCUgAiAEBEhUKCHZhbGlkX3RvGAYgASgJSAGIAQESEwoLbWVtb3J5X3BpZHMYByADKAlCDQoLX3ZhbGlkX2Zyb21CCwoJX3ZhbGlkX3RvInMKFEluc3BlY3RHcmFwaFJlc3BvbnNlEiMKBW5vZGVzGAEgAygLMhQubWVtb2lyLnYxLkdyYXBoTm9kZRIjCgVlZGdlcxgCIAMoCzIULm1lbW9pci52MS5HcmFwaEVkZ2USEQoJdHJ1bmNhdGVkGAMgASgIKrgBCgdKb2JLaW5kEhgKFEpPQl9LSU5EX1VOU1BFQ0lGSUVEEAASEgoOSk9CX0tJTkRfRU1CRUQQARIUChBKT0JfS0lORF9FWFRSQUNUEAISFwoTSk9CX0tJTkRfQ0FURUdPUklaRRADEhYKEkpPQl9LSU5EX1JFUFJPQ0VTUxAEEh8KG0pPQl9LSU5EX1JFTEFUSU9OQUxfRVhUUkFDVBAFEhcKE0pPQl9LSU5EX1NZTlRIRVNJWkUQBjL8BQoMQWRtaW5TZXJ2aWNlElUKDkxpc3RGYWlsZWRKb2JzEiAubWVtb2lyLnYxLkxpc3RGYWlsZWRKb2JzUmVxdWVzdBohLm1lbW9pci52MS5MaXN0RmFpbGVkSm9ic1Jlc3BvbnNlElsKEFBlbmRpbmdKb2JzQ291bnQSIi5tZW1vaXIudjEuUGVuZGluZ0pvYnNDb3VudFJlcXVlc3QaIy5tZW1vaXIudjEuUGVuZGluZ0pvYnNDb3VudFJlc3BvbnNlEkMKCFJldHJ5Sm9iEhoubWVtb2lyLnYxLlJldHJ5Sm9iUmVxdWVzdBobLm1lbW9pci52MS5SZXRyeUpvYlJlc3BvbnNlElgKD0RlbGV0ZUZhaWxlZEpvYhIhLm1lbW9pci52MS5EZWxldGVGYWlsZWRKb2JSZXF1ZXN0GiIubWVtb2lyLnYxLkRlbGV0ZUZhaWxlZEpvYlJlc3BvbnNlElgKD1JldHJ5RmFpbGVkSm9icxIhLm1lbW9pci52MS5SZXRyeUZhaWxlZEpvYnNSZXF1ZXN0GiIubWVtb2lyLnYxLlJldHJ5RmFpbGVkSm9ic1Jlc3BvbnNlEkwKC1Vuc3VwZXJzZWRlEh0ubWVtb2lyLnYxLlVuc3VwZXJzZWRlUmVxdWVzdBoeLm1lbW9pci52MS5VbnN1cGVyc2VkZVJlc3BvbnNlEkYKCVJlY29uY2lsZRIbLm1lbW9pci52MS5SZWNvbmNpbGVSZXF1ZXN0GhwubWVtb2lyLnYxLlJlY29uY2lsZVJlc3BvbnNlElgKD0V4dHJhY3Rpb25TdGF0cxIhLm1lbW9pci52MS5FeHRyYWN0aW9uU3RhdHNSZXF1ZXN0GiIubWVtb2lyLnYxLkV4dHJhY3Rpb25TdGF0c1Jlc3BvbnNlEk8KDEluc3BlY3RHcmFwaBIeLm1lbW9pci52MS5JbnNwZWN0R3JhcGhSZXF1ZXN0Gh8ubWVtb2lyLnYxLkluc3BlY3RHcmFwaFJlc3BvbnNlYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * FailedJob mirrors `memoir_core::jobs::FailedJob` exactly. Deliberately
@@ -448,6 +448,174 @@ export const ExtractionStatsResponseSchema: GenMessage<ExtractionStatsResponse> 
   messageDesc(file_memoir_v1_admin, 17);
 
 /**
+ * @generated from message memoir.v1.InspectGraphRequest
+ */
+export type InspectGraphRequest = Message<"memoir.v1.InspectGraphRequest"> & {
+  /**
+   * Optional scope-subset filters. Each set field narrows the view; an unset
+   * field widens across that dimension. All three unset inspects every tenant
+   * — the cross-scope admin view. Maps to memoir-core's partial-scope
+   * `Client::inspect_graph` setters.
+   *
+   * @generated from field: optional string agent_id = 1;
+   */
+  agentId?: string;
+
+  /**
+   * @generated from field: optional string org_id = 2;
+   */
+  orgId?: string;
+
+  /**
+   * @generated from field: optional string user_id = 3;
+   */
+  userId?: string;
+
+  /**
+   * Maximum nodes and maximum edges to return (applied independently). `0`
+   * means "use library default"; the library clamps to its hard maximum. When
+   * a cap is hit, the response's `truncated` flag is set.
+   *
+   * @generated from field: uint32 limit = 4;
+   */
+  limit: number;
+};
+
+/**
+ * Describes the message memoir.v1.InspectGraphRequest.
+ * Use `create(InspectGraphRequestSchema)` to create a new message.
+ */
+export const InspectGraphRequestSchema: GenMessage<InspectGraphRequest> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_admin, 18);
+
+/**
+ * One entity node in an admin graph snapshot. Mirrors
+ * `memoir_core::graph::GraphNode`. Untyped in v1 (the node carries only its
+ * canonical name for identity) plus the provenance the admin view renders.
+ *
+ * @generated from message memoir.v1.GraphNode
+ */
+export type GraphNode = Message<"memoir.v1.GraphNode"> & {
+  /**
+   * Canonical entity name (identity within a scope).
+   *
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * Memories that contributed this entity.
+   *
+   * @generated from field: repeated string memory_pids = 2;
+   */
+  memoryPids: string[];
+
+  /**
+   * RFC 3339; absent if the node lacks it.
+   *
+   * @generated from field: optional string first_seen_at = 3;
+   */
+  firstSeenAt?: string;
+};
+
+/**
+ * Describes the message memoir.v1.GraphNode.
+ * Use `create(GraphNodeSchema)` to create a new message.
+ */
+export const GraphNodeSchema: GenMessage<GraphNode> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_admin, 19);
+
+/**
+ * One relationship edge in an admin graph snapshot. Mirrors
+ * `memoir_core::graph::GraphEdge`. Carries the full temporal state so the UI can
+ * render history: `valid_to` is absent for a current edge, set for a superseded
+ * one.
+ *
+ * @generated from message memoir.v1.GraphEdge
+ */
+export type GraphEdge = Message<"memoir.v1.GraphEdge"> & {
+  /**
+   * @generated from field: string subject = 1;
+   */
+  subject: string;
+
+  /**
+   * @generated from field: string relation = 2;
+   */
+  relation: string;
+
+  /**
+   * @generated from field: string object = 3;
+   */
+  object: string;
+
+  /**
+   * [0.0, 1.0].
+   *
+   * @generated from field: float confidence = 4;
+   */
+  confidence: number;
+
+  /**
+   * RFC 3339; when the fact became true.
+   *
+   * @generated from field: optional string valid_from = 5;
+   */
+  validFrom?: string;
+
+  /**
+   * RFC 3339; when superseded. Absent = current.
+   *
+   * @generated from field: optional string valid_to = 6;
+   */
+  validTo?: string;
+
+  /**
+   * Memories that contributed this edge.
+   *
+   * @generated from field: repeated string memory_pids = 7;
+   */
+  memoryPids: string[];
+};
+
+/**
+ * Describes the message memoir.v1.GraphEdge.
+ * Use `create(GraphEdgeSchema)` to create a new message.
+ */
+export const GraphEdgeSchema: GenMessage<GraphEdge> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_admin, 20);
+
+/**
+ * @generated from message memoir.v1.InspectGraphResponse
+ */
+export type InspectGraphResponse = Message<"memoir.v1.InspectGraphResponse"> & {
+  /**
+   * @generated from field: repeated memoir.v1.GraphNode nodes = 1;
+   */
+  nodes: GraphNode[];
+
+  /**
+   * @generated from field: repeated memoir.v1.GraphEdge edges = 2;
+   */
+  edges: GraphEdge[];
+
+  /**
+   * Whether the node or edge list was capped at the limit — the view is
+   * partial, not the scope small.
+   *
+   * @generated from field: bool truncated = 3;
+   */
+  truncated: boolean;
+};
+
+/**
+ * Describes the message memoir.v1.InspectGraphResponse.
+ * Use `create(InspectGraphResponseSchema)` to create a new message.
+ */
+export const InspectGraphResponseSchema: GenMessage<InspectGraphResponse> = /*@__PURE__*/
+  messageDesc(file_memoir_v1_admin, 21);
+
+/**
  * JobKind mirrors `memoir_core::jobs::JobKind`. The set is closed by the
  * CHECK constraint on `memory_jobs.kind`; extending it requires a
  * follow-up library migration first, then a proto bump.
@@ -487,6 +655,20 @@ export enum JobKind {
    * @generated from enum value: JOB_KIND_REPROCESS = 4;
    */
   REPROCESS = 4,
+
+  /**
+   * Derive relational triples from an episodic memory (knowledge graph).
+   *
+   * @generated from enum value: JOB_KIND_RELATIONAL_EXTRACT = 5;
+   */
+  RELATIONAL_EXTRACT = 5,
+
+  /**
+   * Reconcile triples against semantic facts + commit to the graph.
+   *
+   * @generated from enum value: JOB_KIND_SYNTHESIZE = 6;
+   */
+  SYNTHESIZE = 6,
 }
 
 /**
@@ -619,6 +801,25 @@ export const AdminService: GenService<{
     methodKind: "unary";
     input: typeof ExtractionStatsRequestSchema;
     output: typeof ExtractionStatsResponseSchema;
+  },
+  /**
+   * Read a whole-scope snapshot of the knowledge graph — the admin "Knowledge
+   * graph view": every entity and relationship (current AND superseded) in a
+   * scope, for memoir-ui to render. Read-only graph traversal, no LLM call.
+   *
+   * Scope fields narrow the view and are AND-combined; an unset field widens
+   * ACROSS that dimension — all-unset inspects every tenant. This is the one
+   * cross-scope read in memoir, and it is admin-only by design: the write,
+   * forget, and search-enrichment paths keep full-scope-tuple isolation. Wraps
+   * memoir-core's `Client::inspect_graph`. Returns an empty snapshot when the
+   * service has no graph configured.
+   *
+   * @generated from rpc memoir.v1.AdminService.InspectGraph
+   */
+  inspectGraph: {
+    methodKind: "unary";
+    input: typeof InspectGraphRequestSchema;
+    output: typeof InspectGraphResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_memoir_v1_admin, 0);

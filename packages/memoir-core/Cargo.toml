@@ -21,11 +21,34 @@ path = "src/lib.rs"
 name = "memoir_core_migrate"
 path = "src/bin/memoir_core_migrate.rs"
 
+[[bench]]
+name = "extractor_accuracy"
+harness = false
+
+[[bench]]
+name = "extractor_latency"
+harness = false
+
+[[bench]]
+name = "resolver_accuracy"
+harness = false
+
+[[bench]]
+name = "edge_accuracy"
+harness = false
+
+[[bench]]
+name = "synthesizer_accuracy"
+harness = false
+
 [dependencies]
 async-trait = "0.1"
 bon = { version = "3.9" }
 chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15"
+falkordb = { version = "0.2", optional = true, default-features = false, features = [
+  "tokio",
+] }
 fastembed = { version = "5.13" }
 futures = { version = "0.3" }
 hf-hub = { version = "0.5" }
@@ -55,6 +78,7 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 anyhow = { version = "1" }
+criterion = { version = "0.5", features = ["async_tokio"] }
 nanoid = { version = "0.5" }
 qdrant-client = { version = "1.18" }
 sea-orm = { version = "2.0.0-rc.20", features = [
@@ -66,11 +90,9 @@ tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 
 [features]
 default = []
-# Enables CUDA execution for the NLI classifier. Off by default so the
-# published crate is CPU-only and builds with no CUDA toolchain (M-OOBE).
-# With this on, the classifier negotiates CUDA-then-CPU and honors
-# `NLI_EXECUTION_PROVIDER`. Additive: enabling it changes no public item
-# (M-FEATURES-ADDITIVE) — only the internal provider negotiation.
+# Enables CUDA execution for the NLI classifier.
 cuda = ["ort/cuda"]
+# Enables the FalkorDB-backed knowledge graph.
+knowledge-graph = ["dep:falkordb"]
 integration = []
 unit = []

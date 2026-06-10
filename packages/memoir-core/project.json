@@ -36,7 +36,7 @@
 			"executor": "nx:run-commands",
 			"options": {
 				"cwd": "{projectRoot}",
-				"commands": ["cargo test --release --features integration -- --test-threads 1"],
+				"commands": ["cargo test --release --features integration,knowledge-graph -- --test-threads 1 --nocapture"],
 				"env": {
 					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_service_test",
 					"QDRANT_URL": "http://localhost:6334",
@@ -46,6 +46,15 @@
 			},
 			"cache": true,
 			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/tests/**/*.rs"]
+		},
+		"bench": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo bench"]
+			},
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/benches/**/*.rs"],
+			"outputs": ["{projectRoot}/benches/results"]
 		},
 		"migrate:up": {
 			"executor": "nx:run-commands",

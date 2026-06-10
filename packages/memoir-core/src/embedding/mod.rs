@@ -27,6 +27,16 @@ pub trait EmbeddingModel: Send + Sync + 'static {
     fn dimensions(&self) -> usize;
 }
 
+impl<T: EmbeddingModel> EmbeddingModel for std::sync::Arc<T> {
+    fn embed(&self, text: &str) -> impl std::future::Future<Output = Result<Vec<f32>, EmbeddingError>> + Send {
+        (**self).embed(text)
+    }
+
+    fn dimensions(&self) -> usize {
+        (**self).dimensions()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

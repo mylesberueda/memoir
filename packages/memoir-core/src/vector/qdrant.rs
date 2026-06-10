@@ -100,6 +100,24 @@ impl QdrantIndex {
         }
     }
 
+    /// Connects to Qdrant at `url`, building the client internally.
+    ///
+    /// The URL-in entry point the [`Client`](crate::client::Client) builder uses,
+    /// so a consumer configures the vector backend with a connection string and
+    /// never names the `qdrant_client::Qdrant` type. `url` is a Qdrant gRPC
+    /// endpoint (e.g. `http://localhost:6334`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`VectorError::Connection`] if `url` is malformed or the client
+    /// cannot be constructed.
+    pub fn connect(url: impl Into<String>) -> Result<Self, VectorError> {
+        let qdrant = Qdrant::from_url(&url.into())
+            .build()
+            .map_err(|err| VectorError::Connection(err.to_string()))?;
+        Ok(Self::new(qdrant))
+    }
+
     /// Sets the Qdrant collection name used for vector storage.
     pub fn with_collection(mut self, collection: impl Into<String>) -> Self {
         self.collection = collection.into();

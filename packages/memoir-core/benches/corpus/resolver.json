@@ -1,0 +1,71 @@
+{
+  "_comment": "Entity-resolution corpus (the EntityResolver seam of ticket 0012-0011). Each case seeds a catalog of entities already in the graph, then resolves one query string against it and checks the outcome. Unlike the extractor corpus (text -> triples, stateless), resolution is stateful: the answer depends on what is already in the catalog. Embeddings are NOT stored here — the bench computes them with the real production embedder (fastembed BGE-small-en-v1.5, OnnxEmbedding), so the numbers reflect the resolver memoir actually ships. 'expected.kind' is 'existing' (should merge into 'expected.key') or 'new' (should NOT merge with any catalog entity). All entities share one scope.",
+  "cases": [
+    {
+      "id": "res-merge-001",
+      "catalog": [{ "key": "alice-node", "name": "Alice" }],
+      "query": "Alice Smith",
+      "expected": { "kind": "existing", "key": "alice-node" }
+    },
+    {
+      "id": "res-merge-002",
+      "catalog": [{ "key": "acme-node", "name": "Acme" }],
+      "query": "Acme Corporation",
+      "expected": { "kind": "existing", "key": "acme-node" }
+    },
+    {
+      "id": "res-merge-003",
+      "catalog": [{ "key": "nyc-node", "name": "New York City" }],
+      "query": "New York",
+      "expected": { "kind": "existing", "key": "nyc-node" }
+    },
+    {
+      "id": "res-merge-004",
+      "catalog": [{ "key": "js-node", "name": "JavaScript" }],
+      "query": "Javascript",
+      "expected": { "kind": "existing", "key": "js-node" }
+    },
+    {
+      "id": "res-split-001",
+      "catalog": [{ "key": "alice-node", "name": "Alice" }],
+      "query": "Bob",
+      "expected": { "kind": "new" }
+    },
+    {
+      "id": "res-split-002",
+      "catalog": [{ "key": "rust-node", "name": "Rust" }],
+      "query": "Python",
+      "expected": { "kind": "new" }
+    },
+    {
+      "id": "res-split-003",
+      "catalog": [{ "key": "paris-node", "name": "Paris" }],
+      "query": "Berlin",
+      "expected": { "kind": "new" }
+    },
+    {
+      "id": "res-split-004",
+      "catalog": [
+        { "key": "alice-node", "name": "Alice" },
+        { "key": "acme-node", "name": "Acme" }
+      ],
+      "query": "Globex",
+      "expected": { "kind": "new" }
+    },
+    {
+      "id": "res-pick-001",
+      "catalog": [
+        { "key": "alice-node", "name": "Alice" },
+        { "key": "bob-node", "name": "Bob" }
+      ],
+      "query": "Alice Smith",
+      "expected": { "kind": "existing", "key": "alice-node" }
+    },
+    {
+      "id": "res-empty-001",
+      "catalog": [],
+      "query": "Alice",
+      "expected": { "kind": "new" }
+    }
+  ]
+}

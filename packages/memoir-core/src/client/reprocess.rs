@@ -211,7 +211,7 @@ impl ClientInner {
             for row in &derived {
                 self.retire_and_evict_internal(&row.pid, request.reason).await;
             }
-            self.re_extract_source(member, request.feedback.as_deref()).await?;
+            self.re_extract_source(member, request.feedback.as_deref(), job.id).await?;
         }
 
         event!(

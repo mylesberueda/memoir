@@ -28,6 +28,12 @@ pub enum LlmRole {
     /// an LLM call. This variant exists so the LLM path is available if the
     /// math doesn't pan out — no consumer wires it today.
     Contradiction,
+
+    /// Calls extracting relational triples from episodic content (epic 0012).
+    ///
+    /// Distinct from [`LlmRole::Extraction`] so graph extraction can run on a
+    /// different model than flat-fact extraction.
+    Relational,
 }
 
 /// Map of [`LlmRole`] → [`RigLlmProvider`].

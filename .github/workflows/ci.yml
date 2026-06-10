@@ -11,9 +11,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [dev, 'ci/test/*']
+    branches: [main, 'ci/test/*']
   push:
-    branches: [dev, main, 'ci/test/*']
+    branches: [main, 'ci/test/*']
   workflow_dispatch:
 
 permissions:
@@ -36,16 +36,15 @@ jobs:
       - name: Check if CI should run
         id: check
         run: |
-          # Always run on PRs, workflow_dispatch, and main branch
+          # Always run on PRs and workflow_dispatch
           if [ "${{ github.event_name }}" = "pull_request" ] || \
-             [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
-             [ "${{ github.ref }}" = "refs/heads/main" ]; then
+             [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should-run=true" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # For dev branch pushes, check if CI already passed on this commit
-          if [ "${{ github.ref }}" = "refs/heads/dev" ]; then
+          # For main branch pushes, skip if CI already passed on this commit via PR
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             CI_STATUS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&status=success&event=pull_request" | \
               jq -r '.workflow_runs[] | select(.name == "CI") | .conclusion' | head -1)
@@ -81,7 +80,6 @@ jobs:
   # Docker test + build (runs after lint passes)
   # Environment mapping:
   #   - main branch → production
-  #   - dev branch → staging
   #   - ci/test/* branches → local (for testing progressive deploy locally)
   docker:
     needs: [check-skip, detect-changes, lint]
@@ -93,7 +91,7 @@ jobs:
     with:
       docker-matrix: ${{ needs.detect-changes.outputs.docker-matrix }}
       push: ${{ github.event_name == 'push' }}
-      environment: ${{ github.ref == 'refs/heads/main' && 'production' || (startsWith(github.ref, 'refs/heads/ci/test/') && 'local' || 'staging') }}
+      environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'local' }}
       registry: ${{ vars.CONTAINER_REGISTRY || 'ghcr' }}
       gar-project-id: ${{ vars.GCP_PROJECT_ID || '' }}
       gar-region: ${{ vars.GAR_REGION || 'us-central1' }}
