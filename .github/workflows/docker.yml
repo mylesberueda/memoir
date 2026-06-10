@@ -258,7 +258,6 @@ jobs:
   # This job pushes Kubernetes values updates to a deploy branch named after
   # the source branch:
   #   - main → deploy/main  (production)
-  #   - dev  → deploy/dev   (staging)
   #
   # The local environment (ci/test/* branches) does NOT use this pattern;
   # update-values is skipped entirely. ci/test/* builds still run docker-test
@@ -266,15 +265,15 @@ jobs:
   # cluster deploys are wired manually until the test-branch cluster story
   # is built (see infrastructure/DEPLOY.md → Future).
   #
-  # ArgoCD watches deploy/<source-branch>; humans work on dev / main and never
-  # see bot commits in their git log. If you grepped for "deploy/main" or
-  # "deploy/dev" and landed here — yes, this is the only place those branches
+  # ArgoCD watches deploy/<source-branch>; humans work on main and never
+  # see bot commits in their git log. If you grepped for "deploy/main" and
+  # landed here — yes, this is the only place those branches
   # are written to. See infrastructure/DEPLOY.md.
   #
   # - Commits as a stable bot identity so deploy-branch history reads as
   #   visibly machine-generated.
   # - [skip ci] retained as belt-and-suspenders; ci.yml's `branches:` filter
-  #   already excludes deploy/* (only dev, main, ci/test/* trigger CI).
+  #   already excludes deploy/* (only main, ci/test/* trigger CI).
   # - Authenticates to ArgoCD via GitHub OIDC (no static secrets).
   # ---------------------------------------------------------------------------
   update-values:

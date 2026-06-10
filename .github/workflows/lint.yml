@@ -36,7 +36,7 @@ jobs:
 
       - uses: nrwl/nx-set-shas@v4
         with:
-          main-branch-name: "dev"
+          main-branch-name: "main"
 
       - name: Lint Node.js projects
         run: |
@@ -100,7 +100,7 @@ jobs:
 
       - uses: nrwl/nx-set-shas@v4
         with:
-          main-branch-name: "dev"
+          main-branch-name: "main"
 
       - name: Lint Rust projects
         run: |
