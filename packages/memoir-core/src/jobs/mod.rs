@@ -671,6 +671,24 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn should_not_enqueue_synthesis_while_a_sibling_is_terminally_failed() {
+        // A half-failed pipeline must never synthesize. A failed job's row is
+        // RETAINED (not deleted like a completed one), so the guard sees it and
+        // refuses. Drive the real lifecycle to the failed state — enqueue, claim,
+        // fail at max_attempts — rather than hand-setting the field.
+        let store = StubJobsStore::default();
+        let relational = store
+            .enqueue(JobKind::RelationalExtract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        store.claim(None).await.unwrap().expect("the relational row is claimable");
+        store.fail(relational, "boom".to_string(), 1).await.unwrap();
+
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
+        assert!(!inserted, "a terminally-failed sibling still blocks synthesis");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn should_not_enqueue_synthesis_when_a_real_sibling_outlives_the_caller() {
         // Caller's own row excluded, but a genuine *other* sibling still present.
         let store = StubJobsStore::default();

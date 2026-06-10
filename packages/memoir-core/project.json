@@ -47,6 +47,15 @@
 			"cache": true,
 			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/tests/**/*.rs"]
 		},
+		"bench": {
+			"executor": "nx:run-commands",
+			"options": {
+				"cwd": "{projectRoot}",
+				"commands": ["cargo bench"]
+			},
+			"inputs": ["{projectRoot}/src/**/*.rs", "{projectRoot}/benches/**/*.rs"],
+			"outputs": ["{projectRoot}/benches/results"]
+		},
 		"migrate:up": {
 			"executor": "nx:run-commands",
 			"options": {
