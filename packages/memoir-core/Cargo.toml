@@ -1,6 +1,6 @@
 [package]
 name = "polypixel-memoir-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "Memoir memory substrate as an embeddable Rust library"
 authors = ["Myles Berueda <myles@polypixel.io>"]
 edition = "2024"

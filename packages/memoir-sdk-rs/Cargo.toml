@@ -1,6 +1,6 @@
 [package]
 name = "polypixel-memoir-sdk"
-version = "0.1.0"
+version = "0.2.0"
 description = "Generated gRPC client SDK for Memoir's memoir-service"
 authors = ["Myles Berueda <myles@polypixel.io>"]
 edition = "2024"
