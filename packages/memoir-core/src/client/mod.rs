@@ -43,7 +43,6 @@ pub use worker::{
 use std::sync::Arc;
 
 use bon::bon;
-use qdrant_client::Qdrant;
 use sea_orm::{ConnectOptions, Database};
 
 use crate::embedding::{EmbeddingModel, OnnxEmbedding};
@@ -110,7 +109,7 @@ impl std::fmt::Debug for Client {
 
 #[bon]
 impl Client {
-    /// Builds a [`Client`] from a Postgres connection string + Qdrant handle.
+    /// Builds a [`Client`] from Postgres and Qdrant connection strings.
     ///
     /// memoir-core owns its own connection pool. The pool's `search_path` is
     /// pinned to the configured schema so memoir-core's tables and
@@ -133,11 +132,9 @@ impl Client {
     /// use memoir_core::client::Client;
     /// use memoir_core::llm::LlmConfig;
     ///
-    /// let qdrant = qdrant_client::Qdrant::from_url("http://localhost:6334").build()?;
-    ///
     /// let client = Client::builder()
     ///     .database_url("postgres://postgres:postgres@localhost:54321/my_app")
-    ///     .qdrant(qdrant)
+    ///     .qdrant("http://localhost:6334")
     ///     .schema("memoir")
     ///     .extraction_llm(LlmConfig::ollama("http://localhost:11434", "llama3.2"))
     ///     .build()
@@ -156,7 +153,7 @@ impl Client {
     #[builder(start_fn = builder, finish_fn = build)]
     pub async fn new(
         #[builder(into)] database_url: String,
-        qdrant: Qdrant,
+        #[builder(into)] qdrant: String,
         #[builder(into)] schema: Option<String>,
         #[builder(into)] system_prompt: Option<String>,
         #[builder(into)] collection: Option<String>,
@@ -190,8 +187,8 @@ impl Client {
         let triple_staging = crate::graph::TripleStaging::new(db.clone());
         let jobs = PostgresJobsStore::new(db);
         let index = match collection {
-            Some(name) => QdrantIndex::new(qdrant).with_collection(name),
-            None => QdrantIndex::new(qdrant),
+            Some(name) => QdrantIndex::connect(qdrant)?.with_collection(name),
+            None => QdrantIndex::connect(qdrant)?,
         };
 
         index.ensure_collection(embedder.dimensions()).await?;

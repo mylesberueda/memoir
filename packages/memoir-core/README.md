@@ -13,7 +13,6 @@ keeps the two stores consistent.
 ```toml
 [dependencies]
 polypixel-memoir-core = "0.1"
-qdrant-client = "1.18"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -29,11 +28,9 @@ use memoir_core::memory::Scope;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let qdrant = qdrant_client::Qdrant::from_url("http://localhost:6334").build()?;
-
     let client = Client::builder()
         .database_url("postgres://postgres:postgres@localhost:54321/memoir")
-        .qdrant(qdrant)
+        .qdrant("http://localhost:6334")
         .system_prompt(DEFAULT_SYSTEM_PROMPT)
         .build()
         .await?;

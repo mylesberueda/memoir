@@ -97,10 +97,12 @@ impl TestHarness {
             .await
             .context("apply memoir-service migrations")?;
 
-        let qdrant = Qdrant::from_url(&qdrant_url).build().context("build Qdrant client")?;
+        // The memoir Client builds its own Qdrant client from the URL; this
+        // handle is kept only for the Drop-time collection cleanup below.
+        let qdrant = Qdrant::from_url(&qdrant_url).build().context("build Qdrant cleanup client")?;
         let memoir = MemoirClient::builder()
             .database_url(database_url.clone())
-            .qdrant(qdrant.clone())
+            .qdrant(qdrant_url.clone())
             .schema(core_schema.clone())
             .collection(collection.clone())
             .build()

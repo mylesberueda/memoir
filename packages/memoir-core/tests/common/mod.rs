@@ -129,11 +129,14 @@ async fn build_test_client(extraction: Option<LlmConfig>, graph: Option<GraphCon
     let db = Database::connect(&database_url)
         .await
         .context("connect to Postgres (cleanup pool)")?;
-    let qdrant = Qdrant::from_url(&qdrant_url).build().context("build Qdrant client")?;
+    // The Client builds its own Qdrant client from the URL; this separate handle
+    // exists only so `TestClient::drop` can delete the per-test collection at
+    // teardown (the Client's internal client isn't reachable for that).
+    let qdrant = Qdrant::from_url(&qdrant_url).build().context("build Qdrant cleanup client")?;
 
     let builder = Client::builder()
         .database_url(database_url.clone())
-        .qdrant(qdrant.clone())
+        .qdrant(qdrant_url.clone())
         .schema(schema.clone())
         .collection(collection.clone())
         .maybe_extraction_llm(extraction);
