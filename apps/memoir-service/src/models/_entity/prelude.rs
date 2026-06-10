@@ -2,5 +2,4 @@
 
 pub use super::api_keys::Entity as ApiKeys;
 pub use super::bootstrap_tokens::Entity as BootstrapTokens;
-pub use super::memoir_service_migrations::Entity as MemoirServiceMigrations;
 pub use super::users::Entity as Users;

@@ -102,7 +102,6 @@ impl Db {
     }
 }
 
-
 struct Memoir;
 
 impl Memoir {
