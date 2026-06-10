@@ -90,6 +90,57 @@ pub type GraphRow = Vec<(String, String)>;
 /// The rows produced by a Cypher [`GraphStore::query`], in result order.
 pub type GraphRows = Vec<GraphRow>;
 
+/// A typed value bound to a Cypher query parameter.
+///
+/// Carries the value *and* its kind so the backend can render each parameter as
+/// the correct Cypher literal: strings are quoted and escaped, numbers stay
+/// bare. The kind cannot be recovered from a plain string once erased — a
+/// `LIMIT` needs the bare integer `500`, while a name needs the quoted literal
+/// `'Alice'` — so callers state the kind at the bind site rather than letting
+/// the backend guess.
+///
+/// FalkorDB's parameter mechanism textually substitutes `CYPHER key=value` into
+/// the query, so the rendered form must be a valid Cypher literal; this enum is
+/// what makes that rendering type-directed instead of a fragile heuristic.
+#[derive(Clone, Debug, PartialEq)]
+pub enum GraphParam {
+    /// A string value, rendered as a quoted, escaped Cypher string literal.
+    Str(String),
+    /// An integer value, rendered bare (e.g. for `LIMIT`).
+    Int(i64),
+    /// A floating-point value, rendered bare.
+    Float(f64),
+}
+
+impl GraphParam {
+    /// Renders the value as a Cypher literal safe to substitute into a query.
+    ///
+    /// [`GraphParam::Str`] is wrapped in single quotes with embedded backslashes
+    /// and single quotes escaped, so a value drawn from user content (an entity
+    /// name, a memory id) cannot break out of the literal. Numeric variants
+    /// render to their bare textual form.
+    #[must_use]
+    pub fn to_cypher_literal(&self) -> String {
+        match self {
+            Self::Str(s) => format!("'{}'", s.replace('\\', "\\\\").replace('\'', "\\'")),
+            Self::Int(n) => n.to_string(),
+            Self::Float(f) => f.to_string(),
+        }
+    }
+}
+
+impl From<String> for GraphParam {
+    fn from(value: String) -> Self {
+        Self::Str(value)
+    }
+}
+
+impl From<&str> for GraphParam {
+    fn from(value: &str) -> Self {
+        Self::Str(value.to_string())
+    }
+}
+
 /// Stores and queries an entity/relationship property graph.
 ///
 /// Implementations own the graph-backend connection and confine their writes to
@@ -113,9 +164,11 @@ pub trait GraphStore: Send + Sync + 'static {
     ///
     /// The raw escape hatch the write-path and read-path build their operations
     /// on. `params` binds query parameters by name, referenced as `$name` in the
-    /// `cypher` body — the only injection-safe way to embed values drawn from
-    /// user content (entity names, memory ids), since the values never enter the
-    /// query string. Relationship *types* and labels cannot be parameterized by
+    /// `cypher` body — the injection-safe way to embed values drawn from user
+    /// content (entity names, memory ids). Each [`GraphParam`] renders to a
+    /// correctly-quoted Cypher literal ([`GraphParam::to_cypher_literal`]), so a
+    /// value cannot break out of its literal regardless of backend parameter
+    /// mechanics. Relationship *types* and labels cannot be parameterized by
     /// Cypher and must be sanitized by the caller. Pass an empty map for a query
     /// with no parameters. Scalar result values are rendered to `String`;
     /// node/edge/path projections are out of scope until a consumer needs them.
@@ -127,7 +180,7 @@ pub trait GraphStore: Send + Sync + 'static {
     fn query(
         &self,
         cypher: &str,
-        params: &HashMap<String, String>,
+        params: &HashMap<String, GraphParam>,
     ) -> impl Future<Output = Result<GraphRows, GraphError>> + Send;
 
     /// Removes each forgotten pid from the graph, reference-counted.
@@ -232,5 +285,43 @@ pub trait GraphStore: Send + Sync + 'static {
         limit: usize,
     ) -> impl Future<Output = Result<GraphSnapshot, GraphError>> + Send {
         inspect::inspect_scope(self, agent_id, org_id, user_id, limit)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GraphParam;
+
+    #[test]
+    fn should_quote_string_param_as_cypher_literal() {
+        assert_eq!(GraphParam::Str("Alice".to_string()).to_cypher_literal(), "'Alice'");
+    }
+
+    #[test]
+    fn should_render_int_param_bare() {
+        assert_eq!(GraphParam::Int(500).to_cypher_literal(), "500");
+    }
+
+    #[test]
+    fn should_render_float_param_bare() {
+        assert_eq!(GraphParam::Float(0.85).to_cypher_literal(), "0.85");
+    }
+
+    #[test]
+    fn should_escape_embedded_single_quote_in_string_param() {
+        assert_eq!(GraphParam::Str("O'Brien".to_string()).to_cypher_literal(), r"'O\'Brien'");
+    }
+
+    #[test]
+    fn should_escape_backslash_before_quote_in_string_param() {
+        assert_eq!(GraphParam::Str(r"a\b".to_string()).to_cypher_literal(), r"'a\\b'");
+    }
+
+    #[test]
+    fn should_not_let_injection_break_out_of_string_literal() {
+        let injection = r#"x"}) DETACH DELETE n //"#;
+        let rendered = GraphParam::Str(injection.to_string()).to_cypher_literal();
+        assert!(rendered.starts_with('\''));
+        assert!(rendered.ends_with('\''));
     }
 }

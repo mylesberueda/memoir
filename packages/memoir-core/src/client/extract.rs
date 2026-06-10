@@ -89,7 +89,7 @@ impl ClientInner {
         };
 
         // First-pass extraction carries no correction.
-        self.re_extract_source(&source, None).await
+        self.re_extract_source(&source, None, job.id).await
     }
 
     /// Re-runs extraction over an already-loaded source, optionally corrected.
@@ -105,15 +105,21 @@ impl ClientInner {
     /// A missing extraction LLM is a no-op success, mirroring the dispatch-time
     /// skip. The caller owns retiring any prior derived rows before calling.
     ///
+    /// `caller_job_id` is the dispatching job's own id, forwarded to the
+    /// synthesis fan-in guard so the job does not count its own still-claimed
+    /// row as a blocking sibling.
+    ///
     /// # Errors
     ///
     /// Returns [`ExtractError::LlmCall`] / [`ExtractError::Parse`] on LLM
     /// failures and [`ExtractError::Persist`] when a row or follow-on job
     /// cannot be written.
+    #[cfg_attr(not(feature = "knowledge-graph"), allow(unused_variables))]
     pub(super) async fn re_extract_source(
         self: &Arc<Self>,
         source: &crate::memory::Memory,
         correction: Option<&str>,
+        caller_job_id: i64,
     ) -> Result<(), ExtractError> {
         let source_pid = source.pid.clone();
 
@@ -261,7 +267,7 @@ impl ClientInner {
         #[cfg(feature = "knowledge-graph")]
         if self.graph.is_some() {
             self.jobs
-                .enqueue_synthesis_if_ready(&source_pid)
+                .enqueue_synthesis_if_ready(&source_pid, caller_job_id)
                 .await
                 .map_err(|err: JobsError| ExtractError::Persist(err.to_string()))?;
         }

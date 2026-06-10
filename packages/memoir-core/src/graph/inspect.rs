@@ -21,7 +21,7 @@
 
 use std::collections::HashMap;
 
-use super::{GraphError, GraphRow, GraphStore};
+use super::{GraphError, GraphParam, GraphRow, GraphStore};
 
 /// Default cap on the nodes and on the edges a single inspection returns.
 ///
@@ -117,21 +117,21 @@ pub(super) async fn inspect_scope<G: GraphStore + ?Sized>(
     let mut node_terms: Vec<&str> = Vec::new();
     let mut edge_terms: Vec<&str> = Vec::new();
     if let Some(agent_id) = agent_id {
-        params.insert("agent_id".to_string(), agent_id.to_string());
+        params.insert("agent_id".to_string(), agent_id.into());
         node_terms.push("n.agent_id = $agent_id");
         edge_terms.push("s.agent_id = $agent_id");
     }
     if let Some(org_id) = org_id {
-        params.insert("org_id".to_string(), org_id.to_string());
+        params.insert("org_id".to_string(), org_id.into());
         node_terms.push("n.org_id = $org_id");
         edge_terms.push("s.org_id = $org_id");
     }
     if let Some(user_id) = user_id {
-        params.insert("user_id".to_string(), user_id.to_string());
+        params.insert("user_id".to_string(), user_id.into());
         node_terms.push("n.user_id = $user_id");
         edge_terms.push("s.user_id = $user_id");
     }
-    params.insert("lim".to_string(), limit.to_string());
+    params.insert("lim".to_string(), GraphParam::Int(limit as i64));
 
     let node_where = where_clause(&node_terms);
     let node_cypher = format!(
@@ -243,7 +243,7 @@ mod tests {
     /// staged responses are drained in that order.
     struct StagedStore {
         responses: Mutex<Vec<GraphRows>>,
-        calls: Mutex<Vec<(String, HashMap<String, String>)>>,
+        calls: Mutex<Vec<(String, HashMap<String, GraphParam>)>>,
     }
 
     impl StagedStore {
@@ -258,7 +258,7 @@ mod tests {
             Self::new(vec![vec![], vec![]])
         }
 
-        fn calls(&self) -> Vec<(String, HashMap<String, String>)> {
+        fn calls(&self) -> Vec<(String, HashMap<String, GraphParam>)> {
             self.calls.lock().unwrap().clone()
         }
     }
@@ -268,7 +268,7 @@ mod tests {
             Ok(())
         }
 
-        async fn query(&self, cypher: &str, params: &HashMap<String, String>) -> Result<GraphRows, GraphError> {
+        async fn query(&self, cypher: &str, params: &HashMap<String, GraphParam>) -> Result<GraphRows, GraphError> {
             self.calls.lock().unwrap().push((cypher.to_string(), params.clone()));
             let mut responses = self.responses.lock().unwrap();
             Ok(if responses.is_empty() {
@@ -286,9 +286,9 @@ mod tests {
 
         let (node_cypher, params) = &store.calls()[0];
         assert!(!node_cypher.contains("\"a\""), "scope must not be interpolated");
-        assert_eq!(params.get("agent_id").map(String::as_str), Some("a"));
-        assert_eq!(params.get("org_id").map(String::as_str), Some("o"));
-        assert_eq!(params.get("user_id").map(String::as_str), Some("u"));
+        assert_eq!(params.get("agent_id"), Some(&GraphParam::Str("a".to_string())));
+        assert_eq!(params.get("org_id"), Some(&GraphParam::Str("o".to_string())));
+        assert_eq!(params.get("user_id"), Some(&GraphParam::Str("u".to_string())));
         assert!(node_cypher.contains("n.agent_id = $agent_id"));
     }
 
@@ -333,8 +333,8 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            store.calls()[0].1.get("lim").map(String::as_str),
-            Some(MAX_INSPECTION_LIMIT.to_string().as_str()),
+            store.calls()[0].1.get("lim"),
+            Some(&GraphParam::Int(MAX_INSPECTION_LIMIT as i64)),
         );
     }
 

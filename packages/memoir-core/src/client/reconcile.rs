@@ -277,12 +277,16 @@ async fn rebuild_graph(
     // Page through episodic memories newest-first. `created_before` is an
     // exclusive upper bound, so advancing the cursor to the oldest row seen would
     // *skip* any same-timestamp rows that fell on the next page. Instead the
-    // cursor steps to just past the oldest (`oldest + 1ns`), re-including that
-    // timestamp's rows, and a seen-pid set dedups the overlap. Re-enqueue is
-    // idempotent anyway, but skipping a memory would silently drop its triples —
-    // so the bias is deliberately toward overlap, never skip.
+    // cursor steps to just past the oldest — by one MICROSECOND, the precision
+    // Postgres `timestamptz` actually stores and the wire protocol encodes; a
+    // finer step truncates back to the same instant and the next page would
+    // exclude that timestamp's remaining rows. The re-included rows dedup via a
+    // seen-pid set. Re-enqueue is idempotent anyway, but skipping a memory would
+    // silently drop its triples — so the bias is deliberately toward overlap,
+    // never skip.
     let mut seen = HashSet::new();
     let mut cursor = None;
+    let mut limit = page_size;
     loop {
         let params = TimelineParams {
             kinds: KindSelector {
@@ -291,7 +295,7 @@ async fn rebuild_graph(
             },
             created_before: cursor,
             include_superseded: true,
-            limit: page_size,
+            limit,
             ..TimelineParams::default()
         };
 
@@ -317,14 +321,22 @@ async fn rebuild_graph(
         }
 
         // A short page is the last one. Otherwise step the cursor to just past
-        // the oldest row (one nanosecond later) so the next page re-includes
-        // that timestamp's rows; the seen-set dedups them. Stop if the cursor
-        // cannot advance (a full page of one timestamp) to avoid looping.
-        let next_cursor = oldest.map(|ts| ts + chrono::Duration::nanoseconds(1));
-        if page_len < page_size || next_cursor == cursor {
+        // the oldest row so the next page re-includes that timestamp's rows; the
+        // seen-set dedups them. A stalled cursor (a full page within one
+        // timestamp) cannot advance past the tie group — and tie ordering has no
+        // secondary sort, so a same-size refetch could return a different subset
+        // and silently skip rows. Escalate the fetch limit instead, until one
+        // page provably covers the whole group (page < limit), then stop.
+        let next_cursor = oldest.map(|ts| ts + chrono::Duration::microseconds(1));
+        if page_len < limit {
             break;
         }
+        if next_cursor == cursor {
+            limit *= 2;
+            continue;
+        }
         cursor = next_cursor;
+        limit = page_size;
     }
     let enqueued = seen.len();
 

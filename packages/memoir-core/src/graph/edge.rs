@@ -103,20 +103,22 @@ pub struct Edge {
 
 /// An edge already in the graph, as the resolver sees it for conflict checks.
 ///
-/// `key` is the edge's stable identity (used to close it); `valid_to` is `None`
-/// while the edge is current and `Some(t)` once it was superseded at `t`. Only
-/// current edges (those with `valid_to == None`) take part in conflict
-/// resolution; already-closed edges are history.
+/// Self-describing: the tuple `(subject_key, relation, object_key, valid_from)`
+/// *is* the edge's identity within a scope — the same tuple the commit path
+/// `MERGE`s on — so a resolver's close decision carries everything needed to
+/// find the edge again, with no backend-internal id. `valid_to` is `None` while
+/// the edge is current and `Some(t)` once it was superseded at `t`. Only
+/// current edges take part in conflict resolution; closed edges are history.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExistingEdge {
-    /// The edge's stable identity within its scope.
-    pub key: String,
     /// Resolved key of the subject node.
     pub subject_key: String,
     /// The relation label.
     pub relation: String,
     /// Resolved key of the object node.
     pub object_key: String,
+    /// When the fact became true — part of the edge's identity.
+    pub valid_from: DateTime<FixedOffset>,
     /// `None` while the edge is current; `Some(t)` once superseded at `t`.
     pub valid_to: Option<DateTime<FixedOffset>>,
 }
@@ -125,14 +127,14 @@ pub struct ExistingEdge {
 ///
 /// Echoes the row-level supersession model at the edge level — closing an edge
 /// records "a newer fact won," a normal lifecycle event, not an extraction
-/// error. `close` lists the stable keys of existing edges to mark superseded
-/// (their `valid_to` set to the new edge's `valid_from`); `open` is the new edge
-/// to add with `valid_to == None`. The commit path (a later ticket) writes both
-/// in one transaction.
+/// error. `close` carries the edges to close *fully described* (see
+/// [`ExistingEdge`]'s identity tuple), so the commit path can match each by its
+/// own properties; their `valid_to` is set to the new edge's `valid_from`.
+/// `open` is the new edge to add as current.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EdgeResolution {
-    /// Stable keys of current edges to close (mark superseded).
-    pub close: Vec<String>,
+    /// Current edges to close (mark superseded), self-describing.
+    pub close: Vec<ExistingEdge>,
     /// The new edge to open as current.
     pub open: Edge,
 }
@@ -221,6 +223,12 @@ impl EdgeResolver for NaiveAppendResolver {
 /// regardless of confidence, matching the row-level supersession model where "a
 /// newer fact won" is purely temporal. Confidence rides on the edge for the read
 /// path but never gates invalidation.
+///
+/// A *restatement* — the same single-valued fact observed again later — folds
+/// into the current edge rather than opening a parallel one: the resolution's
+/// `open` adopts the existing edge's `valid_from` (the edge's identity), so the
+/// commit's `MERGE` matches it and appends this source's pid. `valid_from` thus
+/// means "when the fact first became true," not "when it was last restated."
 #[derive(Debug, Clone)]
 pub struct TemporalEdgeResolver<C> {
     catalog: C,
@@ -244,19 +252,24 @@ impl<C: EdgeCatalog> EdgeResolver for TemporalEdgeResolver<C> {
         }
 
         let current = self.catalog.current_edges(scope, &edge.subject_key, &edge.relation).await?;
-        let close = current
-            .into_iter()
-            .filter(|existing| existing.object_key != edge.object_key)
-            .map(|existing| existing.key)
-            .collect();
+        let mut open = edge;
+        let mut close = Vec::new();
+        for existing in current {
+            if existing.object_key == open.object_key {
+                if existing.valid_from < open.valid_from {
+                    open.valid_from = existing.valid_from;
+                }
+            } else {
+                close.push(existing);
+            }
+        }
 
-        Ok(EdgeResolution { close, open: edge })
+        Ok(EdgeResolution { close, open })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::sync::Mutex;
 
     use super::*;
@@ -286,13 +299,12 @@ mod tests {
     /// In-memory [`EdgeCatalog`] returning only current edges (`valid_to == None`).
     #[derive(Default)]
     struct InMemoryEdgeCatalog {
-        edges: Mutex<HashMap<String, ExistingEdge>>,
+        edges: Mutex<Vec<ExistingEdge>>,
     }
 
     impl InMemoryEdgeCatalog {
         fn with(edges: Vec<ExistingEdge>) -> Self {
-            let map = edges.into_iter().map(|existing| (existing.key.clone(), existing)).collect();
-            Self { edges: Mutex::new(map) }
+            Self { edges: Mutex::new(edges) }
         }
     }
 
@@ -307,7 +319,7 @@ mod tests {
                 .edges
                 .lock()
                 .expect("edge catalog mutex poisoned")
-                .values()
+                .iter()
                 .filter(|existing| {
                     existing.valid_to.is_none() && existing.subject_key == subject_key && existing.relation == relation
                 })
@@ -316,12 +328,12 @@ mod tests {
         }
     }
 
-    fn existing(key: &str, subject: &str, relation: &str, object: &str) -> ExistingEdge {
+    fn existing(subject: &str, relation: &str, object: &str, day: u32) -> ExistingEdge {
         ExistingEdge {
-            key: key.to_string(),
             subject_key: subject.to_string(),
             relation: relation.to_string(),
             object_key: object.to_string(),
+            valid_from: at(day),
             valid_to: None,
         }
     }
@@ -341,7 +353,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn should_close_conflicting_single_valued_edge() {
-        let catalog = InMemoryEdgeCatalog::with(vec![existing("e1", "alice", "works at", "acme")]);
+        let catalog = InMemoryEdgeCatalog::with(vec![existing("alice", "works at", "acme", 1)]);
         let policy = CardinalityPolicy::with_single_valued(["works at"]);
         let resolver = TemporalEdgeResolver::new(catalog, policy);
 
@@ -350,7 +362,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(resolution.close, vec!["e1".to_string()]);
+        assert_eq!(resolution.close, vec![existing("alice", "works at", "acme", 1)]);
         assert_eq!(resolution.open.object_key, "globex");
     }
 
@@ -359,8 +371,8 @@ mod tests {
         // The "deploy" case: three deploy events to distinct objects are all
         // true and coexist; a multi-valued relation never supersedes.
         let catalog = InMemoryEdgeCatalog::with(vec![
-            existing("e1", "team", "deployed", "weekend"),
-            existing("e2", "team", "deployed", "monday"),
+            existing("team", "deployed", "weekend", 1),
+            existing("team", "deployed", "monday", 3),
         ]);
         let policy = CardinalityPolicy::with_single_valued(["works at"]);
         let resolver = TemporalEdgeResolver::new(catalog, policy);
@@ -377,7 +389,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_not_close_when_same_object_restated() {
         // Restating the current fact must not close it against itself.
-        let catalog = InMemoryEdgeCatalog::with(vec![existing("e1", "alice", "works at", "acme")]);
+        let catalog = InMemoryEdgeCatalog::with(vec![existing("alice", "works at", "acme", 1)]);
         let policy = CardinalityPolicy::with_single_valued(["works at"]);
         let resolver = TemporalEdgeResolver::new(catalog, policy);
 
@@ -390,9 +402,25 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
+    async fn should_fold_restated_fact_by_adopting_existing_valid_from() {
+        // A restatement opens no parallel edge: the open edge adopts the current
+        // edge's valid_from (its identity), so the commit MERGEs into it.
+        let catalog = InMemoryEdgeCatalog::with(vec![existing("alice", "works at", "acme", 1)]);
+        let policy = CardinalityPolicy::with_single_valued(["works at"]);
+        let resolver = TemporalEdgeResolver::new(catalog, policy);
+
+        let resolution = resolver
+            .resolve(&scope(), edge("alice", "works at", "acme", 9))
+            .await
+            .unwrap();
+
+        assert_eq!(resolution.open.valid_from, at(1));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     async fn should_close_low_confidence_new_edge_over_high_confidence_old() {
         // Recency wins regardless of confidence (matches row supersession).
-        let catalog = InMemoryEdgeCatalog::with(vec![existing("e1", "alice", "works at", "acme")]);
+        let catalog = InMemoryEdgeCatalog::with(vec![existing("alice", "works at", "acme", 1)]);
         let policy = CardinalityPolicy::with_single_valued(["works at"]);
         let resolver = TemporalEdgeResolver::new(catalog, policy);
 
@@ -400,7 +428,8 @@ mod tests {
         hedged.confidence = 0.3;
         let resolution = resolver.resolve(&scope(), hedged).await.unwrap();
 
-        assert_eq!(resolution.close, vec!["e1".to_string()]);
+        assert_eq!(resolution.close.len(), 1);
+        assert_eq!(resolution.close[0].object_key, "acme");
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use super::{GraphError, GraphRows, GraphStore};
+use super::{GraphError, GraphParam, GraphRows, GraphStore};
 
 /// In-memory [`GraphStore`] for tests and benchmarks, with no live backend.
 ///
@@ -49,7 +49,7 @@ impl GraphStore for InMemoryGraphStore {
         Ok(())
     }
 
-    async fn query(&self, _cypher: &str, _params: &HashMap<String, String>) -> Result<GraphRows, GraphError> {
+    async fn query(&self, _cypher: &str, _params: &HashMap<String, GraphParam>) -> Result<GraphRows, GraphError> {
         Ok(self.rows.lock().expect("graph store mutex poisoned").clone())
     }
 }

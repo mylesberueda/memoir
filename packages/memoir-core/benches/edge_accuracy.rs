@@ -149,14 +149,19 @@ fn at(day: u32) -> DateTime<FixedOffset> {
 }
 
 /// Maps a case's existing-edge specs to current `ExistingEdge`s.
+///
+/// Specs carry no event day, so each edge gets a distinct synthetic
+/// `valid_from` by position; the close decision keys on object, never on
+/// `valid_from`, so the synthetic days cannot change a verdict.
 fn existing_edges(case: &Case) -> Vec<ExistingEdge> {
     case.existing
         .iter()
-        .map(|spec| ExistingEdge {
-            key: spec.key.clone(),
+        .enumerate()
+        .map(|(position, spec)| ExistingEdge {
             subject_key: spec.subject.clone(),
             relation: spec.relation.clone(),
             object_key: spec.object.clone(),
+            valid_from: at(1 + position as u32),
             valid_to: None,
         })
         .collect()
@@ -174,9 +179,22 @@ fn new_edge(case: &Case) -> Edge {
 }
 
 /// Whether a resolution's close-set equals the gold close-set (order-independent).
-fn close_matches(resolution: &EdgeResolution, expected: &[String]) -> bool {
-    let got: HashSet<&String> = resolution.close.iter().collect();
-    let want: HashSet<&String> = expected.iter().collect();
+///
+/// Gold names corpus keys; each key's spec identifies its edge by
+/// `(subject, relation, object)`, which is what the self-describing close
+/// carries, so the sets compare on that tuple.
+fn close_matches(resolution: &EdgeResolution, case: &Case) -> bool {
+    let got: HashSet<(&str, &str, &str)> = resolution
+        .close
+        .iter()
+        .map(|edge| (edge.subject_key.as_str(), edge.relation.as_str(), edge.object_key.as_str()))
+        .collect();
+    let want: HashSet<(&str, &str, &str)> = case
+        .expected_close
+        .iter()
+        .filter_map(|key| case.existing.iter().find(|spec| spec.key == *key))
+        .map(|spec| (spec.subject.as_str(), spec.relation.as_str(), spec.object.as_str()))
+        .collect();
     got == want
 }
 
@@ -192,10 +210,8 @@ fn main() {
     let mut temporal = Tally::default();
 
     for case in &corpus.cases {
-        let expected = &case.expected_close;
-
         let naive_resolution = runtime.block_on(NaiveAppendResolver::new().resolve(&scope(), new_edge(case)));
-        let naive_ok = close_matches(&naive_resolution.expect("naive resolve never errors"), expected);
+        let naive_ok = close_matches(&naive_resolution.expect("naive resolve never errors"), case);
         if !naive_ok {
             println!("  [naive] {} → close mismatch", case.id);
         }
@@ -205,7 +221,7 @@ fn main() {
         let policy = CardinalityPolicy::with_single_valued(case.single_valued.iter());
         let resolver = TemporalEdgeResolver::new(catalog, policy);
         let temporal_resolution = runtime.block_on(resolver.resolve(&scope(), new_edge(case)));
-        let temporal_ok = close_matches(&temporal_resolution.expect("temporal resolve over in-memory catalog"), expected);
+        let temporal_ok = close_matches(&temporal_resolution.expect("temporal resolve over in-memory catalog"), case);
         if !temporal_ok {
             println!("  [temporal] {} → close mismatch", case.id);
         }

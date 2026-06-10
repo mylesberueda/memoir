@@ -15,11 +15,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::DateTime;
+
 use crate::memory::Scope;
 
 use super::{
-    EdgeCatalog, EdgeError, EntityCatalog, EntityVector, ExistingEdge, FalkorGraphStore, GraphRow, GraphStore,
-    ResolveError,
+    EdgeCatalog, EdgeError, EntityCatalog, EntityVector, ExistingEdge, FalkorGraphStore, GraphParam, GraphRow,
+    GraphStore, ResolveError,
 };
 
 /// Reads candidate entity nodes from FalkorDB for [`EntityCatalog`].
@@ -78,12 +80,13 @@ impl EdgeCatalog for FalkorEdgeCatalog {
         relation: &str,
     ) -> Result<Vec<ExistingEdge>, EdgeError> {
         let cypher = "MATCH (s:Entity {agent_id: $agent_id, org_id: $org_id, user_id: $user_id, name: $subject}) \
-             -[r {relation: $relation, valid_to: null}]->(o:Entity) \
-             RETURN id(r) AS key, s.name AS subject, r.relation AS relation, o.name AS object";
+             -[r {relation: $relation}]->(o:Entity {agent_id: $agent_id, org_id: $org_id, user_id: $user_id}) \
+             WHERE r.valid_to IS NULL \
+             RETURN s.name AS subject, r.relation AS relation, o.name AS object, r.valid_from AS valid_from";
 
         let mut params = scope_params(scope);
-        params.insert("subject".to_string(), subject_key.to_string());
-        params.insert("relation".to_string(), relation.to_string());
+        params.insert("subject".to_string(), subject_key.into());
+        params.insert("relation".to_string(), relation.into());
 
         let rows = self
             .store
@@ -114,12 +117,15 @@ fn entity_from_row(row: &GraphRow) -> Option<EntityVector> {
 /// Parses an `ExistingEdge` from a current-edge result row.
 ///
 /// `valid_to` is `None` by construction — the query matches only current edges.
+/// Rows missing a column or carrying an unparseable `valid_from` are skipped
+/// rather than failing the read — one malformed edge should not break
+/// resolution for the rest of the scope.
 fn existing_edge_from_row(row: &GraphRow) -> Option<ExistingEdge> {
     Some(ExistingEdge {
-        key: column(row, "key")?.to_string(),
         subject_key: column(row, "subject")?.to_string(),
         relation: column(row, "relation")?.to_string(),
         object_key: column(row, "object")?.to_string(),
+        valid_from: DateTime::parse_from_rfc3339(column(row, "valid_from")?).ok()?,
         valid_to: None,
     })
 }
@@ -132,11 +138,11 @@ fn column<'a>(row: &'a GraphRow, name: &str) -> Option<&'a str> {
 }
 
 /// Builds the scope parameter map shared by the catalog reads.
-fn scope_params(scope: &Scope) -> HashMap<String, String> {
+fn scope_params(scope: &Scope) -> HashMap<String, GraphParam> {
     HashMap::from([
-        ("agent_id".to_string(), scope.agent_id.clone()),
-        ("org_id".to_string(), scope.org_id.clone()),
-        ("user_id".to_string(), scope.user_id.clone()),
+        ("agent_id".to_string(), scope.agent_id.clone().into()),
+        ("org_id".to_string(), scope.org_id.clone().into()),
+        ("user_id".to_string(), scope.user_id.clone().into()),
     ])
 }
 
@@ -167,16 +173,28 @@ mod tests {
     }
 
     #[test]
-    fn should_parse_current_edge_with_null_valid_to() {
+    fn should_parse_current_edge_with_identity_tuple() {
         let parsed = existing_edge_from_row(&row(&[
-            ("key", "42"),
             ("subject", "Alice"),
             ("relation", "works at"),
             ("object", "Acme"),
+            ("valid_from", "2026-06-01T00:00:00+00:00"),
         ]))
         .unwrap();
-        assert_eq!(parsed.key, "42");
+        assert_eq!(parsed.subject_key, "Alice");
         assert_eq!(parsed.object_key, "Acme");
+        assert_eq!(parsed.valid_from.to_rfc3339(), "2026-06-01T00:00:00+00:00");
         assert!(parsed.valid_to.is_none());
+    }
+
+    #[test]
+    fn should_skip_edge_with_unparseable_valid_from() {
+        assert!(existing_edge_from_row(&row(&[
+            ("subject", "Alice"),
+            ("relation", "works at"),
+            ("object", "Acme"),
+            ("valid_from", "null"),
+        ]))
+        .is_none());
     }
 }

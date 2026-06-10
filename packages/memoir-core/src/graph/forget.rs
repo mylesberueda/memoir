@@ -23,7 +23,7 @@ use std::collections::HashMap;
 
 use crate::memory::Scope;
 
-use super::{GraphError, GraphStore};
+use super::{GraphError, GraphParam, GraphStore};
 
 /// Backs [`GraphStore::forget_pids`]; see that method for semantics.
 pub(super) async fn forget_pids<G: GraphStore + ?Sized>(store: &G, pids: &[&str]) -> Result<(), GraphError> {
@@ -35,7 +35,7 @@ pub(super) async fn forget_pids<G: GraphStore + ?Sized>(store: &G, pids: &[&str]
 
 /// Removes a single pid's references, edges first then isolated empty nodes.
 async fn forget_one_pid<G: GraphStore + ?Sized>(store: &G, pid: &str) -> Result<(), GraphError> {
-    let params = HashMap::from([("pid".to_string(), pid.to_string())]);
+    let params = HashMap::from([("pid".to_string(), GraphParam::from(pid))]);
 
     // Strip the pid from matching edges, then delete those left with no pids.
     let edge_cypher = "MATCH ()-[r]->() WHERE $pid IN r.memory_pids \
@@ -63,11 +63,11 @@ pub(super) async fn forget_scope<G: GraphStore + ?Sized>(store: &G, scope: &Scop
 }
 
 /// Builds the scope parameter map shared by every forget statement.
-fn scope_params(scope: &Scope) -> HashMap<String, String> {
+fn scope_params(scope: &Scope) -> HashMap<String, GraphParam> {
     HashMap::from([
-        ("agent_id".to_string(), scope.agent_id.clone()),
-        ("org_id".to_string(), scope.org_id.clone()),
-        ("user_id".to_string(), scope.user_id.clone()),
+        ("agent_id".to_string(), scope.agent_id.clone().into()),
+        ("org_id".to_string(), scope.org_id.clone().into()),
+        ("user_id".to_string(), scope.user_id.clone().into()),
     ])
 }
 
@@ -89,11 +89,11 @@ mod tests {
     /// Records every (cypher, params) call so tests assert what forget issues.
     #[derive(Default)]
     struct RecordingStore {
-        calls: Mutex<Vec<(String, HashMap<String, String>)>>,
+        calls: Mutex<Vec<(String, HashMap<String, GraphParam>)>>,
     }
 
     impl RecordingStore {
-        fn calls(&self) -> Vec<(String, HashMap<String, String>)> {
+        fn calls(&self) -> Vec<(String, HashMap<String, GraphParam>)> {
             self.calls.lock().expect("recording store poisoned").clone()
         }
     }
@@ -103,7 +103,7 @@ mod tests {
             Ok(())
         }
 
-        async fn query(&self, cypher: &str, params: &HashMap<String, String>) -> Result<GraphRows, GraphError> {
+        async fn query(&self, cypher: &str, params: &HashMap<String, GraphParam>) -> Result<GraphRows, GraphError> {
             self.calls
                 .lock()
                 .expect("recording store poisoned")
@@ -132,7 +132,7 @@ mod tests {
 
         for (cypher, params) in store.calls() {
             assert!(!cypher.contains("mem1"), "pid must not be interpolated");
-            assert_eq!(params.get("pid").map(String::as_str), Some("mem1"));
+            assert_eq!(params.get("pid"), Some(&GraphParam::Str("mem1".to_string())));
             // The pid is globally unique, so the pid path carries no scope.
             assert!(!cypher.contains("agent_id"), "pid path is not scope-confined");
         }
@@ -179,6 +179,6 @@ mod tests {
         let calls = store.calls();
         assert_eq!(calls.len(), 1);
         assert!(calls[0].0.contains("DETACH DELETE"));
-        assert_eq!(calls[0].1.get("agent_id").map(String::as_str), Some("agent"));
+        assert_eq!(calls[0].1.get("agent_id"), Some(&GraphParam::Str("agent".to_string())));
     }
 }

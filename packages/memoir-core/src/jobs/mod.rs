@@ -42,19 +42,30 @@ pub trait MemoryJobsStore: Send + Sync + 'static {
     /// both LLM-derived siblings have succeeded.
     ///
     /// The two-parent fan-in of the knowledge-graph pipeline, resolved without a
-    /// job-dependency system: a `synthesize` row is inserted iff no `extract` or
-    /// `relational_extract` row for `source_pid` still exists. Because a
-    /// succeeded job deletes its row ([`Self::complete`]) while a failed or
-    /// in-flight one retains it, "no sibling row" means "both siblings
-    /// succeeded." The check and the insert MUST share one atomic statement so
-    /// two concurrent sibling completions cannot both insert. Returns whether a
-    /// row was inserted (`false` when a sibling is still present, or a
-    /// `synthesize` row already exists).
+    /// job-dependency system: a `synthesize` row is inserted iff no *other*
+    /// `extract` or `relational_extract` row for `source_pid` still exists.
+    /// Because a succeeded job deletes its row ([`Self::complete`]) while a
+    /// failed or in-flight one retains it, "no sibling row" means "both siblings
+    /// succeeded."
+    ///
+    /// `caller_job_id` is the id of the calling sibling's own job row, which is
+    /// still present (claimed, not yet completed) at call time — each handler
+    /// fires this from inside its own dispatch, before the worker completes it.
+    /// It is excluded from the sibling check so a job does not see *itself* as a
+    /// still-running sibling and block synthesis forever. The check and the
+    /// insert MUST share one atomic statement so two concurrent sibling
+    /// completions cannot both insert. Returns whether a row was inserted
+    /// (`false` when another sibling is still present, or a `synthesize` row
+    /// already exists).
     ///
     /// # Errors
     ///
     /// Returns [`JobsError::Database`] for database failures.
-    fn enqueue_synthesis_if_ready(&self, source_pid: &str) -> impl Future<Output = Result<bool, JobsError>> + Send;
+    fn enqueue_synthesis_if_ready(
+        &self,
+        source_pid: &str,
+        caller_job_id: i64,
+    ) -> impl Future<Output = Result<bool, JobsError>> + Send;
 
     /// Atomically claims the oldest pending job and returns it, or `None`.
     ///
@@ -215,10 +226,11 @@ mod tests {
             Ok(id)
         }
 
-        async fn enqueue_synthesis_if_ready(&self, source_pid: &str) -> Result<bool, JobsError> {
+        async fn enqueue_synthesis_if_ready(&self, source_pid: &str, caller_job_id: i64) -> Result<bool, JobsError> {
             let mut rows = self.rows.lock().unwrap();
             let blocked = rows.iter().any(|r| {
-                r.source_pid == source_pid
+                r.id != caller_job_id
+                    && r.source_pid == source_pid
                     && matches!(
                         r.kind,
                         JobKind::Extract | JobKind::RelationalExtract | JobKind::Synthesize
@@ -608,13 +620,32 @@ mod tests {
         assert_eq!(store.pending_count().await.unwrap(), 1);
     }
 
+    /// A job id no staged row uses, for tests where the caller's own row is
+    /// irrelevant — the exclusion is then a no-op and only sibling rows matter.
+    const NO_CALLER: i64 = 0;
+
     #[tokio::test(flavor = "current_thread")]
     async fn should_enqueue_synthesis_when_no_siblings_remain() {
         let store = StubJobsStore::default();
-        let inserted = store.enqueue_synthesis_if_ready("pid_done").await.unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_done", NO_CALLER).await.unwrap();
         assert!(inserted, "no sibling rows -> synthesis fires");
         let claimed = store.claim(None).await.unwrap().expect("synthesize row");
         assert_eq!(claimed.kind, JobKind::Synthesize);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_enqueue_synthesis_when_only_the_callers_own_row_remains() {
+        // The real worker fires this guard from inside the calling sibling's
+        // handler, before the worker completes (deletes) that row. So the
+        // caller's own row is always present at call time; it must be excluded
+        // or synthesis can never fire. Regression for the fan-in never firing.
+        let store = StubJobsStore::default();
+        let caller_id = store
+            .enqueue(JobKind::RelationalExtract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", caller_id).await.unwrap();
+        assert!(inserted, "only the caller's own row remains -> synthesis fires");
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -624,7 +655,7 @@ mod tests {
             .enqueue(JobKind::Extract, "pid_x".to_string(), serde_json::json!({}))
             .await
             .unwrap();
-        let inserted = store.enqueue_synthesis_if_ready("pid_x").await.unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
         assert!(!inserted, "extract sibling still present -> no synthesis");
     }
 
@@ -635,16 +666,32 @@ mod tests {
             .enqueue(JobKind::RelationalExtract, "pid_x".to_string(), serde_json::json!({}))
             .await
             .unwrap();
-        let inserted = store.enqueue_synthesis_if_ready("pid_x").await.unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
         assert!(!inserted, "relational sibling still present -> no synthesis");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_not_enqueue_synthesis_when_a_real_sibling_outlives_the_caller() {
+        // Caller's own row excluded, but a genuine *other* sibling still present.
+        let store = StubJobsStore::default();
+        let caller_id = store
+            .enqueue(JobKind::RelationalExtract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        store
+            .enqueue(JobKind::Extract, "pid_x".to_string(), serde_json::json!({}))
+            .await
+            .unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", caller_id).await.unwrap();
+        assert!(!inserted, "a real other sibling outlives the caller -> no synthesis");
     }
 
     #[tokio::test(flavor = "current_thread")]
     async fn should_enqueue_synthesis_exactly_once_regardless_of_order() {
         // Two sibling completions both call the guard; exactly one inserts.
         let store = StubJobsStore::default();
-        let first = store.enqueue_synthesis_if_ready("pid_x").await.unwrap();
-        let second = store.enqueue_synthesis_if_ready("pid_x").await.unwrap();
+        let first = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
+        let second = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
         assert!(first, "first call inserts");
         assert!(!second, "second call sees the existing synthesize row -> no duplicate");
     }
@@ -661,7 +708,7 @@ mod tests {
             .enqueue(JobKind::Categorize, "pid_x".to_string(), serde_json::json!({}))
             .await
             .unwrap();
-        let inserted = store.enqueue_synthesis_if_ready("pid_x").await.unwrap();
+        let inserted = store.enqueue_synthesis_if_ready("pid_x", NO_CALLER).await.unwrap();
         assert!(inserted, "embed/categorize are not synthesis parents -> synthesis fires");
     }
 

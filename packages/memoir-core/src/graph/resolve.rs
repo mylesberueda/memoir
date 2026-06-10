@@ -37,7 +37,14 @@ use super::cosine::cosine_similarity;
 /// (`client/categorize.rs`): a deliberately conservative default that favors a
 /// new node over a wrong merge, since an over-eager merge is harder to undo than
 /// a duplicate.
-pub const MIN_ENTITY_SIMILARITY: f32 = 0.85;
+///
+/// Chosen by measurement (`benches/resolver_accuracy.rs`, BGE-small-en-v1.5,
+/// 2026-06-10): should-merge name variants scored ≥ 0.763 ("Alice Smith" vs
+/// "Alice") while should-split distinct entities scored ≤ 0.718, so the floor
+/// sits inside that band, biased toward the merge bound to keep favoring
+/// splits. The original 0.85 guess false-split "Alice Smith" in the live 0014
+/// suite.
+pub const MIN_ENTITY_SIMILARITY: f32 = 0.75;
 
 /// The outcome of resolving an entity string against the existing graph.
 ///

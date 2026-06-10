@@ -87,12 +87,12 @@ pub(super) async fn neighbors<G: GraphStore + ?Sized>(
     let depth = depth.clamp(1, MAX_ENRICHMENT_DEPTH);
 
     let mut params = HashMap::from([
-        ("agent_id".to_string(), scope.agent_id.clone()),
-        ("org_id".to_string(), scope.org_id.clone()),
-        ("user_id".to_string(), scope.user_id.clone()),
+        ("agent_id".to_string(), scope.agent_id.clone().into()),
+        ("org_id".to_string(), scope.org_id.clone().into()),
+        ("user_id".to_string(), scope.user_id.clone().into()),
     ]);
     for (i, pid) in seed_pids.iter().enumerate() {
-        params.insert(format!("pid{i}"), (*pid).to_string());
+        params.insert(format!("pid{i}"), (*pid).into());
     }
     let pid_list = (0..seed_pids.len())
         .map(|i| format!("$pid{i}"))
@@ -163,7 +163,7 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::graph::GraphRows;
+    use crate::graph::{GraphParam, GraphRows};
 
     fn scope() -> Scope {
         Scope {
@@ -181,7 +181,7 @@ mod tests {
     #[derive(Default)]
     struct StagedStore {
         rows: Mutex<GraphRows>,
-        calls: Mutex<Vec<(String, HashMap<String, String>)>>,
+        calls: Mutex<Vec<(String, HashMap<String, GraphParam>)>>,
     }
 
     impl StagedStore {
@@ -192,7 +192,7 @@ mod tests {
             }
         }
 
-        fn calls(&self) -> Vec<(String, HashMap<String, String>)> {
+        fn calls(&self) -> Vec<(String, HashMap<String, GraphParam>)> {
             self.calls.lock().unwrap().clone()
         }
     }
@@ -202,7 +202,7 @@ mod tests {
             Ok(())
         }
 
-        async fn query(&self, cypher: &str, params: &HashMap<String, String>) -> Result<GraphRows, GraphError> {
+        async fn query(&self, cypher: &str, params: &HashMap<String, GraphParam>) -> Result<GraphRows, GraphError> {
             self.calls.lock().unwrap().push((cypher.to_string(), params.clone()));
             Ok(self.rows.lock().unwrap().clone())
         }
@@ -223,9 +223,9 @@ mod tests {
 
         let (cypher, params) = &store.calls()[0];
         assert!(!cypher.contains("mem1"), "pids must not be interpolated");
-        assert_eq!(params.get("pid0").map(String::as_str), Some("mem1"));
-        assert_eq!(params.get("pid1").map(String::as_str), Some("mem2"));
-        assert_eq!(params.get("agent_id").map(String::as_str), Some("agent"));
+        assert_eq!(params.get("pid0"), Some(&GraphParam::Str("mem1".to_string())));
+        assert_eq!(params.get("pid1"), Some(&GraphParam::Str("mem2".to_string())));
+        assert_eq!(params.get("agent_id"), Some(&GraphParam::Str("agent".to_string())));
     }
 
     #[tokio::test(flavor = "current_thread")]

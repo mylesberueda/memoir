@@ -22,7 +22,10 @@ use chrono::{DateTime, FixedOffset};
 use crate::embedding::{EmbeddingError, EmbeddingModel};
 use crate::memory::Scope;
 
-use super::{Edge, EdgeResolver, EntityResolver, GraphError, GraphStore, Resolution, ResolveError, Triple, TripleSet};
+use super::{
+    Edge, EdgeResolver, EntityResolver, ExistingEdge, GraphError, GraphParam, GraphStore, Resolution, ResolveError,
+    Triple, TripleSet,
+};
 
 /// The label every entity node carries in v1 (untyped — see ticket 0005).
 const ENTITY_LABEL: &str = "Entity";
@@ -122,6 +125,13 @@ where
     ER: EntityResolver,
     EdgeR: EdgeResolver,
 {
+    // A blank subject or object is not a usable entity: FalkorDB rejects a
+    // MERGE on an empty-string key as a null-property merge, and a nameless node
+    // has no identity anyway. Noisy LLM output produces these; skip them.
+    if triple.subject.trim().is_empty() || triple.object.trim().is_empty() {
+        return Ok(false);
+    }
+
     let subject = entities.resolve(&ctx.scope, &triple.subject).await?;
     let object = entities.resolve(&ctx.scope, &triple.object).await?;
 
@@ -186,61 +196,82 @@ async fn upsert_node<G: GraphStore + ?Sized, EM: EmbeddingModel>(
     );
 
     let mut params = scope_params(&ctx.scope);
-    params.insert("name".to_string(), name);
-    params.insert("pid".to_string(), ctx.memory_pid.clone());
-    params.insert("now".to_string(), ctx.valid_from.to_rfc3339());
-    params.insert("embedding".to_string(), embedding_json);
+    params.insert("name".to_string(), name.into());
+    params.insert("pid".to_string(), ctx.memory_pid.clone().into());
+    params.insert("now".to_string(), ctx.valid_from.to_rfc3339().into());
+    params.insert("embedding".to_string(), embedding_json.into());
 
     store.query(&cypher, &params).await?;
     Ok(())
 }
 
 /// `MERGE`s a current relationship edge, creating it or adding this pid.
+///
+/// The merge key is the edge's identity: the two scope-matched endpoints, the
+/// sanitized relationship label, and `valid_from` — all non-null, so a replay of
+/// the same source matches the same edge (pid appends), while a distinct event
+/// (different `valid_from`) coexists as its own edge. `valid_to` is never
+/// written on create: currency is the *absence* of `valid_to` (FalkorDB does
+/// not store null properties), and closing stamps it later.
 async fn upsert_edge<G: GraphStore + ?Sized>(store: &G, ctx: &CommitContext, edge: &Edge) -> Result<(), CommitError> {
     let label = sanitize_relation_label(&edge.relation);
     let cypher = format!(
         "MATCH (s:{ENTITY_LABEL} {{agent_id: $agent_id, org_id: $org_id, user_id: $user_id, name: $subject}}) \
          MATCH (o:{ENTITY_LABEL} {{agent_id: $agent_id, org_id: $org_id, user_id: $user_id, name: $object}}) \
-         MERGE (s)-[r:{label} {{valid_to: null}}]->(o) \
-         ON CREATE SET r.valid_from = $valid_from, r.confidence = $confidence, \
+         MERGE (s)-[r:{label} {{valid_from: $valid_from}}]->(o) \
+         ON CREATE SET r.confidence = $confidence, \
            r.relation = $relation, r.memory_pids = [$pid] \
          ON MATCH SET r.memory_pids = \
            CASE WHEN $pid IN r.memory_pids THEN r.memory_pids ELSE r.memory_pids + $pid END"
     );
 
     let mut params = scope_params(&ctx.scope);
-    params.insert("subject".to_string(), edge.subject_key.clone());
-    params.insert("object".to_string(), edge.object_key.clone());
-    params.insert("relation".to_string(), edge.relation.clone());
-    params.insert("valid_from".to_string(), edge.valid_from.to_rfc3339());
-    params.insert("confidence".to_string(), edge.confidence.to_string());
-    params.insert("pid".to_string(), ctx.memory_pid.clone());
+    params.insert("subject".to_string(), edge.subject_key.clone().into());
+    params.insert("object".to_string(), edge.object_key.clone().into());
+    params.insert("relation".to_string(), edge.relation.clone().into());
+    params.insert("valid_from".to_string(), edge.valid_from.to_rfc3339().into());
+    params.insert("confidence".to_string(), GraphParam::Float(edge.confidence.into()));
+    params.insert("pid".to_string(), ctx.memory_pid.clone().into());
 
     store.query(&cypher, &params).await?;
     Ok(())
 }
 
 /// Closes a superseded edge by stamping its `valid_to`, keeping it as history.
-async fn close_edge<G: GraphStore + ?Sized>(store: &G, ctx: &CommitContext, edge_key: &str) -> Result<(), CommitError> {
-    let cypher = "MATCH ()-[r {relation: $relation_key, valid_to: null}]->() \
-         WHERE r.agent_id = $agent_id AND r.org_id = $org_id AND r.user_id = $user_id \
+///
+/// Matches the edge by its self-describing identity tuple (scope-matched
+/// endpoints, `relation`, `valid_from`) — the same tuple [`upsert_edge`] merges
+/// on. Closing an already-closed edge is a no-op (`valid_to IS NULL` guards),
+/// so replaying a partially-failed batch never re-stamps history.
+async fn close_edge<G: GraphStore + ?Sized>(
+    store: &G,
+    ctx: &CommitContext,
+    target: &ExistingEdge,
+) -> Result<(), CommitError> {
+    let cypher = format!(
+        "MATCH (s:{ENTITY_LABEL} {{agent_id: $agent_id, org_id: $org_id, user_id: $user_id, name: $subject}}) \
+         -[r]->(o:{ENTITY_LABEL} {{agent_id: $agent_id, org_id: $org_id, user_id: $user_id, name: $object}}) \
+         WHERE r.relation = $relation AND r.valid_from = $valid_from AND r.valid_to IS NULL \
          SET r.valid_to = $valid_to"
-        .to_string();
+    );
 
     let mut params = scope_params(&ctx.scope);
-    params.insert("relation_key".to_string(), edge_key.to_string());
-    params.insert("valid_to".to_string(), ctx.valid_from.to_rfc3339());
+    params.insert("subject".to_string(), target.subject_key.clone().into());
+    params.insert("object".to_string(), target.object_key.clone().into());
+    params.insert("relation".to_string(), target.relation.clone().into());
+    params.insert("valid_from".to_string(), target.valid_from.to_rfc3339().into());
+    params.insert("valid_to".to_string(), ctx.valid_from.to_rfc3339().into());
 
     store.query(&cypher, &params).await?;
     Ok(())
 }
 
 /// Builds the scope parameter map shared by every node/edge write.
-fn scope_params(scope: &Scope) -> HashMap<String, String> {
+fn scope_params(scope: &Scope) -> HashMap<String, GraphParam> {
     HashMap::from([
-        ("agent_id".to_string(), scope.agent_id.clone()),
-        ("org_id".to_string(), scope.org_id.clone()),
-        ("user_id".to_string(), scope.user_id.clone()),
+        ("agent_id".to_string(), scope.agent_id.clone().into()),
+        ("org_id".to_string(), scope.org_id.clone().into()),
+        ("user_id".to_string(), scope.user_id.clone().into()),
     ])
 }
 
@@ -318,11 +349,11 @@ mod tests {
     /// A [`GraphStore`] recording every (cypher, params) call for assertions.
     #[derive(Default)]
     struct RecordingStore {
-        calls: Mutex<Vec<(String, HashMap<String, String>)>>,
+        calls: Mutex<Vec<(String, HashMap<String, GraphParam>)>>,
     }
 
     impl RecordingStore {
-        fn calls(&self) -> Vec<(String, HashMap<String, String>)> {
+        fn calls(&self) -> Vec<(String, HashMap<String, GraphParam>)> {
             self.calls.lock().expect("recording store poisoned").clone()
         }
     }
@@ -332,7 +363,7 @@ mod tests {
             Ok(())
         }
 
-        async fn query(&self, cypher: &str, params: &HashMap<String, String>) -> Result<GraphRows, GraphError> {
+        async fn query(&self, cypher: &str, params: &HashMap<String, GraphParam>) -> Result<GraphRows, GraphError> {
             self.calls
                 .lock()
                 .expect("recording store poisoned")
@@ -380,8 +411,9 @@ mod tests {
         for (cypher, _) in &calls {
             assert!(!cypher.contains("DETACH DELETE"), "user value leaked into query string");
         }
+        let injected = GraphParam::Str(injection.to_string());
         assert!(
-            calls.iter().any(|(_, params)| params.values().any(|v| v == injection)),
+            calls.iter().any(|(_, params)| params.values().any(|v| *v == injected)),
             "the injection value must ride as a bound param somewhere",
         );
     }
@@ -397,8 +429,8 @@ mod tests {
             .unwrap();
 
         for (_, params) in store.calls() {
-            assert_eq!(params.get("agent_id").map(String::as_str), Some("agent"));
-            assert_eq!(params.get("pid").map(String::as_str), Some("mem1"));
+            assert_eq!(params.get("agent_id"), Some(&GraphParam::Str("agent".to_string())));
+            assert_eq!(params.get("pid"), Some(&GraphParam::Str("mem1".to_string())));
         }
     }
 
@@ -414,6 +446,22 @@ mod tests {
 
         assert_eq!(committed, 0);
         assert!(store.calls().is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn should_skip_triple_with_blank_entity() {
+        // A blank object would MERGE a node on name '' -> FalkorDB null-merge
+        // error. Skip before resolution; nothing is written.
+        let store = RecordingStore::default();
+        let entities = ExactStringResolver::new(InMemoryEntityCatalog::new());
+        let edges = NaiveAppendResolver::new();
+
+        let committed = commit_triples(&store, &StubEmbedding, &entities, &edges, &ctx(), &one_triple("Alice", "works at", "   "))
+            .await
+            .unwrap();
+
+        assert_eq!(committed, 0);
+        assert!(store.calls().is_empty(), "blank entity must write nothing");
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -437,12 +485,13 @@ mod tests {
             .await
             .unwrap();
 
+        let alice = GraphParam::Str("Alice".to_string());
         let subject_merge = store
             .calls()
             .into_iter()
-            .find(|(c, p)| c.contains("MERGE (e:Entity") && p.get("name").map(String::as_str) == Some("Alice"))
+            .find(|(c, p)| c.contains("MERGE (e:Entity") && p.get("name") == Some(&alice))
             .expect("subject node merged");
-        assert_eq!(subject_merge.1.get("name").map(String::as_str), Some("Alice"));
+        assert_eq!(subject_merge.1.get("name"), Some(&alice));
     }
 
     #[test]

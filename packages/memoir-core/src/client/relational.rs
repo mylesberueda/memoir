@@ -94,7 +94,7 @@ impl ClientInner {
             .map_err(|err| RelationalExtractError::Staging(err.to_string()))?;
 
         self.jobs
-            .enqueue_synthesis_if_ready(&source.pid)
+            .enqueue_synthesis_if_ready(&source.pid, job.id)
             .await
             .map_err(|err| RelationalExtractError::Staging(err.to_string()))?;
 

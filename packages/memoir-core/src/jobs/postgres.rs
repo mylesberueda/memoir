@@ -60,10 +60,13 @@ impl MemoryJobsStore for PostgresJobsStore {
         row.try_get::<i64>("", "id").map_err(database)
     }
 
-    async fn enqueue_synthesis_if_ready(&self, source_pid: &str) -> Result<bool, JobsError> {
-        // Single atomic statement: insert the synthesize row only if neither
+    async fn enqueue_synthesis_if_ready(&self, source_pid: &str, caller_job_id: i64) -> Result<bool, JobsError> {
+        // Single atomic statement: insert the synthesize row only if no *other*
         // LLM-derived sibling (extract / relational_extract) still has a row for
-        // this source, AND no synthesize row exists yet. The `SELECT ... WHERE
+        // this source, AND no synthesize row exists yet. `id <> $2` excludes the
+        // calling sibling's own still-claimed row — the handler fires this before
+        // the worker completes (deletes) it, so without the exclusion a job would
+        // always see itself and synthesis could never fire. The `SELECT ... WHERE
         // NOT EXISTS` and the `INSERT` share one snapshot, so two concurrent
         // sibling completions cannot both insert. `RETURNING` lets us report
         // whether a row landed.
@@ -75,11 +78,15 @@ impl MemoryJobsStore for PostgresJobsStore {
             WHERE NOT EXISTS (
                 SELECT 1 FROM memory_jobs
                 WHERE source_pid = $1
+                  AND id <> $2
                   AND kind IN ('extract', 'relational_extract', 'synthesize')
             )
             RETURNING id
             "#,
-            [SeaOrmValue::String(Some(source_pid.to_owned()))],
+            [
+                SeaOrmValue::String(Some(source_pid.to_owned())),
+                SeaOrmValue::BigInt(Some(caller_job_id)),
+            ],
         );
 
         let inserted = self.db.query_one_raw(stmt).await.map_err(database)?.is_some();

@@ -227,18 +227,62 @@ fn score(
 ) -> Tally {
     let mut tally = Tally::default();
     for case in &corpus.cases {
-        let verdict = runtime.block_on(async {
+        let (verdict, nearest) = runtime.block_on(async {
             let catalog = catalog_for(case, embedder).await;
+            let nearest = nearest_by_cosine(case, embedder).await;
             let resolver = build(embedder.clone(), catalog);
             let resolution = resolver.resolve(&scope(), &case.query).await;
-            judge(&resolution, &case.expected)
+            (judge(&resolution, &case.expected), nearest)
         });
-        if !verdict.is_correct() {
-            println!("  [{label}] {} → {verdict:?}", case.id);
+        let marker = if verdict.is_correct() { "ok" } else { "MISS" };
+        match nearest {
+            Some((name, cosine)) => {
+                println!("  [{label}] {} {marker} {verdict:?} (nearest: {name} @ cosine {cosine:.3})", case.id)
+            }
+            None => println!("  [{label}] {} {marker} {verdict:?}", case.id),
         }
         tally.add(verdict);
     }
     tally
+}
+
+/// Finds the catalog entity nearest to the case's query by embedding cosine.
+///
+/// The diagnostic that turns a failed verdict into a threshold decision: a
+/// `FalseSplit` at cosine 0.81 says "lower [`MIN_ENTITY_SIMILARITY`] below
+/// 0.81," whereas the verdict alone only says "wrong."
+///
+/// [`MIN_ENTITY_SIMILARITY`]: memoir_core::graph::MIN_ENTITY_SIMILARITY
+async fn nearest_by_cosine(case: &Case, embedder: &Arc<OnnxEmbedding>) -> Option<(String, f32)> {
+    let query = embedder
+        .embed(&case.query)
+        .await
+        .unwrap_or_else(|err| panic!("embedding query {} failed: {err}", case.query));
+
+    let mut best: Option<(String, f32)> = None;
+    for entity in &case.catalog {
+        let embedding = embedder
+            .embed(&entity.name)
+            .await
+            .unwrap_or_else(|err| panic!("embedding catalog entity {} failed: {err}", entity.name));
+        let cosine = cosine(&query, &embedding);
+        if best.as_ref().is_none_or(|(_, best_cosine)| cosine > *best_cosine) {
+            best = Some((entity.name.clone(), cosine));
+        }
+    }
+    best
+}
+
+/// Cosine similarity between two equal-length vectors.
+fn cosine(a: &[f32], b: &[f32]) -> f32 {
+    let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm_a == 0.0 || norm_b == 0.0 {
+        0.0
+    } else {
+        dot / (norm_a * norm_b)
+    }
 }
 
 /// Renders the per-resolver verdict breakdown as a markdown table.
