@@ -1,6 +1,6 @@
 [package]
 name = "memoir-service"
-version = "0.2.0"
+version = "0.3.0"
 description = "Memoir gRPC service — auth + memory APIs"
 authors = ["Myles Berueda <myles@polypixel.io>"]
 edition = "2024"
