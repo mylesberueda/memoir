@@ -37,9 +37,11 @@ service MemoryService {
   // Hybrid-ranked retrieval: vector candidates re-ranked by a blend of
   // cosine similarity and recency, returning prompt-shaped context. Wraps
   // memoir-core's `Client::query`. The response carries raw memories +
-  // their hybrid score + the strategy used; set `template` on the request
-  // to also receive `rendered` — prompt-ready text produced server-side by
-  // memoir-core's own rendering (see `Template`).
+  // their hybrid score + the strategy used, plus `rendered` — prompt-ready
+  // text produced server-side by memoir-core's own rendering, always
+  // populated. `template` on the request chooses the preamble: unset
+  // selects memoir-core's `DEFAULT_SYSTEM_PROMPT`; set supplies the
+  // caller's preamble verbatim.
   rpc Query(QueryRequest) returns (QueryResponse);
 
   // In-place correction of an existing memory — distinct from supersession
