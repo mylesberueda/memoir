@@ -60,6 +60,28 @@ for (const hit of response.hits) {
 per call via the `headers` option (as above), or via a Connect-RPC
 [interceptor](https://connectrpc.com/docs/web/interceptors).
 
+## Rendered prompt context
+
+Every read RPC (`search`, `recall`, `timeline`, `recallAsOf`, `query`) always
+returns a `rendered` field: prompt-ready text — a system-prompt preamble
+followed by one bullet per memory — produced server-side by memoir-core's own
+rendering. The optional `template` on the request chooses the preamble: leave
+it unset to use memoir's default phrasing (you never copy the string), or set
+it to supply your own (the empty string renders a blank preamble line):
+
+```ts
+const response = await memory.query({
+	scope: { agentId: 'my-agent', orgId: 'my-org', userId: 'user-42' },
+	query: 'what does the user drink?',
+	// template omitted → memoir's default preamble; set a string for your own
+});
+
+console.log(response.rendered);
+```
+
+Query's bullets are dated (`- [YYYY-MM-DD, N units ago] content`); the other
+reads render `- content`, mirroring the library.
+
 ## What's in the package
 
 - Generated Connect-RPC service definitions: `MemoryService`, `AdminService`,

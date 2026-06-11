@@ -52,8 +52,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Authenticated requests need an `Authorization` header on each call; attach it
-via `tonic::Request::metadata_mut()` or a `tonic::service::Interceptor`. See
+## Rendered prompt context
+
+Every read RPC (`Search`, `Recall`, `Timeline`, `RecallAsOf`, `Query`) always
+returns a `rendered` field: prompt-ready text — a system-prompt preamble
+followed by one bullet per memory — produced server-side by memoir-core's own
+rendering. The optional `template` on the request chooses the preamble: leave
+it unset to use memoir's default phrasing (you never copy the string), or set
+it to supply your own (the empty string renders a blank preamble line).
+
+```rust,no_run
+use memoir_sdk::memoir::v1::{QueryRequest, Scope};
+
+let request = QueryRequest {
+    scope: Some(Scope {
+        agent_id: "my-agent".into(),
+        org_id: "my-org".into(),
+        user_id: "user-42".into(),
+    }),
+    query: "what does the user drink?".into(),
+    template: None, // None = memoir's default preamble; Some(s) = your own
+    ..Default::default()
+};
+```
+
+Query's bullets are dated (`- [YYYY-MM-DD, N units ago] content`); the other
+reads render `- content`, mirroring the library.
+
+## Authenticated requests
+
+Authenticated requests need an `Authorization` header on each call. The SDK
+ships `BearerAuth`, a `tonic` interceptor that attaches it:
+
+```rust,no_run
+use memoir_sdk::BearerAuth;
+use memoir_sdk::memoir::v1::memory_service_client::MemoryServiceClient;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let channel = tonic::transport::Channel::from_static("http://localhost:5153")
+        .connect()
+        .await?;
+    let auth = BearerAuth::new("my-api-token")?;
+    let mut client = MemoryServiceClient::with_interceptor(channel, auth);
+    Ok(())
+}
+```
+
+See
 [memoir-service](https://github.com/mylesberueda/memoir/tree/dev/apps/memoir-service)
 for the available authentication modes.
 

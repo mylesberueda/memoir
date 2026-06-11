@@ -7,10 +7,6 @@ import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
 // MemoryService is the canonical read/write surface for processed memories.
-//
-// v0.1: handlers return Unimplemented. The proto is defined now to lock in
-// the SDK surface so consumers can integrate against stable types.
-// The memory epic implements real handlers.
 service MemoryService {
   // Semantic retrieval within a scope. Vector + optional graph traversal,
   // no LLM call. Hot path — designed to add minimal latency to agent loops.
@@ -41,8 +37,9 @@ service MemoryService {
   // Hybrid-ranked retrieval: vector candidates re-ranked by a blend of
   // cosine similarity and recency, returning prompt-shaped context. Wraps
   // memoir-core's `Client::query`. The response carries raw memories +
-  // their hybrid score + the strategy used; rendering to a prompt string
-  // is the SDK's job, not the wire's.
+  // their hybrid score + the strategy used; set `template` on the request
+  // to also receive `rendered` — prompt-ready text produced server-side by
+  // memoir-core's own rendering (see `Template`).
   rpc Query(QueryRequest) returns (QueryResponse);
 
   // In-place correction of an existing memory — distinct from supersession
@@ -226,6 +223,13 @@ message SearchRequest {
   // (1); values are clamped to the library maximum (2). Maps to
   // `SearchBuilder::with_graph_depth`. Ignored when enrichment is off.
   uint32 graph_depth = 8;
+
+  // System-prompt preamble for the rendered output. Unset selects memoir-core's
+  // `DEFAULT_SYSTEM_PROMPT`, keeping the default phrasing server-side so
+  // consumers never copy it; set supplies the caller's preamble verbatim (the
+  // empty string renders a blank preamble line). Either way
+  // `SearchResponse.rendered` is populated — reads always render.
+  optional string template = 9;
 }
 
 // Caller-supplied filter applied at search time. Mirrors Qdrant's payload
@@ -297,14 +301,31 @@ message SearchResponse {
   // The graph neighborhood around the hits, present only when the request set
   // `with_graph_enrichment`. Empty/absent otherwise.
   optional GraphEnrichment enrichment = 2;
+
+  // Prompt-ready text: the resolved preamble, then one `- content` bullet
+  // per hit, rendered by memoir-core's `Memories`. Always populated; the
+  // preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`.
+  string rendered = 3;
 }
 
 message RecallRequest {
   string pid = 1;
+
+  // System-prompt preamble for the rendered output. Unset selects memoir-core's
+  // `DEFAULT_SYSTEM_PROMPT`, keeping the default phrasing server-side so
+  // consumers never copy it; set supplies the caller's preamble verbatim (the
+  // empty string renders a blank preamble line). Either way
+  // `RecallResponse.rendered` is populated — reads always render.
+  optional string template = 2;
 }
 
 message RecallResponse {
   Memory memory = 1;
+
+  // Prompt-ready text: the resolved preamble, then the memory as a single
+  // `- content` bullet, rendered by memoir-core's `Memories`. Always populated;
+  // the preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`.
+  string rendered = 2;
 }
 
 message RememberRequest {
@@ -366,12 +387,25 @@ message TimelineRequest {
   // Oldest-first when true. Default (false/omitted) is newest-first by
   // created_at, matching the library default.
   bool ascending = 9;
+
+  // System-prompt preamble for the rendered output. Unset selects memoir-core's
+  // `DEFAULT_SYSTEM_PROMPT`, keeping the default phrasing server-side so
+  // consumers never copy it; set supplies the caller's preamble verbatim (the
+  // empty string renders a blank preamble line). Either way
+  // `TimelineResponse.rendered` is populated — reads always render.
+  optional string template = 10;
 }
 
 message TimelineResponse {
   // Memories in the requested order. `score` is never set (timeline computes
   // no similarity). Mirrors `Client::timeline`'s `Vec<Memory>` return.
   repeated Memory memories = 1;
+
+  // Prompt-ready text: the resolved preamble, then one `- content` bullet
+  // per memory in the requested order, rendered by memoir-core's `Memories`.
+  // Always populated; the preamble is `template` when set, else
+  // `DEFAULT_SYSTEM_PROMPT`.
+  string rendered = 2;
 }
 
 message RecallAsOfRequest {
@@ -388,12 +422,24 @@ message RecallAsOfRequest {
 
   // Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
   int32 limit = 4;
+
+  // System-prompt preamble for the rendered output. Unset selects memoir-core's
+  // `DEFAULT_SYSTEM_PROMPT`, keeping the default phrasing server-side so
+  // consumers never copy it; set supplies the caller's preamble verbatim (the
+  // empty string renders a blank preamble line). Either way
+  // `RecallAsOfResponse.rendered` is populated — reads always render.
+  optional string template = 5;
 }
 
 message RecallAsOfResponse {
   // Memories active as of the requested instant, newest-first. `score` is
   // never set. Mirrors `Client::recall_as_of`'s `Vec<Memory>` return.
   repeated Memory memories = 1;
+
+  // Prompt-ready text: the resolved preamble, then one `- content` bullet
+  // per memory, rendered by memoir-core's `Memories`. Always populated; the
+  // preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`.
+  string rendered = 2;
 }
 
 // How Query orders candidates. Mirrors memoir-core's `RankingStrategy`.
@@ -518,6 +564,13 @@ message QueryRequest {
   // (1); clamped to the library maximum (2). Maps to
   // `QueryBuilder::with_graph_depth`. Ignored when enrichment is off.
   uint32 graph_depth = 13;
+
+  // System-prompt preamble for the rendered output. Unset selects memoir-core's
+  // `DEFAULT_SYSTEM_PROMPT`, keeping the default phrasing server-side so
+  // consumers never copy it; set supplies the caller's preamble verbatim (the
+  // empty string renders a blank preamble line). Either way
+  // `QueryResponse.rendered` is populated — reads always render.
+  optional string template = 14;
 }
 
 message QueryResponse {
@@ -532,6 +585,14 @@ message QueryResponse {
   // The graph neighborhood around the hits, present only when the request set
   // `with_graph_enrichment`. Empty/absent otherwise.
   optional GraphEnrichment enrichment = 3;
+
+  // Prompt-ready text: the resolved preamble, then one dated bullet per hit
+  // (`- [YYYY-MM-DD, N units ago] content`), rendered by memoir-core's
+  // `MemoryContext`. Query is the one read whose bullets carry the date
+  // bracket — that mirrors the library, where only `query` renders dates.
+  // Always populated; the preamble is `template` when set, else
+  // `DEFAULT_SYSTEM_PROMPT`.
+  string rendered = 4;
 }
 
 message EditRequest {

@@ -7447,6 +7447,9 @@ impl serde::Serialize for QueryRequest {
         if self.graph_depth != 0 {
             len += 1;
         }
+        if self.template.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.QueryRequest", len)?;
         if let Some(v) = self.scope.as_ref() {
             struct_ser.serialize_field("scope", v)?;
@@ -7487,6 +7490,9 @@ impl serde::Serialize for QueryRequest {
         if self.graph_depth != 0 {
             struct_ser.serialize_field("graphDepth", &self.graph_depth)?;
         }
+        if let Some(v) = self.template.as_ref() {
+            struct_ser.serialize_field("template", v)?;
+        }
         struct_ser.end()
     }
 }
@@ -7518,6 +7524,7 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
             "withGraphEnrichment",
             "graph_depth",
             "graphDepth",
+            "template",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -7535,6 +7542,7 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
             Ranking,
             WithGraphEnrichment,
             GraphDepth,
+            Template,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -7569,6 +7577,7 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
                             "ranking" => Ok(GeneratedField::Ranking),
                             "withGraphEnrichment" | "with_graph_enrichment" => Ok(GeneratedField::WithGraphEnrichment),
                             "graphDepth" | "graph_depth" => Ok(GeneratedField::GraphDepth),
+                            "template" => Ok(GeneratedField::Template),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -7601,6 +7610,7 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
                 let mut ranking__ = None;
                 let mut with_graph_enrichment__ = None;
                 let mut graph_depth__ = None;
+                let mut template__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Scope => {
@@ -7687,6 +7697,12 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
                                 Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
                             ;
                         }
+                        GeneratedField::Template => {
+                            if template__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("template"));
+                            }
+                            template__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(QueryRequest {
@@ -7703,6 +7719,7 @@ impl<'de> serde::Deserialize<'de> for QueryRequest {
                     ranking: ranking__,
                     with_graph_enrichment: with_graph_enrichment__.unwrap_or_default(),
                     graph_depth: graph_depth__.unwrap_or_default(),
+                    template: template__,
                 })
             }
         }
@@ -7726,6 +7743,9 @@ impl serde::Serialize for QueryResponse {
         if self.enrichment.is_some() {
             len += 1;
         }
+        if !self.rendered.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.QueryResponse", len)?;
         if !self.hits.is_empty() {
             struct_ser.serialize_field("hits", &self.hits)?;
@@ -7735,6 +7755,9 @@ impl serde::Serialize for QueryResponse {
         }
         if let Some(v) = self.enrichment.as_ref() {
             struct_ser.serialize_field("enrichment", v)?;
+        }
+        if !self.rendered.is_empty() {
+            struct_ser.serialize_field("rendered", &self.rendered)?;
         }
         struct_ser.end()
     }
@@ -7750,6 +7773,7 @@ impl<'de> serde::Deserialize<'de> for QueryResponse {
             "ranking_used",
             "rankingUsed",
             "enrichment",
+            "rendered",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -7757,6 +7781,7 @@ impl<'de> serde::Deserialize<'de> for QueryResponse {
             Hits,
             RankingUsed,
             Enrichment,
+            Rendered,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -7781,6 +7806,7 @@ impl<'de> serde::Deserialize<'de> for QueryResponse {
                             "hits" => Ok(GeneratedField::Hits),
                             "rankingUsed" | "ranking_used" => Ok(GeneratedField::RankingUsed),
                             "enrichment" => Ok(GeneratedField::Enrichment),
+                            "rendered" => Ok(GeneratedField::Rendered),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -7803,6 +7829,7 @@ impl<'de> serde::Deserialize<'de> for QueryResponse {
                 let mut hits__ = None;
                 let mut ranking_used__ = None;
                 let mut enrichment__ = None;
+                let mut rendered__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Hits => {
@@ -7823,12 +7850,19 @@ impl<'de> serde::Deserialize<'de> for QueryResponse {
                             }
                             enrichment__ = map_.next_value()?;
                         }
+                        GeneratedField::Rendered => {
+                            if rendered__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rendered"));
+                            }
+                            rendered__ = Some(map_.next_value()?);
+                        }
                     }
                 }
                 Ok(QueryResponse {
                     hits: hits__.unwrap_or_default(),
                     ranking_used: ranking_used__,
                     enrichment: enrichment__,
+                    rendered: rendered__.unwrap_or_default(),
                 })
             }
         }
@@ -7964,6 +7998,9 @@ impl serde::Serialize for RecallAsOfRequest {
         if self.limit != 0 {
             len += 1;
         }
+        if self.template.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.RecallAsOfRequest", len)?;
         if let Some(v) = self.scope.as_ref() {
             struct_ser.serialize_field("scope", v)?;
@@ -7976,6 +8013,9 @@ impl serde::Serialize for RecallAsOfRequest {
         }
         if self.limit != 0 {
             struct_ser.serialize_field("limit", &self.limit)?;
+        }
+        if let Some(v) = self.template.as_ref() {
+            struct_ser.serialize_field("template", v)?;
         }
         struct_ser.end()
     }
@@ -7992,6 +8032,7 @@ impl<'de> serde::Deserialize<'de> for RecallAsOfRequest {
             "asOf",
             "kinds",
             "limit",
+            "template",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -8000,6 +8041,7 @@ impl<'de> serde::Deserialize<'de> for RecallAsOfRequest {
             AsOf,
             Kinds,
             Limit,
+            Template,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -8025,6 +8067,7 @@ impl<'de> serde::Deserialize<'de> for RecallAsOfRequest {
                             "asOf" | "as_of" => Ok(GeneratedField::AsOf),
                             "kinds" => Ok(GeneratedField::Kinds),
                             "limit" => Ok(GeneratedField::Limit),
+                            "template" => Ok(GeneratedField::Template),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -8048,6 +8091,7 @@ impl<'de> serde::Deserialize<'de> for RecallAsOfRequest {
                 let mut as_of__ = None;
                 let mut kinds__ = None;
                 let mut limit__ = None;
+                let mut template__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Scope => {
@@ -8076,6 +8120,12 @@ impl<'de> serde::Deserialize<'de> for RecallAsOfRequest {
                                 Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
                             ;
                         }
+                        GeneratedField::Template => {
+                            if template__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("template"));
+                            }
+                            template__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(RecallAsOfRequest {
@@ -8083,6 +8133,7 @@ impl<'de> serde::Deserialize<'de> for RecallAsOfRequest {
                     as_of: as_of__,
                     kinds: kinds__,
                     limit: limit__.unwrap_or_default(),
+                    template: template__,
                 })
             }
         }
@@ -8100,9 +8151,15 @@ impl serde::Serialize for RecallAsOfResponse {
         if !self.memories.is_empty() {
             len += 1;
         }
+        if !self.rendered.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.RecallAsOfResponse", len)?;
         if !self.memories.is_empty() {
             struct_ser.serialize_field("memories", &self.memories)?;
+        }
+        if !self.rendered.is_empty() {
+            struct_ser.serialize_field("rendered", &self.rendered)?;
         }
         struct_ser.end()
     }
@@ -8115,11 +8172,13 @@ impl<'de> serde::Deserialize<'de> for RecallAsOfResponse {
     {
         const FIELDS: &[&str] = &[
             "memories",
+            "rendered",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             Memories,
+            Rendered,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -8142,6 +8201,7 @@ impl<'de> serde::Deserialize<'de> for RecallAsOfResponse {
                     {
                         match value {
                             "memories" => Ok(GeneratedField::Memories),
+                            "rendered" => Ok(GeneratedField::Rendered),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -8162,6 +8222,7 @@ impl<'de> serde::Deserialize<'de> for RecallAsOfResponse {
                     V: serde::de::MapAccess<'de>,
             {
                 let mut memories__ = None;
+                let mut rendered__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Memories => {
@@ -8170,10 +8231,17 @@ impl<'de> serde::Deserialize<'de> for RecallAsOfResponse {
                             }
                             memories__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::Rendered => {
+                            if rendered__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rendered"));
+                            }
+                            rendered__ = Some(map_.next_value()?);
+                        }
                     }
                 }
                 Ok(RecallAsOfResponse {
                     memories: memories__.unwrap_or_default(),
+                    rendered: rendered__.unwrap_or_default(),
                 })
             }
         }
@@ -8191,9 +8259,15 @@ impl serde::Serialize for RecallRequest {
         if !self.pid.is_empty() {
             len += 1;
         }
+        if self.template.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.RecallRequest", len)?;
         if !self.pid.is_empty() {
             struct_ser.serialize_field("pid", &self.pid)?;
+        }
+        if let Some(v) = self.template.as_ref() {
+            struct_ser.serialize_field("template", v)?;
         }
         struct_ser.end()
     }
@@ -8206,11 +8280,13 @@ impl<'de> serde::Deserialize<'de> for RecallRequest {
     {
         const FIELDS: &[&str] = &[
             "pid",
+            "template",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             Pid,
+            Template,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -8233,6 +8309,7 @@ impl<'de> serde::Deserialize<'de> for RecallRequest {
                     {
                         match value {
                             "pid" => Ok(GeneratedField::Pid),
+                            "template" => Ok(GeneratedField::Template),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -8253,6 +8330,7 @@ impl<'de> serde::Deserialize<'de> for RecallRequest {
                     V: serde::de::MapAccess<'de>,
             {
                 let mut pid__ = None;
+                let mut template__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Pid => {
@@ -8261,10 +8339,17 @@ impl<'de> serde::Deserialize<'de> for RecallRequest {
                             }
                             pid__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::Template => {
+                            if template__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("template"));
+                            }
+                            template__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(RecallRequest {
                     pid: pid__.unwrap_or_default(),
+                    template: template__,
                 })
             }
         }
@@ -8282,9 +8367,15 @@ impl serde::Serialize for RecallResponse {
         if self.memory.is_some() {
             len += 1;
         }
+        if !self.rendered.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.RecallResponse", len)?;
         if let Some(v) = self.memory.as_ref() {
             struct_ser.serialize_field("memory", v)?;
+        }
+        if !self.rendered.is_empty() {
+            struct_ser.serialize_field("rendered", &self.rendered)?;
         }
         struct_ser.end()
     }
@@ -8297,11 +8388,13 @@ impl<'de> serde::Deserialize<'de> for RecallResponse {
     {
         const FIELDS: &[&str] = &[
             "memory",
+            "rendered",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             Memory,
+            Rendered,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -8324,6 +8417,7 @@ impl<'de> serde::Deserialize<'de> for RecallResponse {
                     {
                         match value {
                             "memory" => Ok(GeneratedField::Memory),
+                            "rendered" => Ok(GeneratedField::Rendered),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -8344,6 +8438,7 @@ impl<'de> serde::Deserialize<'de> for RecallResponse {
                     V: serde::de::MapAccess<'de>,
             {
                 let mut memory__ = None;
+                let mut rendered__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Memory => {
@@ -8352,10 +8447,17 @@ impl<'de> serde::Deserialize<'de> for RecallResponse {
                             }
                             memory__ = map_.next_value()?;
                         }
+                        GeneratedField::Rendered => {
+                            if rendered__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rendered"));
+                            }
+                            rendered__ = Some(map_.next_value()?);
+                        }
                     }
                 }
                 Ok(RecallResponse {
                     memory: memory__,
+                    rendered: rendered__.unwrap_or_default(),
                 })
             }
         }
@@ -10125,6 +10227,9 @@ impl serde::Serialize for SearchRequest {
         if self.graph_depth != 0 {
             len += 1;
         }
+        if self.template.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.SearchRequest", len)?;
         if let Some(v) = self.scope.as_ref() {
             struct_ser.serialize_field("scope", v)?;
@@ -10150,6 +10255,9 @@ impl serde::Serialize for SearchRequest {
         if self.graph_depth != 0 {
             struct_ser.serialize_field("graphDepth", &self.graph_depth)?;
         }
+        if let Some(v) = self.template.as_ref() {
+            struct_ser.serialize_field("template", v)?;
+        }
         struct_ser.end()
     }
 }
@@ -10172,6 +10280,7 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
             "withGraphEnrichment",
             "graph_depth",
             "graphDepth",
+            "template",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -10184,6 +10293,7 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
             Kinds,
             WithGraphEnrichment,
             GraphDepth,
+            Template,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -10213,6 +10323,7 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                             "kinds" => Ok(GeneratedField::Kinds),
                             "withGraphEnrichment" | "with_graph_enrichment" => Ok(GeneratedField::WithGraphEnrichment),
                             "graphDepth" | "graph_depth" => Ok(GeneratedField::GraphDepth),
+                            "template" => Ok(GeneratedField::Template),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -10240,6 +10351,7 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                 let mut kinds__ = None;
                 let mut with_graph_enrichment__ = None;
                 let mut graph_depth__ = None;
+                let mut template__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Scope => {
@@ -10296,6 +10408,12 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                                 Some(map_.next_value::<::pbjson::private::NumberDeserialize<_>>()?.0)
                             ;
                         }
+                        GeneratedField::Template => {
+                            if template__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("template"));
+                            }
+                            template__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(SearchRequest {
@@ -10307,6 +10425,7 @@ impl<'de> serde::Deserialize<'de> for SearchRequest {
                     kinds: kinds__,
                     with_graph_enrichment: with_graph_enrichment__.unwrap_or_default(),
                     graph_depth: graph_depth__.unwrap_or_default(),
+                    template: template__,
                 })
             }
         }
@@ -10327,12 +10446,18 @@ impl serde::Serialize for SearchResponse {
         if self.enrichment.is_some() {
             len += 1;
         }
+        if !self.rendered.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.SearchResponse", len)?;
         if !self.hits.is_empty() {
             struct_ser.serialize_field("hits", &self.hits)?;
         }
         if let Some(v) = self.enrichment.as_ref() {
             struct_ser.serialize_field("enrichment", v)?;
+        }
+        if !self.rendered.is_empty() {
+            struct_ser.serialize_field("rendered", &self.rendered)?;
         }
         struct_ser.end()
     }
@@ -10346,12 +10471,14 @@ impl<'de> serde::Deserialize<'de> for SearchResponse {
         const FIELDS: &[&str] = &[
             "hits",
             "enrichment",
+            "rendered",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             Hits,
             Enrichment,
+            Rendered,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -10375,6 +10502,7 @@ impl<'de> serde::Deserialize<'de> for SearchResponse {
                         match value {
                             "hits" => Ok(GeneratedField::Hits),
                             "enrichment" => Ok(GeneratedField::Enrichment),
+                            "rendered" => Ok(GeneratedField::Rendered),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -10396,6 +10524,7 @@ impl<'de> serde::Deserialize<'de> for SearchResponse {
             {
                 let mut hits__ = None;
                 let mut enrichment__ = None;
+                let mut rendered__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Hits => {
@@ -10410,11 +10539,18 @@ impl<'de> serde::Deserialize<'de> for SearchResponse {
                             }
                             enrichment__ = map_.next_value()?;
                         }
+                        GeneratedField::Rendered => {
+                            if rendered__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rendered"));
+                            }
+                            rendered__ = Some(map_.next_value()?);
+                        }
                     }
                 }
                 Ok(SearchResponse {
                     hits: hits__.unwrap_or_default(),
                     enrichment: enrichment__,
+                    rendered: rendered__.unwrap_or_default(),
                 })
             }
         }
@@ -10948,6 +11084,9 @@ impl serde::Serialize for TimelineRequest {
         if self.ascending {
             len += 1;
         }
+        if self.template.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.TimelineRequest", len)?;
         if let Some(v) = self.scope.as_ref() {
             struct_ser.serialize_field("scope", v)?;
@@ -10976,6 +11115,9 @@ impl serde::Serialize for TimelineRequest {
         if self.ascending {
             struct_ser.serialize_field("ascending", &self.ascending)?;
         }
+        if let Some(v) = self.template.as_ref() {
+            struct_ser.serialize_field("template", v)?;
+        }
         struct_ser.end()
     }
 }
@@ -11000,6 +11142,7 @@ impl<'de> serde::Deserialize<'de> for TimelineRequest {
             "excludeSuperseded",
             "limit",
             "ascending",
+            "template",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -11013,6 +11156,7 @@ impl<'de> serde::Deserialize<'de> for TimelineRequest {
             ExcludeSuperseded,
             Limit,
             Ascending,
+            Template,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -11043,6 +11187,7 @@ impl<'de> serde::Deserialize<'de> for TimelineRequest {
                             "excludeSuperseded" | "exclude_superseded" => Ok(GeneratedField::ExcludeSuperseded),
                             "limit" => Ok(GeneratedField::Limit),
                             "ascending" => Ok(GeneratedField::Ascending),
+                            "template" => Ok(GeneratedField::Template),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -11071,6 +11216,7 @@ impl<'de> serde::Deserialize<'de> for TimelineRequest {
                 let mut exclude_superseded__ = None;
                 let mut limit__ = None;
                 let mut ascending__ = None;
+                let mut template__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Scope => {
@@ -11129,6 +11275,12 @@ impl<'de> serde::Deserialize<'de> for TimelineRequest {
                             }
                             ascending__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::Template => {
+                            if template__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("template"));
+                            }
+                            template__ = map_.next_value()?;
+                        }
                     }
                 }
                 Ok(TimelineRequest {
@@ -11141,6 +11293,7 @@ impl<'de> serde::Deserialize<'de> for TimelineRequest {
                     exclude_superseded: exclude_superseded__.unwrap_or_default(),
                     limit: limit__.unwrap_or_default(),
                     ascending: ascending__.unwrap_or_default(),
+                    template: template__,
                 })
             }
         }
@@ -11158,9 +11311,15 @@ impl serde::Serialize for TimelineResponse {
         if !self.memories.is_empty() {
             len += 1;
         }
+        if !self.rendered.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.TimelineResponse", len)?;
         if !self.memories.is_empty() {
             struct_ser.serialize_field("memories", &self.memories)?;
+        }
+        if !self.rendered.is_empty() {
+            struct_ser.serialize_field("rendered", &self.rendered)?;
         }
         struct_ser.end()
     }
@@ -11173,11 +11332,13 @@ impl<'de> serde::Deserialize<'de> for TimelineResponse {
     {
         const FIELDS: &[&str] = &[
             "memories",
+            "rendered",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             Memories,
+            Rendered,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -11200,6 +11361,7 @@ impl<'de> serde::Deserialize<'de> for TimelineResponse {
                     {
                         match value {
                             "memories" => Ok(GeneratedField::Memories),
+                            "rendered" => Ok(GeneratedField::Rendered),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -11220,6 +11382,7 @@ impl<'de> serde::Deserialize<'de> for TimelineResponse {
                     V: serde::de::MapAccess<'de>,
             {
                 let mut memories__ = None;
+                let mut rendered__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Memories => {
@@ -11228,10 +11391,17 @@ impl<'de> serde::Deserialize<'de> for TimelineResponse {
                             }
                             memories__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::Rendered => {
+                            if rendered__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rendered"));
+                            }
+                            rendered__ = Some(map_.next_value()?);
+                        }
                     }
                 }
                 Ok(TimelineResponse {
                     memories: memories__.unwrap_or_default(),
+                    rendered: rendered__.unwrap_or_default(),
                 })
             }
         }

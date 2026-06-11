@@ -102,7 +102,7 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     // Sidecar HTTP listener serves the playground chat (and any future
     // non-gRPC routes). Separate port keeps crash isolation: a panic in the
     // playground handler doesn't take gRPC down. Defaults to 5154 when
-    // unset; opt out by setting MEMOIR_HTTP_PORT=0 (TODO: not yet honored).
+    // unset; always-on — prod deployments simply don't expose the port.
     let http_port = std::env::var("MEMOIR_HTTP_PORT").unwrap_or_else(|_| "5154".to_string());
     let http_addr: SocketAddr = format!("{host}:{http_port}").parse()?;
     let app = axum::Router::new().merge(playground_router(ctx.clone()));

@@ -40,8 +40,8 @@ use crate::AppContext;
 use crate::middleware::auth::{Authenticator, Principal};
 use crate::services::conversions::{
     EditArgs, FeedbackArgs, Metadata, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs,
-    WireGraphEnrichment, WireMemoryFilter, WireSupersessionEvent, forget_target_from_proto, query_response,
-    recall_as_of_response, scope_from_proto, timeline_response,
+    WireGraphEnrichment, WireMemoryFilter, WireQueryResponse, WireRecallAsOfResponse, WireSupersessionEvent,
+    WireTemplate, WireTimelineResponse, forget_target_from_proto, scope_from_proto,
 };
 use crate::services::wire::{WireError, WireMemory};
 
@@ -93,9 +93,11 @@ impl MemoryService for Memory {
             kinds,
             with_graph_enrichment,
             graph_depth,
+            template,
         } = request.into_inner();
 
         let scope = scope_from_proto(scope)?;
+        let template = WireTemplate::from(template);
         let metadata_filter = metadata_filter
             .map(WireMemoryFilter::try_from)
             .transpose()?
@@ -119,29 +121,36 @@ impl MemoryService for Memory {
         if limit > 0 {
             builder = builder.limit(limit as usize);
         }
+
         if let Some(filter) = metadata_filter {
             builder = builder.metadata_filter(filter);
         }
+
         if let Some(threshold) = min_similarity {
             builder = builder.min_similarity(threshold);
         }
+
         // Builder treats neither-toggled as both kinds, so only toggle to filter down.
         if let Some(k) = kinds {
             if k.episodic {
                 builder = builder.episodic();
             }
+
             if k.semantic {
                 builder = builder.semantic();
             }
         }
+
         if with_graph_enrichment {
             builder = builder.with_graph();
             if graph_depth > 0 {
                 builder = builder.with_graph_depth(graph_depth as usize);
             }
         }
+
         let memories = builder.await.map_err(WireError::into_status)?;
 
+        let rendered = template.render(memories.list());
         let enrichment = WireGraphEnrichment::from(memories.graph()).into_inner();
         let hits = memories
             .list()
@@ -156,18 +165,26 @@ impl MemoryService for Memory {
             })
             .collect();
 
-        Ok(Response::new(SearchResponse { hits, enrichment }))
+        Ok(Response::new(SearchResponse {
+            hits,
+            enrichment,
+            rendered,
+        }))
     }
 
     /// Looks up a memory by pid at any lifecycle state.
     async fn recall(&self, request: Request<RecallRequest>) -> Result<Response<RecallResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         let pid = principal_pid(&caller.principal).to_owned();
-        let RecallRequest { pid: memory_pid } = request.into_inner();
+        let RecallRequest {
+            pid: memory_pid,
+            template,
+        } = request.into_inner();
 
         if memory_pid.is_empty() {
             return Err(Status::invalid_argument("pid: required"));
         }
+        let template = WireTemplate::from(template);
 
         tracing::event!(
             name: "memoir.service.memory.recall.invoked",
@@ -184,8 +201,10 @@ impl MemoryService for Memory {
             .await
             .map_err(WireError::into_status)?;
 
+        let rendered = template.render(std::slice::from_ref(&memory));
         Ok(Response::new(RecallResponse {
             memory: Some(WireMemory::from(memory).0),
+            rendered,
         }))
     }
 
@@ -270,7 +289,11 @@ impl MemoryService for Memory {
     async fn timeline(&self, request: Request<TimelineRequest>) -> Result<Response<TimelineResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         let pid = principal_pid(&caller.principal).to_owned();
-        let TimelineArgs { scope, params } = request.into_inner().try_into()?;
+        let TimelineArgs {
+            scope,
+            params,
+            template,
+        } = request.into_inner().try_into()?;
 
         tracing::event!(
             name: "memoir.service.memory.timeline.invoked",
@@ -311,7 +334,9 @@ impl MemoryService for Memory {
         }
 
         let memories = builder.await.map_err(WireError::into_status)?;
-        Ok(Response::new(timeline_response(memories)))
+        Ok(Response::new(
+            WireTimelineResponse::new(memories, template).into_inner(),
+        ))
     }
 
     /// Point-in-time read: what memoir knew as of a timestamp. Postgres-only.
@@ -321,7 +346,11 @@ impl MemoryService for Memory {
     async fn recall_as_of(&self, request: Request<RecallAsOfRequest>) -> Result<Response<RecallAsOfResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         let pid = principal_pid(&caller.principal).to_owned();
-        let RecallAsOfArgs { scope, params } = request.into_inner().try_into()?;
+        let RecallAsOfArgs {
+            scope,
+            params,
+            template,
+        } = request.into_inner().try_into()?;
 
         tracing::event!(
             name: "memoir.service.memory.recall_as_of.invoked",
@@ -344,13 +373,17 @@ impl MemoryService for Memory {
         }
 
         let memories = builder.await.map_err(WireError::into_status)?;
-        Ok(Response::new(recall_as_of_response(memories)))
+        Ok(Response::new(
+            WireRecallAsOfResponse::new(memories, template).into_inner(),
+        ))
     }
 
     /// Hybrid-ranked retrieval returning prompt-shaped context.
     ///
     /// Read-tier auth. The response carries raw memories + hybrid score +
-    /// the strategy used; the SDK renders the prompt string, not the wire.
+    /// the strategy used; when the request sets `template`, `rendered`
+    /// additionally carries the prompt string produced by memoir-core's
+    /// own rendering.
     async fn query(&self, request: Request<QueryRequest>) -> Result<Response<QueryResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         let pid = principal_pid(&caller.principal).to_owned();
@@ -406,7 +439,9 @@ impl MemoryService for Memory {
         }
 
         let context = builder.await.map_err(WireError::into_status)?;
-        Ok(Response::new(query_response(context)))
+        Ok(Response::new(
+            WireQueryResponse::new(context, args.template).into_inner(),
+        ))
     }
 
     /// In-place correction of an existing memory. Distinct from supersession.

@@ -1,5 +1,10 @@
 include!("mod.rs");
 
+pub mod auth;
+
+#[doc(inline)]
+pub use auth::BearerAuth;
+
 pub mod google {
     pub mod protobuf {
         pub use pbjson_types::*;

@@ -726,6 +726,13 @@ pub struct SearchRequest {
     /// `SearchBuilder::with_graph_depth`. Ignored when enrichment is off.
     #[prost(uint32, tag="8")]
     pub graph_depth: u32,
+    /// System-prompt preamble for the rendered output. Unset selects memoir-core's
+    /// `DEFAULT_SYSTEM_PROMPT`, keeping the default phrasing server-side so
+    /// consumers never copy it; set supplies the caller's preamble verbatim (the
+    /// empty string renders a blank preamble line). Either way
+    /// `SearchResponse.rendered` is populated — reads always render.
+    #[prost(string, optional, tag="9")]
+    pub template: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Caller-supplied filter applied at search time. Mirrors Qdrant's payload
 /// filter structure one-to-one but is a memoir-owned type so consumers do not
@@ -833,16 +840,33 @@ pub struct SearchResponse {
     /// `with_graph_enrichment`. Empty/absent otherwise.
     #[prost(message, optional, tag="2")]
     pub enrichment: ::core::option::Option<GraphEnrichment>,
+    /// Prompt-ready text: the resolved preamble, then one `- content` bullet
+    /// per hit, rendered by memoir-core's `Memories`. Always populated; the
+    /// preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`.
+    #[prost(string, tag="3")]
+    pub rendered: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct RecallRequest {
     #[prost(string, tag="1")]
     pub pid: ::prost::alloc::string::String,
+    /// System-prompt preamble for the rendered output. Unset selects memoir-core's
+    /// `DEFAULT_SYSTEM_PROMPT`, keeping the default phrasing server-side so
+    /// consumers never copy it; set supplies the caller's preamble verbatim (the
+    /// empty string renders a blank preamble line). Either way
+    /// `RecallResponse.rendered` is populated — reads always render.
+    #[prost(string, optional, tag="2")]
+    pub template: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RecallResponse {
     #[prost(message, optional, tag="1")]
     pub memory: ::core::option::Option<Memory>,
+    /// Prompt-ready text: the resolved preamble, then the memory as a single
+    /// `- content` bullet, rendered by memoir-core's `Memories`. Always populated;
+    /// the preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`.
+    #[prost(string, tag="2")]
+    pub rendered: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RememberRequest {
@@ -925,6 +949,13 @@ pub struct TimelineRequest {
     /// created_at, matching the library default.
     #[prost(bool, tag="9")]
     pub ascending: bool,
+    /// System-prompt preamble for the rendered output. Unset selects memoir-core's
+    /// `DEFAULT_SYSTEM_PROMPT`, keeping the default phrasing server-side so
+    /// consumers never copy it; set supplies the caller's preamble verbatim (the
+    /// empty string renders a blank preamble line). Either way
+    /// `TimelineResponse.rendered` is populated — reads always render.
+    #[prost(string, optional, tag="10")]
+    pub template: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TimelineResponse {
@@ -932,6 +963,12 @@ pub struct TimelineResponse {
     /// no similarity). Mirrors `Client::timeline`'s `Vec<Memory>` return.
     #[prost(message, repeated, tag="1")]
     pub memories: ::prost::alloc::vec::Vec<Memory>,
+    /// Prompt-ready text: the resolved preamble, then one `- content` bullet
+    /// per memory in the requested order, rendered by memoir-core's `Memories`.
+    /// Always populated; the preamble is `template` when set, else
+    /// `DEFAULT_SYSTEM_PROMPT`.
+    #[prost(string, tag="2")]
+    pub rendered: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct RecallAsOfRequest {
@@ -949,6 +986,13 @@ pub struct RecallAsOfRequest {
     /// Maximum rows. `0` = library default (50, `DEFAULT_TIMELINE_LIMIT`).
     #[prost(int32, tag="4")]
     pub limit: i32,
+    /// System-prompt preamble for the rendered output. Unset selects memoir-core's
+    /// `DEFAULT_SYSTEM_PROMPT`, keeping the default phrasing server-side so
+    /// consumers never copy it; set supplies the caller's preamble verbatim (the
+    /// empty string renders a blank preamble line). Either way
+    /// `RecallAsOfResponse.rendered` is populated — reads always render.
+    #[prost(string, optional, tag="5")]
+    pub template: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RecallAsOfResponse {
@@ -956,6 +1000,11 @@ pub struct RecallAsOfResponse {
     /// never set. Mirrors `Client::recall_as_of`'s `Vec<Memory>` return.
     #[prost(message, repeated, tag="1")]
     pub memories: ::prost::alloc::vec::Vec<Memory>,
+    /// Prompt-ready text: the resolved preamble, then one `- content` bullet
+    /// per memory, rendered by memoir-core's `Memories`. Always populated; the
+    /// preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`.
+    #[prost(string, tag="2")]
+    pub rendered: ::prost::alloc::string::String,
 }
 /// How Query orders candidates. Mirrors memoir-core's `RankingStrategy`.
 /// A message-with-oneof (not a bare enum) so new strategies and their
@@ -1118,6 +1167,13 @@ pub struct QueryRequest {
     /// `QueryBuilder::with_graph_depth`. Ignored when enrichment is off.
     #[prost(uint32, tag="13")]
     pub graph_depth: u32,
+    /// System-prompt preamble for the rendered output. Unset selects memoir-core's
+    /// `DEFAULT_SYSTEM_PROMPT`, keeping the default phrasing server-side so
+    /// consumers never copy it; set supplies the caller's preamble verbatim (the
+    /// empty string renders a blank preamble line). Either way
+    /// `QueryResponse.rendered` is populated — reads always render.
+    #[prost(string, optional, tag="14")]
+    pub template: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct QueryResponse {
@@ -1133,6 +1189,14 @@ pub struct QueryResponse {
     /// `with_graph_enrichment`. Empty/absent otherwise.
     #[prost(message, optional, tag="3")]
     pub enrichment: ::core::option::Option<GraphEnrichment>,
+    /// Prompt-ready text: the resolved preamble, then one dated bullet per hit
+    /// (`- \[YYYY-MM-DD, N units ago\] content`), rendered by memoir-core's
+    /// `MemoryContext`. Query is the one read whose bullets carry the date
+    /// bracket — that mirrors the library, where only `query` renders dates.
+    /// Always populated; the preamble is `template` when set, else
+    /// `DEFAULT_SYSTEM_PROMPT`.
+    #[prost(string, tag="4")]
+    pub rendered: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EditRequest {

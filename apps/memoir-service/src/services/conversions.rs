@@ -25,13 +25,15 @@
 
 use std::ops::Deref;
 
-use memoir_core::client::{DEFAULT_QUERY_LIMIT, DecayFn, MemoryContext, RankingStrategy, ReconcileSummary};
+use memoir_core::client::{
+    DEFAULT_QUERY_LIMIT, DEFAULT_SYSTEM_PROMPT, DecayFn, MemoryContext, RankingStrategy, ReconcileSummary,
+};
 use memoir_core::graph::GraphContext as LibGraphContext;
 use memoir_core::graph::GraphSnapshot as LibGraphSnapshot;
 use memoir_core::jobs::{FailedJob as LibFailedJob, JobKind as LibJobKind};
 use memoir_core::memory::{
-    ExtractionStat as LibExtractionStat, ForgetTarget, KindSelector as LibKindSelector, Memory as LibMemory,
-    Scope as LibScope, StatsFilter, SupersessionEvent as LibSupersessionEvent,
+    ExtractionStat as LibExtractionStat, ForgetTarget, KindSelector as LibKindSelector, Memories as LibMemories,
+    Memory as LibMemory, Scope as LibScope, StatsFilter, SupersessionEvent as LibSupersessionEvent,
 };
 use memoir_core::store::{AsOfParams, DEFAULT_TIMELINE_LIMIT, TimelineDirection, TimelineParams};
 use memoir_core::vector::{
@@ -52,6 +54,8 @@ use memoir_sdk::memoir::v1::{
     filter_condition, forget_request, match_value, match_values, ranking,
 };
 use tonic::Status;
+
+use crate::services::wire::WireMemory;
 
 /// Converts a wire `Scope` into the library shape, rejecting empty fields.
 ///
@@ -228,6 +232,50 @@ fn kind_selector_from_proto(kinds: Option<ProtoKindSelector>) -> LibKindSelector
     }
 }
 
+/// The system-prompt preamble a read renders with. Build via `WireTemplate::from(request.template)`.
+///
+/// Resolves a request's `Option<String>` template: `None` selects memoir-core's
+/// [`DEFAULT_SYSTEM_PROMPT`] at the boundary, so the default phrasing never
+/// crosses the wire; `Some(s)` is the caller's preamble verbatim (including the
+/// empty string, which renders a blank preamble line). Reads always render, so
+/// every response gets one of these. Rendering hangs off it: [`Self::render`]
+/// for the list-shaped reads, [`Self::render_context`] for query.
+#[derive(Debug)]
+pub(crate) struct WireTemplate(pub String);
+
+impl From<Option<String>> for WireTemplate {
+    fn from(template: Option<String>) -> Self {
+        Self(template.unwrap_or_else(|| DEFAULT_SYSTEM_PROMPT.to_string()))
+    }
+}
+
+impl Deref for WireTemplate {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl WireTemplate {
+    /// Renders the preamble followed by one `- content` bullet per memory.
+    ///
+    /// Delegates to memoir-core's [`LibMemories`] `Display`; the service
+    /// owns no bullet format.
+    pub(crate) fn render(self, memories: &[LibMemory]) -> String {
+        LibMemories::new(memories.to_vec(), Some(self.0)).to_string()
+    }
+
+    /// Renders the preamble followed by the query context's dated bullets.
+    ///
+    /// The context's `Display` emits bullets only (the service's client
+    /// configures no system prompt), so preamble + newline + context is
+    /// byte-identical to the library's rendering with a system prompt set.
+    pub(crate) fn render_context(self, context: &MemoryContext) -> String {
+        format!("{}\n{context}", self.0)
+    }
+}
+
 /// A validated `Timeline` request: scope plus query parameters.
 ///
 /// `TryFrom<TimelineRequest>` performs boundary validation — the request's
@@ -238,6 +286,7 @@ fn kind_selector_from_proto(kinds: Option<ProtoKindSelector>) -> LibKindSelector
 pub(crate) struct TimelineArgs {
     pub scope: LibScope,
     pub params: TimelineParams,
+    pub template: WireTemplate,
 }
 
 impl TryFrom<TimelineRequest> for TimelineArgs {
@@ -266,15 +315,31 @@ impl TryFrom<TimelineRequest> for TimelineArgs {
                 limit,
                 direction,
             },
+            template: WireTemplate::from(request.template),
         })
     }
 }
 
-/// Wraps a library timeline result in the wire response shape.
-pub(crate) fn timeline_response(memories: Vec<LibMemory>) -> TimelineResponse {
-    use crate::services::wire::WireMemory;
-    TimelineResponse {
-        memories: memories.into_iter().map(|m| WireMemory::from(m).0).collect(),
+/// Wire form of a `Timeline` result. Build via `WireTimelineResponse::new(...)`.
+///
+/// Anchors the construction on a local newtype: `TimelineResponse` is foreign
+/// (generated into `memoir_sdk`), so the conversion from the library's
+/// `Vec<LibMemory>` cannot be an inherent `TimelineResponse::new`. `template`
+/// opts into server-side rendering; see [`WireTemplate::render`].
+pub(crate) struct WireTimelineResponse(pub TimelineResponse);
+
+impl WireTimelineResponse {
+    pub(crate) fn new(memories: Vec<LibMemory>, template: WireTemplate) -> Self {
+        let rendered = template.render(&memories);
+        Self(TimelineResponse {
+            memories: memories.into_iter().map(|m| WireMemory::from(m).0).collect(),
+            rendered,
+        })
+    }
+
+    /// Consumes the wrapper, yielding the inner wire response.
+    pub(crate) fn into_inner(self) -> TimelineResponse {
+        self.0
     }
 }
 
@@ -283,6 +348,7 @@ pub(crate) fn timeline_response(memories: Vec<LibMemory>) -> TimelineResponse {
 pub(crate) struct RecallAsOfArgs {
     pub scope: LibScope,
     pub params: AsOfParams,
+    pub template: WireTemplate,
 }
 
 impl TryFrom<RecallAsOfRequest> for RecallAsOfArgs {
@@ -304,15 +370,30 @@ impl TryFrom<RecallAsOfRequest> for RecallAsOfArgs {
                 kinds: kind_selector_from_proto(request.kinds),
                 limit,
             },
+            template: WireTemplate::from(request.template),
         })
     }
 }
 
-/// Wraps a library recall-as-of result in the wire response shape.
-pub(crate) fn recall_as_of_response(memories: Vec<LibMemory>) -> RecallAsOfResponse {
-    use crate::services::wire::WireMemory;
-    RecallAsOfResponse {
-        memories: memories.into_iter().map(|m| WireMemory::from(m).0).collect(),
+/// Wire form of a `RecallAsOf` result. Build via `WireRecallAsOfResponse::new(...)`.
+///
+/// Local-newtype anchor for the same coherence reason as
+/// [`WireTimelineResponse`]. `template` opts into server-side rendering; see
+/// [`WireTemplate::render`].
+pub(crate) struct WireRecallAsOfResponse(pub RecallAsOfResponse);
+
+impl WireRecallAsOfResponse {
+    pub(crate) fn new(memories: Vec<LibMemory>, template: WireTemplate) -> Self {
+        let rendered = template.render(&memories);
+        Self(RecallAsOfResponse {
+            memories: memories.into_iter().map(|m| WireMemory::from(m).0).collect(),
+            rendered,
+        })
+    }
+
+    /// Consumes the wrapper, yielding the inner wire response.
+    pub(crate) fn into_inner(self) -> RecallAsOfResponse {
+        self.0
     }
 }
 
@@ -492,6 +573,7 @@ pub(crate) struct QueryArgs {
     pub ranking: RankingStrategy,
     pub with_graph_enrichment: bool,
     pub graph_depth: Option<usize>,
+    pub template: WireTemplate,
 }
 
 impl TryFrom<QueryRequest> for QueryArgs {
@@ -524,34 +606,48 @@ impl TryFrom<QueryRequest> for QueryArgs {
             ranking: ranking_from_proto(request.ranking)?,
             with_graph_enrichment: request.with_graph_enrichment,
             graph_depth: (request.graph_depth > 0).then_some(request.graph_depth as usize),
+            template: WireTemplate::from(request.template),
         })
     }
 }
 
-/// Wraps a library `MemoryContext` in the wire `QueryResponse`.
+/// Wire form of a `Query` result. Build via `WireQueryResponse::new(...)`.
 ///
-/// Each hit carries its hybrid score (from `Memory.score`, populated by
-/// `query`). `ranking_used` echoes the strategy that produced the result.
-pub(crate) fn query_response(context: MemoryContext) -> QueryResponse {
-    use crate::services::wire::WireMemory;
-    let ranking_used = Some(ranking_to_proto(context.strategy_used()));
-    let enrichment = WireGraphEnrichment::from(context.graph()).into_inner();
-    let hits = context
-        .memories()
-        .iter()
-        .cloned()
-        .map(|m| {
-            let score = m.score.unwrap_or(0.0);
-            QueryHit {
-                memory: Some(WireMemory::from(m).0),
-                score,
-            }
+/// Local-newtype anchor for the same coherence reason as
+/// [`WireTimelineResponse`]. Each hit carries its hybrid score (from
+/// `Memory.score`, populated by `query`); `ranking_used` echoes the strategy
+/// that produced the result. `template` opts into server-side rendering; see
+/// [`WireTemplate::render_context`].
+pub(crate) struct WireQueryResponse(pub QueryResponse);
+
+impl WireQueryResponse {
+    pub(crate) fn new(context: MemoryContext, template: WireTemplate) -> Self {
+        let rendered = template.render_context(&context);
+        let ranking_used = Some(ranking_to_proto(context.strategy_used()));
+        let enrichment = WireGraphEnrichment::from(context.graph()).into_inner();
+        let hits = context
+            .memories()
+            .iter()
+            .cloned()
+            .map(|m| {
+                let score = m.score.unwrap_or(0.0);
+                QueryHit {
+                    memory: Some(WireMemory::from(m).0),
+                    score,
+                }
+            })
+            .collect();
+        Self(QueryResponse {
+            hits,
+            ranking_used,
+            enrichment,
+            rendered,
         })
-        .collect();
-    QueryResponse {
-        hits,
-        ranking_used,
-        enrichment,
+    }
+
+    /// Consumes the wrapper, yielding the inner wire response.
+    pub(crate) fn into_inner(self) -> QueryResponse {
+        self.0
     }
 }
 
@@ -1185,6 +1281,57 @@ mod tests {
         let proto = scope_to_proto(original.clone());
         let back = scope_from_proto(Some(proto)).unwrap();
         assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_resolve_absent_template_to_core_default() {
+        let resolved = WireTemplate::from(None);
+        assert_eq!(&*resolved, DEFAULT_SYSTEM_PROMPT);
+    }
+
+    #[test]
+    fn should_pass_custom_template_verbatim() {
+        let resolved = WireTemplate::from(Some("## My preamble".to_string()));
+        assert_eq!(&*resolved, "## My preamble");
+    }
+
+    #[test]
+    fn should_keep_empty_template_distinct_from_absent() {
+        let resolved = WireTemplate::from(Some(String::new()));
+        assert_eq!(&*resolved, "");
+    }
+
+    /// A minimal library memory for rendering tests.
+    fn lib_memory(content: &str) -> LibMemory {
+        let now: chrono::DateTime<chrono::FixedOffset> = chrono::Utc::now().into();
+        LibMemory {
+            pid: "m".into(),
+            scope: LibScope {
+                agent_id: "a".into(),
+                org_id: "o".into(),
+                user_id: "u".into(),
+            },
+            content: content.into(),
+            metadata: serde_json::json!({}),
+            kind: memoir_core::memory::MemoryKind::Episodic,
+            source_pid: None,
+            supersession: None,
+            created_at: now,
+            updated_at: now,
+            event_at: None,
+            score: None,
+            status: memoir_core::store::IndexStatus::Indexed,
+            confidence: memoir_core::memory::Confidence::default(),
+            category: None,
+            retirement: None,
+        }
+    }
+
+    #[test]
+    fn should_render_template_then_bullets() {
+        let rows = vec![lib_memory("likes coffee"), lib_memory("deployed the service")];
+        let rendered = WireTemplate("## My preamble".into()).render(&rows);
+        assert_eq!(rendered, "## My preamble\n- likes coffee\n- deployed the service\n");
     }
 
     /// Builds a wire `Struct` from a JSON value the way the proto layer
