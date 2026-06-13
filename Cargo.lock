@@ -3100,7 +3100,7 @@ dependencies = [
 
 [[package]]
 name = "memoir-service"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "axum 0.8.8",
@@ -3141,7 +3141,7 @@ dependencies = [
 
 [[package]]
 name = "memoir-service-migration"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "dotenvy",
  "once_cell",
@@ -3897,7 +3897,7 @@ dependencies = [
 
 [[package]]
 name = "polypixel-memoir-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3931,7 +3931,7 @@ dependencies = [
 
 [[package]]
 name = "polypixel-memoir-sdk"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "pbjson",
  "pbjson-types",
