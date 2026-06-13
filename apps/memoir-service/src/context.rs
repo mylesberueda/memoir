@@ -111,6 +111,13 @@ impl Memoir {
         schema: &str,
     ) -> Result<(Arc<MemoirClient>, MemoirWorkerHandle), AppContextError> {
         let extraction_llm = Self::extraction_llm()?;
+        let relational_llm = Self::relational_llm()?;
+
+        // FALKOR_URL unset leaves the graph off (the builder no-ops). Set, it is
+        // required: `build()` connects and runs `ensure_graph`, so an unreachable
+        // FalkorDB fails startup here rather than silently disabling the graph.
+        let falkor_url = std::env::var("FALKOR_URL").ok();
+        let graph_name = std::env::var("GRAPH_NAME").ok();
 
         tracing::info!("Building memoir client...");
         let client = MemoirClient::builder()
@@ -118,6 +125,9 @@ impl Memoir {
             .qdrant(qdrant_url.to_owned())
             .schema(schema.to_owned())
             .maybe_extraction_llm(extraction_llm)
+            .maybe_relational_llm(relational_llm)
+            .maybe_falkor(falkor_url)
+            .maybe_graph_name(graph_name)
             .build()
             .await
             .map_err(AppContextError::Memoir)?;
@@ -139,10 +149,10 @@ impl Memoir {
 
     /// Resolves the operator-configured extraction LLM from the environment.
     ///
-    /// Returns `None` when `MEMOIR_EXTRACTION_PROVIDER` is unset, leaving the
+    /// Returns `None` when `EXTRACTION_PROVIDER` is unset, leaving the
     /// extraction role unconfigured: the write-behind worker skips extraction
     /// jobs and the playground returns 503, while embed-only writes and gRPC
-    /// keep working. The provider selects which `MEMOIR_EXTRACTION_*` vars are
+    /// keep working. The provider selects which `EXTRACTION_*` vars are
     /// read; each model/url falls back to memoir-core's documented defaults.
     ///
     /// # Errors
@@ -151,27 +161,66 @@ impl Memoir {
     /// provider, and [`AppContextError::EnvironmentVariableMissing`] when a
     /// provider that requires an API key has none set.
     fn extraction_llm() -> Result<Option<LlmConfig>, AppContextError> {
-        let Ok(provider) = std::env::var("MEMOIR_EXTRACTION_PROVIDER") else {
+        let Ok(provider) = std::env::var("EXTRACTION_PROVIDER") else {
             return Ok(None);
         };
 
         let config = match provider.to_lowercase().as_str() {
             "ollama" => LlmConfig::ollama(
-                Env::get_or("MEMOIR_EXTRACTION_URL", DEFAULT_OLLAMA_URL),
-                Env::get_or("MEMOIR_EXTRACTION_MODEL", DEFAULT_OLLAMA_MODEL),
+                Env::get_or("EXTRACTION_URL", DEFAULT_OLLAMA_URL),
+                Env::get_or("EXTRACTION_MODEL", DEFAULT_OLLAMA_MODEL),
             ),
             "openai" => LlmConfig::openai(
-                Env::get("MEMOIR_EXTRACTION_API_KEY")?,
-                Env::get_or("MEMOIR_EXTRACTION_MODEL", DEFAULT_OPENAI_MODEL),
+                Env::get("EXTRACTION_API_KEY")?,
+                Env::get_or("EXTRACTION_MODEL", DEFAULT_OPENAI_MODEL),
             ),
             "anthropic" => LlmConfig::anthropic(
-                Env::get("MEMOIR_EXTRACTION_API_KEY")?,
-                Env::get_or("MEMOIR_EXTRACTION_MODEL", DEFAULT_ANTHROPIC_MODEL),
+                Env::get("EXTRACTION_API_KEY")?,
+                Env::get_or("EXTRACTION_MODEL", DEFAULT_ANTHROPIC_MODEL),
             ),
             _ => return Err(AppContextError::UnknownLlmProvider(provider)),
         };
 
         tracing::info!(provider = %config.kind(), model = %config.model(), "Extraction LLM configured");
+        Ok(Some(config))
+    }
+
+    /// Resolves the operator-configured relational-extraction LLM.
+    ///
+    /// Mirrors [`Self::extraction_llm`] but reads the `RELATIONAL_*`
+    /// env group, so triple extraction for the knowledge graph can point at a
+    /// different provider/model than semantic extraction. Returns `None` when
+    /// `RELATIONAL_PROVIDER` is unset, leaving the relational role
+    /// unconfigured: the worker skips `RelationalExtract` jobs, so the graph
+    /// receives no triples even if `FALKOR_URL` is set.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AppContextError::UnknownLlmProvider`] for an unrecognized
+    /// provider, and [`AppContextError::EnvironmentVariableMissing`] when a
+    /// provider that requires an API key has none set.
+    fn relational_llm() -> Result<Option<LlmConfig>, AppContextError> {
+        let Ok(provider) = std::env::var("RELATIONAL_PROVIDER") else {
+            return Ok(None);
+        };
+
+        let config = match provider.to_lowercase().as_str() {
+            "ollama" => LlmConfig::ollama(
+                Env::get_or("RELATIONAL_URL", DEFAULT_OLLAMA_URL),
+                Env::get_or("RELATIONAL_MODEL", DEFAULT_OLLAMA_MODEL),
+            ),
+            "openai" => LlmConfig::openai(
+                Env::get("RELATIONAL_API_KEY")?,
+                Env::get_or("RELATIONAL_MODEL", DEFAULT_OPENAI_MODEL),
+            ),
+            "anthropic" => LlmConfig::anthropic(
+                Env::get("RELATIONAL_API_KEY")?,
+                Env::get_or("RELATIONAL_MODEL", DEFAULT_ANTHROPIC_MODEL),
+            ),
+            _ => return Err(AppContextError::UnknownLlmProvider(provider)),
+        };
+
+        tracing::info!(provider = %config.kind(), model = %config.model(), "Relational LLM configured");
         Ok(Some(config))
     }
 }

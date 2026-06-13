@@ -324,8 +324,8 @@ impl TryFrom<TimelineRequest> for TimelineArgs {
 ///
 /// Anchors the construction on a local newtype: `TimelineResponse` is foreign
 /// (generated into `memoir_sdk`), so the conversion from the library's
-/// `Vec<LibMemory>` cannot be an inherent `TimelineResponse::new`. `template`
-/// opts into server-side rendering; see [`WireTemplate::render`].
+/// `Vec<LibMemory>` cannot be an inherent `TimelineResponse::new`. Reads always
+/// render; `template` only chooses the preamble (see [`WireTemplate::render`]).
 pub(crate) struct WireTimelineResponse(pub TimelineResponse);
 
 impl WireTimelineResponse {
@@ -378,8 +378,8 @@ impl TryFrom<RecallAsOfRequest> for RecallAsOfArgs {
 /// Wire form of a `RecallAsOf` result. Build via `WireRecallAsOfResponse::new(...)`.
 ///
 /// Local-newtype anchor for the same coherence reason as
-/// [`WireTimelineResponse`]. `template` opts into server-side rendering; see
-/// [`WireTemplate::render`].
+/// [`WireTimelineResponse`]. Reads always render; `template` only chooses the
+/// preamble (see [`WireTemplate::render`]).
 pub(crate) struct WireRecallAsOfResponse(pub RecallAsOfResponse);
 
 impl WireRecallAsOfResponse {
@@ -616,8 +616,8 @@ impl TryFrom<QueryRequest> for QueryArgs {
 /// Local-newtype anchor for the same coherence reason as
 /// [`WireTimelineResponse`]. Each hit carries its hybrid score (from
 /// `Memory.score`, populated by `query`); `ranking_used` echoes the strategy
-/// that produced the result. `template` opts into server-side rendering; see
-/// [`WireTemplate::render_context`].
+/// that produced the result. Reads always render; `template` only chooses the
+/// preamble (see [`WireTemplate::render_context`]).
 pub(crate) struct WireQueryResponse(pub QueryResponse);
 
 impl WireQueryResponse {

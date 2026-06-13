@@ -9,11 +9,11 @@
 //! ## Running
 //!
 //! Same provider gating as `extractor_accuracy`: a plain `cargo bench` with no
-//! `MEMOIR_BENCH_PROVIDER` set prints a skip notice and exits 0 (no API call, no
+//! `BENCH_PROVIDER` set prints a skip notice and exits 0 (no API call, no
 //! failure). Configure a provider to time it:
 //!
-//! - `MEMOIR_BENCH_PROVIDER=ollama` (free + local), `openai`, or `anthropic`.
-//! - Optional: `MEMOIR_BENCH_MODEL`, `MEMOIR_BENCH_OLLAMA_URL`.
+//! - `BENCH_PROVIDER=ollama` (free + local), `openai`, or `anthropic`.
+//! - Optional: `BENCH_MODEL`, `BENCH_OLLAMA_URL`.
 //!
 //! ## Cache posture (a ticket 0012-0011 decision)
 //!
@@ -21,7 +21,7 @@
 //! it measures warm-deployment steady-state latency (the common production case).
 //! Busting the cache on every criterion iteration would both change the question
 //! (cold-start instead of steady-state) and multiply token spend against the cost
-//! ceiling. Set `MEMOIR_BENCH_BUST_CACHE=1` to measure cold-start instead.
+//! ceiling. Set `BENCH_BUST_CACHE=1` to measure cold-start instead.
 
 mod common;
 
@@ -42,7 +42,7 @@ const SAMPLE: &str = "Sarah owns the billing service and reports to Tom.";
 
 /// Builds the per-call input, optionally cache-busted (cold-start measurement).
 fn input() -> String {
-    if env::var("MEMOIR_BENCH_BUST_CACHE").is_ok_and(|v| v == "1") {
+    if env::var("BENCH_BUST_CACHE").is_ok_and(|v| v == "1") {
         cache_busted(SAMPLE)
     } else {
         SAMPLE.to_string()
@@ -53,7 +53,7 @@ fn main() {
     let Some(config) = provider_from_env() else {
         println!(
             "extractor_latency: no provider configured — skipping (expected for a plain `cargo bench`).\n\
-             Set MEMOIR_BENCH_PROVIDER=ollama|openai|anthropic to run. See the file header for details."
+             Set BENCH_PROVIDER=ollama|openai|anthropic to run. See the file header for details."
         );
         return;
     };

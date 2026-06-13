@@ -12,13 +12,13 @@
 //! the run prints how to enable one and exits 0 (so CI and an offline `cargo
 //! bench` neither hit a paid API nor fail). Configure a provider via env:
 //!
-//! - `MEMOIR_BENCH_PROVIDER=ollama` (default URL/model, free + local), or
-//! - `MEMOIR_BENCH_PROVIDER=openai` with `OPENAI_API_KEY`, or
-//! - `MEMOIR_BENCH_PROVIDER=anthropic` with `ANTHROPIC_API_KEY`.
+//! - `BENCH_PROVIDER=ollama` (default URL/model, free + local), or
+//! - `BENCH_PROVIDER=openai` with `OPENAI_API_KEY`, or
+//! - `BENCH_PROVIDER=anthropic` with `ANTHROPIC_API_KEY`.
 //!
-//! Optional overrides: `MEMOIR_BENCH_MODEL`, `MEMOIR_BENCH_OLLAMA_URL`.
+//! Optional overrides: `BENCH_MODEL`, `BENCH_OLLAMA_URL`.
 //!
-//! The same corpus runs against any provider by swapping `MEMOIR_BENCH_PROVIDER`
+//! The same corpus runs against any provider by swapping `BENCH_PROVIDER`
 //! — the cross-provider comparison rides the `LlmProvider` seam, no code change.
 
 mod common;
@@ -171,7 +171,7 @@ fn main() {
     let Some(config) = provider_from_env() else {
         println!(
             "extractor_accuracy: no provider configured — skipping (this is expected for a plain `cargo bench`).\n\
-             Set MEMOIR_BENCH_PROVIDER=ollama|openai|anthropic to run. See the file header for details."
+             Set BENCH_PROVIDER=ollama|openai|anthropic to run. See the file header for details."
         );
         return;
     };

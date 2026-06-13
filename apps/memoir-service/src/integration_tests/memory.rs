@@ -67,6 +67,7 @@ async fn should_search_and_return_indexed_memories() {
             kinds: None,
             with_graph_enrichment: false,
             graph_depth: 0,
+            template: None,
         }))
         .await
         .expect("search rpc")
@@ -102,6 +103,7 @@ async fn should_recall_by_pid() {
     let recalled = memory
         .recall(harness.authed(RecallRequest {
             pid: written.pid.clone(),
+            template: None,
         }))
         .await
         .expect("recall rpc")
@@ -143,7 +145,10 @@ async fn should_forget_by_pid() {
     assert_eq!(deleted, vec![written.pid.clone()]);
 
     let recall_err = memory
-        .recall(harness.authed(RecallRequest { pid: written.pid }))
+        .recall(harness.authed(RecallRequest {
+            pid: written.pid,
+            template: None,
+        }))
         .await
         .expect_err("recall of forgotten pid must fail");
     assert_eq!(recall_err.code(), Code::NotFound);
@@ -325,6 +330,7 @@ async fn should_exclude_memories_via_must_not_metadata_filter() {
             kinds: None,
             with_graph_enrichment: false,
             graph_depth: 0,
+            template: None,
         }))
         .await
         .expect("search rpc")
@@ -379,6 +385,7 @@ async fn should_apply_min_similarity_floor() {
             kinds: None,
             with_graph_enrichment: false,
             graph_depth: 0,
+            template: None,
         }))
         .await
         .expect("search rpc")
@@ -401,6 +408,7 @@ async fn should_apply_min_similarity_floor() {
             kinds: None,
             with_graph_enrichment: false,
             graph_depth: 0,
+            template: None,
         }))
         .await
         .expect("search rpc")

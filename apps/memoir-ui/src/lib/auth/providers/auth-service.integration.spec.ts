@@ -3,10 +3,10 @@
  *
  * Hits memoir-service's live gRPC AuthService. Requires:
  *
- * - `MEMOIR_SERVICE_URL`     — the gRPC base URL (e.g. http://localhost:5500)
- * - `MEMOIR_TEST_USERNAME`   — a pre-created user (created out-of-band via
- *                              `memoir auth create` or MEMOIR_DEV_MODE)
- * - `MEMOIR_TEST_PASSWORD`   — that user's password
+ * - `SERVICE_URL`     — the gRPC base URL (e.g. http://localhost:5500)
+ * - `TEST_USERNAME`   — a pre-created user (created out-of-band via
+ *                       `memoir auth create` or DEV_MODE)
+ * - `TEST_PASSWORD`   — that user's password
  *
  * Missing env vars are a hard fail at the top of the suite so misconfigured
  * runs produce one clear error rather than ten obscure ones.
@@ -14,8 +14,8 @@
 import { describe, expect, it } from 'vitest';
 import { AuthServiceAuthProvider } from './auth-service';
 
-const SERVICE_URL = process.env.MEMOIR_SERVICE_URL;
-const HAS_ENV = Boolean(SERVICE_URL && process.env.MEMOIR_TEST_USERNAME && process.env.MEMOIR_TEST_PASSWORD);
+const SERVICE_URL = process.env.SERVICE_URL;
+const HAS_ENV = Boolean(SERVICE_URL && process.env.TEST_USERNAME && process.env.TEST_PASSWORD);
 
 function requireEnv(name: string): string {
 	const value = process.env[name];
@@ -24,8 +24,8 @@ function requireEnv(name: string): string {
 }
 
 describe.skipIf(!HAS_ENV)('AuthServiceAuthProvider integration', () => {
-	const USERNAME = requireEnv('MEMOIR_TEST_USERNAME');
-	const PASSWORD = requireEnv('MEMOIR_TEST_PASSWORD');
+	const USERNAME = requireEnv('TEST_USERNAME');
+	const PASSWORD = requireEnv('TEST_PASSWORD');
 
 	it('should issue access and refresh tokens for valid credentials', async () => {
 		const provider = new AuthServiceAuthProvider();

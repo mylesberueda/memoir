@@ -11,9 +11,9 @@ interface ProxyBody {
 }
 
 export async function POST(request: Request) {
-	const httpUrl = process.env.MEMOIR_HTTP_URL;
+	const httpUrl = process.env.HTTP_URL;
 	if (!httpUrl) {
-		return new Response('MEMOIR_HTTP_URL is not set', { status: 503 });
+		return new Response('HTTP_URL is not set', { status: 503 });
 	}
 
 	const session = await getSession();

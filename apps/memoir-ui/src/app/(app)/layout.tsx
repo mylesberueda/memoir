@@ -23,7 +23,7 @@ interface AppLayoutProps {
 export default async function AppLayout({ children }: AppLayoutProps) {
 	const [rawUser, ctx] = await Promise.all([
 		getCurrentUser().catch(() => null),
-		loadLayoutContext(requireEnv('MEMOIR_SERVICE_URL')),
+		loadLayoutContext(requireEnv('SERVICE_URL')),
 	]);
 
 	if (!rawUser) {

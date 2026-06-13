@@ -1,232 +1,166 @@
-<div id="top" />
+# memoir-service
 
-<!-- PROJECT LOGO -->
-<br />
-<div align="center">
-  <a href="https://github.com/MylesWritesCode/rust-cli-starter">
-    <img src=".meta/logo.png" alt="Logo">
-  </a>
+A gRPC server over [`memoir-core`](../../packages/memoir-core/README.md), adding local auth (JWT + API keys). Run it when you want a memory backend other processes or languages talk to over the network. If you're writing a Rust agent, embed [`memoir-core`](../../packages/memoir-core/README.md) in-process instead.
 
-<h3 align="center">Rust CLI Starter</h3>
+## What it serves
 
-  <p align="center">
-    A starter template for a Rust CLI program
-    <br />
-    <a href="https://github.com/MylesWritesCode/rust-cli-starter">
-      <strong>Explore the docs »</strong>
-    </a>
-    <br />
-    <br />
-    <a href="https://github.com/MylesWritesCode/rust-cli-starter">View Demo</a>
-    ·
-    <a href="https://github.com/MylesWritesCode/rust-cli-starter/issues">Report Bug</a>
-    ·
-    <a href="https://github.com/MylesWritesCode/rust-cli-starter/issues">Request Feature</a>
-  </p>
-</div>
+Three gRPC services on one port, plus gRPC health and reflection. Run `grpcurl <host>:<port> list` to enumerate everything (reflection is registered, so no local `.proto` files needed). Network clients use the generated SDKs: [`polypixel-memoir-sdk`](https://crates.io/crates/polypixel-memoir-sdk) (crates.io) or `@polypixel/memoir-sdk` (npm).
 
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-      </ul>
-    </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
-  </ol>
-</details>
+| Service | RPCs |
+|---|---|
+| `MemoryService` | `remember`, `search`, `query`, `recall`, `timeline`, `recall_as_of`, `edit`, `feedback`, `forget`, `supersession_history`, `list_agents` |
+| `AdminService` | failed-job triage, `reconcile`, `unsupersede`, `extraction_stats`, `inspect_graph` |
+| `AuthService` | bootstrap, login, refresh, users, API keys |
 
-<!-- ABOUT THE PROJECT -->
+## Running it
 
-## About The Project
+The image is published to `ghcr.io/mylesberueda/memoir/memoir-service`. It needs a Postgres database and a Qdrant instance; bring both up locally with the compose stack at the repo root:
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
-
-This is your basic Rust CLI starter kit. Most of the README isn't going to make
-sense until I figure out exactly what and how I want the project to be built. In
-the meantime, feel free to use this as-is.
-
-### Scaffolding
-
-This project includes it's own scaffolding command which won't show in
-production builds. To scaffold a new command, you can run the following:
-
-```sh
-cargo run -- scaffold <NAME>
+```bash
+docker compose --profile dbs up -d        # Postgres + Qdrant
 ```
 
-This will create a new command for you, so you don't have to spend time copying
-and pasting the example around.
+Then run the service against them:
 
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-### Built With
-
-- [Clap](https://github.com/clap-rs/clap)
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-<!-- GETTING STARTED -->
-
-## Getting Started
-
-Using this template is pretty easy - just take a look at the prerequisites and
-installation steps below.
-
-### Prerequisites
-
-- [Rust](https://rust-lang.org)
-
-### Installation
-
-### Most brute-force way to use this template
-
-> _This'll get you up and running fairly quickly_
-
-1. Clone the repo
-
-```
-# with https
-git clone https://github.com/MylesWritesCode/rust-cli-starter.git
-
-# or ssh
-git clone git@github.com:MylesWritesCode/rust-cli-starter.git
+```bash
+docker run --rm -p 5153:5153 \
+  -e DATABASE_URL=postgres://postgres:postgres@host.docker.internal:54321/memoir_service \
+  -e QDRANT_URL=http://host.docker.internal:6334 \
+  -e JWT_SECRET=$(openssl rand -base64 32) \
+  ghcr.io/mylesberueda/memoir/memoir-service:latest
 ```
 
-2. Remove the `.git` directory
+On first start, with no admin in the database, the service prints a one-time **bootstrap token** to stdout — exchange it for the first admin (see [Authentication](#authentication)).
 
+> **Create the database first.** Migrations create Memoir's schemas and tables, never the database itself; the server won't start if it can't connect. The compose Postgres seeds only a database called `memoir`, so if `DATABASE_URL` points at `memoir_service` (as `.env.example` does), create it yourself first: `createdb -h localhost -p 54321 -U postgres memoir_service`.
+
+### Ports
+
+| Port | Default | Purpose |
+|---|---|---|
+| gRPC | `5153` | All three services, health, reflection. Override with `-e PORT=…`. |
+| HTTP | `5154` | Playground chat UI. Don't expose it in production. Override with `-e HTTP_PORT=…`. |
+
+## Configuration
+
+Environment-driven; the canonical list with dev defaults is in [`.env.example`](.env.example).
+
+### Required
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres connection string. The database must pre-exist. |
+| `QDRANT_URL` | Qdrant endpoint. Include the scheme (`http://host:6334`) — it's passed to the Qdrant client verbatim. |
+| `JWT_SECRET` | Signing secret for access/refresh JWTs. Must be base64 that decodes to ≥32 bytes (`openssl rand -base64 32`) or startup fails. Rotating it invalidates all live sessions. |
+
+### Optional
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `HOST` | `0.0.0.0` | Bind address. |
+| `PORT` | `5153` | gRPC port. |
+| `HTTP_PORT` | `5154` | Playground HTTP port. |
+| `SERVICE_SCHEMA` | `memoir_service` | Postgres schema for the auth/tenant tables (co-tenants a shared Postgres). |
+| `CORE_SCHEMA` | `memoir` | Postgres schema for the memory tables. |
+
+### Extraction (optional)
+
+Without these, the service is a scoped vector store — it stores and searches what you write but derives no semantic facts. Set the provider to enable the extraction worker.
+
+| Variable | Purpose |
+|---|---|
+| `EXTRACTION_PROVIDER` | `ollama`, `openai`, or `anthropic`. Unset → embed-only. An unrecognized value fails startup. |
+| `EXTRACTION_URL` | Provider endpoint (e.g. `http://localhost:11434` for Ollama). |
+| `EXTRACTION_MODEL` | Model id; provider default if unset. |
+| `EXTRACTION_API_KEY` | Required for `openai`/`anthropic`; startup fails if missing. |
+
+### Knowledge graph (optional)
+
+Writes entities and relationships extracted from memories into a [FalkorDB](https://falkordb.com) instance and enriches reads with graph context.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `FALKOR_URL` | — | FalkorDB endpoint, Redis-protocol (`redis://host:6379`). Set → validated at startup; an unreachable endpoint fails the boot. |
+| `GRAPH_NAME` | `memoir` | Named graph to write to (isolates co-tenants). |
+
+**`FALKOR_URL` alone won't populate the graph** — set a relational provider too, or the graph stays empty. Same variable shape as extraction, separate so triples can use a different model:
+
+| Variable | Purpose |
+|---|---|
+| `RELATIONAL_PROVIDER` | `ollama`, `openai`, or `anthropic`. Unset → no triples are extracted. |
+| `RELATIONAL_URL` | Provider endpoint. |
+| `RELATIONAL_MODEL` | Model id; provider default if unset. |
+| `RELATIONAL_API_KEY` | Required for `openai`/`anthropic`. |
+
+### Dev-mode bootstrap (local only)
+
+Skips the bootstrap-token step and creates an admin from env vars on first start. Don't use in production — these env vars leak to `docker inspect` and logs.
+
+| Variable | Purpose |
+|---|---|
+| `DEV_MODE` | `true` enables it. |
+| `DEV_ADMIN_USERNAME` | Admin username. Must be email-shaped — the `memoir-ui` login form validates email format. |
+| `DEV_ADMIN_PASSWORD` | Admin password. |
+
+## Authentication
+
+Every RPC except the auth-path RPCs requires `authorization: Bearer <token>`. Two credential types:
+
+- **User JWTs** — log in with username + password for an access/refresh pair. The access token authenticates calls; the refresh token mints a new one when it expires.
+- **API keys** — long-lived tokens of shape `mk.<key_id>.<secret>` for service-to-service callers. Each key has a role (`admin` or `integration`) and can be scope-bound to an `org_id`.
+
+### First admin (bootstrap)
+
+The bootstrap token (24h TTL) is logged to stdout on first start. Consume it:
+
+```bash
+grpcurl -plaintext -d '{
+  "token": "<token-from-stdout>",
+  "username": "admin@example.com",
+  "password": "<password>"
+}' localhost:5153 memoir.v1.AuthService/ConsumeBootstrapToken
 ```
-# cd into the cloned directory
-cd rust-cli-starter
 
-# delete `.git`
-rm -rf .git
+Single-use; invalidated once an admin exists. (In dev, `DEV_MODE` replaces this step.)
+
+### Integration key
+
+Log in as the admin, then mint a key with that access token — the plaintext is returned once.
+
+```bash
+grpcurl -plaintext -d '{"username":"admin@example.com","password":"<password>"}' \
+  localhost:5153 memoir.v1.AuthService/Login
+
+grpcurl -plaintext \
+  -H 'authorization: Bearer <access_token>' \
+  -d '{"name":"agent-backend","role":2}' \
+  localhost:5153 memoir.v1.AuthService/CreateApiKey
 ```
 
-3. Re-init git
+`role:2` is integration (`1` is admin). Store the returned `plaintext` — it's never shown again. Rotate with `RotateApiKey`, disable with `RevokeApiKey`. Full contract in [`proto/memoir/v1/auth.proto`](proto/memoir/v1/auth.proto).
 
+## Deployment
+
+Stateless binary; all state lives in Postgres, Qdrant, and (optionally) FalkorDB.
+
+- **Health probes.** The gRPC health service reports `SERVING` for all three services — target it with a gRPC health-check probe.
+- **Writable HOME.** On first use, `fastembed` downloads the embedding model (BGE-small-en-v1.5, ~50 MB) and caches it under `$HOME`. A read-only-root deployment must mount a writable HOME (or model-cache) volume, or every start re-downloads.
+- **Fail-fast startup.** A missing/unreachable database, a missing extraction key, or an unknown provider fails startup. Size the liveness probe's initial delay to allow first-start migrations.
+
+For the production deploy model (GitOps, ArgoCD), see [`infrastructure/DEPLOY.md`](../../infrastructure/DEPLOY.md).
+
+### Deploying FalkorDB
+
+- Use the **`falkordb/falkordb-server`** image (server only), not `falkordb/falkordb` (bundles the browser UI). The dev `docker-compose.yml` uses the bundled image for convenience.
+- FalkorDB takes its password as `REDIS_ARGS=--requirepass <password>`; reach it via the `redis://` scheme in `FALKOR_URL`.
+
+## Building from source
+
+```bash
+cargo run -p memoir-service -- server start   # against the local compose stores
+docker build --target runtime -t memoir-service:local -f apps/memoir-service/Dockerfile .
 ```
-git init
-```
-
-4. Create a repo on your preferred git hosting site (e.g. GitHub)
-5. Add your new remote to your local git instance
-
-```
-git remote add origin <your url>
-git add .
-git commit -m 'init'
-git push origin <your branch>
-```
-
-6. Start hacking away
-
-### Simpler, since you're here
-
-> _alternatively, the "I have a Github account" way_
-
-1. [Github docs][github-template-docs] telling you to click the button above, labeled "Use this template".
-2. ???
-3. Profit by hacking away after you clone your new repo.
-
-[github-template-docs]: https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-<!-- USAGE EXAMPLES -->
-
-## Usage
-
-This repo is meant to be used as a template for Rust CLI programs. Metadata
-files will be within the `.meta` folder. In there, you'll find places to put
-your project logo and screenshot. Importantly, you'll find a fresh README.md
-that you can use to overwrite this one.
-
-Happy hacking!
-
-_For more examples, please refer to the [Documentation](https://example.com)_
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-<!-- ROADMAP -->
-
-## Roadmap
-
-- [ ] Feature 1
-- [ ] Feature 2
-- [ ] Feature 3
-  - [ ] Nested Feature
-
-See the [open issues](https://github.com/MylesWritesCode/rust-cli-starter/issues) for a full list of proposed features (and known issues).
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-<!-- CONTRIBUTING -->
-
-## Contributing
-
-[![Contributors](https://img.shields.io/github/contributors/MylesWritesCode/rust-cli-starter.svg?style=for-the-badge)](https://github.com/MylesWritesCode/rust-cli-starter/graphs/contributors)
-
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-Don't forget to give the project a star! Thanks again!
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-<!-- LICENSE -->
 
 ## License
 
-[![LICENSE](https://img.shields.io/github/license/MylesWritesCode/rust-cli-starter.svg?style=for-the-badge)](https://github.com/MylesWritesCode/rust-wasm/blob/master/LICENSE)
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-<!-- CONTACT -->
-
-## Contact
-
-### Myles Berueda
-
-[![LinkedIn](https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555)](https://linkedin.com/in/myles-berueda)
-[![Mastodon](https://img.shields.io/mastodon/follow/113004977572109573?domain=https%3A%2F%2Fmstdn.social&style=for-the-badge&label=MSTDN.SOCIAL)](https://mstdn.social/@mylesberueda)
-[![Github](https://img.shields.io/github/followers/MylesWritesCode?style=for-the-badge&label=GITHUB)](https://github.com/MylesWritesCode)
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-<!-- ACKNOWLEDGMENTS -->
-
-<!-- ## Acknowledgments -->
-
-<!-- - []() -->
-<!-- - []() -->
-<!-- - []() -->
-
-<!-- <p align="right">(<a href="#top">back to top</a>)</p> -->
-
-<!-- MARKDOWN LINKS & IMAGES -->
-
-[product-screenshot]: .meta/screenshot.png
+Licensed under either of [Apache License 2.0](../../LICENSE-APACHE) or [MIT](../../LICENSE-MIT) at your option.

@@ -99,9 +99,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-See
-[memoir-service](https://github.com/mylesberueda/memoir/tree/dev/apps/memoir-service)
-for the available authentication modes.
+See the
+[memoir-service authentication guide](https://github.com/mylesberueda/memoir/blob/dev/apps/memoir-service/README.md#authentication)
+for the bootstrap flow, JWT vs `mk.*` API keys, and the day-one provisioning
+sequence.
 
 ## Features
 

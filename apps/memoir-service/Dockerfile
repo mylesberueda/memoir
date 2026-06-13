@@ -9,7 +9,7 @@
 #   Run:   docker run --rm -p 5153:5153 \
 #            -e DATABASE_URL=postgres://... \
 #            -e QDRANT_URL=http://... \
-#            -e MEMOIR_JWT_SECRET=... \
+#            -e JWT_SECRET=... \
 #            memoir-service:local
 #
 # Notes:

@@ -84,7 +84,7 @@ pub(crate) enum AuthOpError {
 /// Creates a user with a hashed password.
 ///
 /// Shared by the `CreateUser` RPC, the `memoir auth create` CLI subcommand,
-/// and the `MEMOIR_DEV_MODE` / bootstrap-token paths. Returns the inserted
+/// and the `DEV_MODE` / bootstrap-token paths. Returns the inserted
 /// row so callers can surface its `pid` to the user.
 ///
 /// # Errors

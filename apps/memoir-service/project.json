@@ -51,8 +51,7 @@
 				"commands": ["cargo test --release --features integration -- --test-threads 1"],
 				"env": {
 					"DATABASE_URL": "postgres://postgres:postgres@localhost:54321/memoir_service_test",
-					"QDRANT_URL": "http://localhost:6334",
-					"MEMOIR_JWT_SECRET": "9dbJde/2FypoYXPKRr1MabCdqT143GUKPgfDRRSAGEM="
+					"QDRANT_URL": "http://localhost:6334"
 				}
 			},
 			"cache": true,

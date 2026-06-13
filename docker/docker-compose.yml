@@ -1,0 +1,115 @@
+name: memoir
+
+volumes:
+  postgres: {}
+  qdrant: {}
+  falkordb: {}
+  redis: {}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: ${MEMOIR_SERVICE_DB_USER}
+      POSTGRES_PASSWORD: ${MEMOIR_SERVICE_DB_PASS}
+      POSTGRES_DB: ${MEMOIR_SERVICE_DB_NAME}
+    ports:
+      - ${MEMOIR_SERVICE_DB_PORT}:5432
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    command: postgres -c listen_addresses='*'
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-d", "${MEMOIR_SERVICE_DB_NAME}", "-U", "${MEMOIR_SERVICE_DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - ${MEMOIR_SERVICE_QDRANT_REST_PORT}:6333
+      - ${MEMOIR_SERVICE_QDRANT_GRPC_PORT}:6334
+    volumes:
+      - qdrant:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  falkordb:
+    image: falkordb/falkordb:latest
+    profiles: ["knowledge-graph"]
+    ports:
+      - ${MEMOIR_SERVICE_FALKOR_PORT}:6379
+    volumes:
+      - falkordb:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    ports:
+      - ${MEMOIR_UI_REDIS_PORT}:6379
+    command: redis-server --appendonly yes
+    volumes:
+      - redis:/data
+    restart: unless-stopped
+
+  memoir-service:
+    image: ghcr.io/mylesberueda/memoir/memoir-service:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${MEMOIR_SERVICE_DB_USER}:${MEMOIR_SERVICE_DB_PASS}@postgres:5432/${MEMOIR_SERVICE_DB_NAME}
+      QDRANT_URL: http://qdrant:6334
+      JWT_SECRET: ${MEMOIR_SERVICE_JWT_SECRET}
+      HOST: ${MEMOIR_SERVICE_HOST}
+      PORT: ${MEMOIR_SERVICE_PORT}
+      HTTP_PORT: ${MEMOIR_SERVICE_HTTP_PORT}
+      SERVICE_SCHEMA: ${MEMOIR_SERVICE_SCHEMA}
+      CORE_SCHEMA: ${MEMOIR_SERVICE_CORE_SCHEMA}
+      EXTRACTION_PROVIDER: ${MEMOIR_SERVICE_EXTRACTION_PROVIDER}
+      EXTRACTION_URL: ${MEMOIR_SERVICE_EXTRACTION_URL}
+      EXTRACTION_MODEL: ${MEMOIR_SERVICE_EXTRACTION_MODEL}
+      EXTRACTION_API_KEY: ${MEMOIR_SERVICE_EXTRACTION_API_KEY}
+      RELATIONAL_PROVIDER: ${MEMOIR_SERVICE_RELATIONAL_PROVIDER}
+      RELATIONAL_URL: ${MEMOIR_SERVICE_RELATIONAL_URL}
+      RELATIONAL_MODEL: ${MEMOIR_SERVICE_RELATIONAL_MODEL}
+      RELATIONAL_API_KEY: ${MEMOIR_SERVICE_RELATIONAL_API_KEY}
+      FALKOR_URL: ${MEMOIR_SERVICE_FALKOR_URL}
+      GRAPH_NAME: ${MEMOIR_SERVICE_GRAPH_NAME}
+      DEV_MODE: ${MEMOIR_SERVICE_DEV_MODE}
+      DEV_ADMIN_USERNAME: ${MEMOIR_SERVICE_DEV_ADMIN_USERNAME}
+      DEV_ADMIN_PASSWORD: ${MEMOIR_SERVICE_DEV_ADMIN_PASSWORD}
+    ports:
+      - ${MEMOIR_SERVICE_PORT}:${MEMOIR_SERVICE_PORT}
+    restart: unless-stopped
+
+  memoir-ui:
+    image: ghcr.io/mylesberueda/memoir/memoir-ui:latest
+    depends_on:
+      - memoir-service
+      - redis
+    environment:
+      SERVICE_URL: ${MEMOIR_UI_SERVICE_URL}
+      HTTP_URL: ${MEMOIR_UI_HTTP_URL}
+      REDIS_URL: ${MEMOIR_UI_REDIS_URL}
+      SESSION_SECRET: ${MEMOIR_UI_SESSION_SECRET}
+      LOG_LEVEL: ${MEMOIR_UI_LOG_LEVEL}
+      PORT: ${MEMOIR_UI_PORT}
+    ports:
+      - ${MEMOIR_UI_PORT}:${MEMOIR_UI_PORT}
+    restart: unless-stopped

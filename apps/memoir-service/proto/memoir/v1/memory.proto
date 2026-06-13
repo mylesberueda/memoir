@@ -307,6 +307,9 @@ message SearchResponse {
   // Prompt-ready text: the resolved preamble, then one `- content` bullet
   // per hit, rendered by memoir-core's `Memories`. Always populated; the
   // preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`.
+  // With zero hits this is the preamble alone (no bullets) — gate on the
+  // hits list before injecting, or you tell the model it has memories it
+  // doesn't.
   string rendered = 3;
 }
 
@@ -406,7 +409,8 @@ message TimelineResponse {
   // Prompt-ready text: the resolved preamble, then one `- content` bullet
   // per memory in the requested order, rendered by memoir-core's `Memories`.
   // Always populated; the preamble is `template` when set, else
-  // `DEFAULT_SYSTEM_PROMPT`.
+  // `DEFAULT_SYSTEM_PROMPT`. With no memories this is the preamble alone (no
+  // bullets) — gate on the list before injecting.
   string rendered = 2;
 }
 
@@ -440,7 +444,9 @@ message RecallAsOfResponse {
 
   // Prompt-ready text: the resolved preamble, then one `- content` bullet
   // per memory, rendered by memoir-core's `Memories`. Always populated; the
-  // preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`.
+  // preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`. With no
+  // memories this is the preamble alone (no bullets) — gate on the list
+  // before injecting.
   string rendered = 2;
 }
 
@@ -593,7 +599,8 @@ message QueryResponse {
   // `MemoryContext`. Query is the one read whose bullets carry the date
   // bracket — that mirrors the library, where only `query` renders dates.
   // Always populated; the preamble is `template` when set, else
-  // `DEFAULT_SYSTEM_PROMPT`.
+  // `DEFAULT_SYSTEM_PROMPT`. With zero hits this is the preamble alone (no
+  // bullets) — gate on the hits list before injecting.
   string rendered = 4;
 }
 

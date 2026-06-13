@@ -1,17 +1,16 @@
 # Deploy
 
-This template uses a **deploy-branch GitOps pattern**. Humans land code on `dev` (staging) and `main` (production). CI builds images, then commits the new image digests to a parallel branch named after the source branch that ArgoCD watches:
+This repo uses a **deploy-branch GitOps pattern**. Humans land code on `main` (production). CI builds images, then commits the new image digests to a parallel branch that ArgoCD watches:
 
 | Source branch | Environment | Deploy branch  |
 |---------------|-------------|----------------|
 | `main`        | production  | `deploy/main`  |
-| `dev`         | staging     | `deploy/dev`   |
 
-Devs working on `dev` and `main` never see bot deploy commits in their `git log`. Rebasing onto `dev` does not race against CI.
+Devs working on `main` never see bot deploy commits in their `git log`. Rebasing onto `main` does not race against CI.
 
 The local environment (`ci/test/*` branches) does NOT use the deploy-branch pattern. CI still runs full image builds for validation on `ci/test/*` pushes, but no deploy commit lands. Local cluster deployment is wired manually until the test-branch cluster story is built — see [Future](#future) below.
 
-The mechanism lives in `.github/workflows/docker.yml` — grep for `deploy/main` or `deploy/dev` to find it.
+The mechanism lives in `.github/workflows/docker.yml` — grep for `deploy/main` to find it.
 
 ## Convention: humans never push to `deploy/*`
 
@@ -23,7 +22,7 @@ This is enforced by **convention**, not by GitHub branch protection. The templat
 
 ArgoCD's `targetRevision` is set to `deploy/<source-branch>` in the per-stack Terraform config (`infrastructure/terraform/stacks/<env>/mise.local.toml`). The deploy branches don't exist on origin yet — CI auto-creates them on first push. So the bootstrap order is:
 
-1. **Push to `dev`** (or `main`) first. CI runs, detects that `deploy/dev` (or `deploy/main`) doesn't exist on origin, creates it from your source commit, and pushes the first image-digest commit to it. The workflow run UI shows a loud "🆕 Bootstrapped `deploy/dev`" summary.
+1. **Push to `main`** first. CI runs, detects that `deploy/main` doesn't exist on origin, creates it from your source commit, and pushes the first image-digest commit to it. The workflow run UI shows a loud "🆕 Bootstrapped `deploy/main`" summary.
 2. **Then `terraform apply`**. ArgoCD finds the deploy branch already exists and reconciles cleanly.
 
 Doing it in the other order works but produces an alarming-looking ArgoCD dashboard state (Application stuck at "OutOfSync, Unknown ref") until the first CI push lands. Not broken — just noisy.

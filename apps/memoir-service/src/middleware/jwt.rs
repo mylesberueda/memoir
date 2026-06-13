@@ -13,7 +13,7 @@
 //! authenticate a non-refresh RPC, and an access token presented to
 //! `RefreshToken` is rejected before it can mint another access token.
 //!
-//! The secret is read from `MEMOIR_JWT_SECRET` once at process start and
+//! The secret is read from `JWT_SECRET` once at process start and
 //! held as bytes for the lifetime of the [`Jwt`] instance. Rotation is an
 //! operator concern — restart the service with the new value.
 
@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 /// Value is a base64-encoded byte string of at least 32 bytes (256 bits) of
 /// entropy. Refusing shorter values is intentional — HS256 with < 256 bits
 /// of secret is below the algorithm's security target.
-pub(crate) const ENV_JWT_SECRET: &str = "MEMOIR_JWT_SECRET";
+pub(crate) const ENV_JWT_SECRET: &str = "JWT_SECRET";
 
 /// Minimum acceptable secret length, in bytes, after base64 decode.
 ///
@@ -60,13 +60,13 @@ const AUD_REFRESH: &str = "refresh";
 /// Failure modes for JWT issuance + verification.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum JwtError {
-    #[error("MEMOIR_JWT_SECRET environment variable is not set")]
+    #[error("JWT_SECRET environment variable is not set")]
     SecretMissing,
 
-    #[error("MEMOIR_JWT_SECRET is not valid base64: {0}")]
+    #[error("JWT_SECRET is not valid base64: {0}")]
     SecretBase64(base64::DecodeError),
 
-    #[error("MEMOIR_JWT_SECRET decodes to {actual} bytes; minimum is {min} for HS256")]
+    #[error("JWT_SECRET decodes to {actual} bytes; minimum is {min} for HS256")]
     SecretTooShort { actual: usize, min: usize },
 
     #[error("token signing failed: {0}")]
@@ -141,7 +141,7 @@ impl std::fmt::Debug for Jwt {
 }
 
 impl Jwt {
-    /// Builds the signer + verifier from the `MEMOIR_JWT_SECRET` env var.
+    /// Builds the signer + verifier from the `JWT_SECRET` env var.
     ///
     /// # Errors
     ///

@@ -8,15 +8,15 @@ import { MemoryService } from '@polypixel/memoir-sdk/memoir/v1/memory_pb';
 /**
  * Server-to-server transport pointed at memoir-service's gRPC endpoint.
  *
- * Configured once at module load. `MEMOIR_SERVICE_URL` must be set; the
+ * Configured once at module load. `SERVICE_URL` must be set; the
  * Next.js server-side routes that call into this transport panic loudly at
  * import time if it's missing, which is preferable to silent fall-through
  * to a default localhost that may not match the running container.
  */
 function transport() {
-	const baseUrl = process.env.MEMOIR_SERVICE_URL;
+	const baseUrl = process.env.SERVICE_URL;
 	if (!baseUrl) {
-		throw new Error('MEMOIR_SERVICE_URL must be set for the memoir-ui server to reach memoir-service');
+		throw new Error('SERVICE_URL must be set for the memoir-ui server to reach memoir-service');
 	}
 	return createGrpcTransport({ baseUrl });
 }

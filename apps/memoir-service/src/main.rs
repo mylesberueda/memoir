@@ -33,7 +33,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> crate::Result<()> {
     // Load .env at the very top so every downstream `std::env::var` lookup
-    // (DATABASE_URL, MEMOIR_JWT_SECRET, HOST, PORT, etc.) resolves to the
+    // (DATABASE_URL, JWT_SECRET, HOST, PORT, etc.) resolves to the
     // file's values when the shell hasn't exported them. Missing .env is
     // not an error — production deployments inject env vars directly.
     let _ = dotenvy::dotenv();

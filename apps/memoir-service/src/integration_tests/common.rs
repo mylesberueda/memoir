@@ -123,7 +123,7 @@ impl TestHarness {
         let worker_cancel = memoir_worker.cancellation_token();
         let memoir = Arc::new(memoir);
 
-        let jwt = Jwt::from_env().context("build Jwt signer from MEMOIR_JWT_SECRET")?;
+        let jwt = Jwt::from_env().context("build Jwt signer from JWT_SECRET")?;
         let authenticator = Authenticator::new(service_db.clone(), jwt);
         let ctx = Arc::new(AppContext {
             db: Arc::new(service_db.clone()),
@@ -288,6 +288,7 @@ impl TestHarness {
                 kinds: None,
                 with_graph_enrichment: false,
                 graph_depth: 0,
+                template: None,
             });
             let resp = self.memory.search(req).await.context("search probe")?.into_inner();
             if resp

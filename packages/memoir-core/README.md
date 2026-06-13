@@ -18,7 +18,13 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 You also need a Postgres database and a running Qdrant instance. The
 [`docker-compose.yml`](https://github.com/mylesberueda/memoir) at the
-project root brings both up locally.
+project root brings both up locally. The database itself must already
+exist — `migrate()` creates schemas and tables, not the database.
+
+The knowledge graph is optional: enable the `knowledge-graph` feature and
+wire a [FalkorDB](https://falkordb.com) connection with `.falkor(url)` to
+derive an entity/relationship graph from your memories and enrich reads
+with graph context. Without it, `memoir-core` is a scoped vector store.
 
 ## Quick start
 

@@ -21,16 +21,16 @@ use crate::services::memory::Memory;
 /// Env var that opts the server into dev-mode bootstrap.
 ///
 /// When set to `"true"`, the server reads admin credentials from
-/// [`MEMOIR_DEV_ADMIN_USERNAME`] and [`MEMOIR_DEV_ADMIN_PASSWORD`] on first
-/// start and creates the admin in-process. Loudly off by default; env vars
-/// are visible to `docker inspect` and may leak to logs.
-const ENV_DEV_MODE: &str = "MEMOIR_DEV_MODE";
+/// [`DEV_ADMIN_USERNAME`] and [`DEV_ADMIN_PASSWORD`] on first start and
+/// creates the admin in-process. Loudly off by default; env vars are visible
+/// to `docker inspect` and may leak to logs.
+const ENV_DEV_MODE: &str = "DEV_MODE";
 
 /// Env var for the dev-mode bootstrap username.
-const ENV_DEV_USERNAME: &str = "MEMOIR_DEV_ADMIN_USERNAME";
+const ENV_DEV_USERNAME: &str = "DEV_ADMIN_USERNAME";
 
 /// Env var for the dev-mode bootstrap password.
-const ENV_DEV_PASSWORD: &str = "MEMOIR_DEV_ADMIN_PASSWORD";
+const ENV_DEV_PASSWORD: &str = "DEV_ADMIN_PASSWORD";
 
 #[derive(clap::Args)]
 pub(crate) struct Arguments {
@@ -103,7 +103,7 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
     // non-gRPC routes). Separate port keeps crash isolation: a panic in the
     // playground handler doesn't take gRPC down. Defaults to 5154 when
     // unset; always-on — prod deployments simply don't expose the port.
-    let http_port = std::env::var("MEMOIR_HTTP_PORT").unwrap_or_else(|_| "5154".to_string());
+    let http_port = std::env::var("HTTP_PORT").unwrap_or_else(|_| "5154".to_string());
     let http_addr: SocketAddr = format!("{host}:{http_port}").parse()?;
     let app = axum::Router::new().merge(playground_router(ctx.clone()));
     let listener = tokio::net::TcpListener::bind(http_addr).await?;
@@ -120,7 +120,7 @@ async fn start(host: &Option<String>, port: &Option<String>) -> crate::Result<()
 /// Runs the first-admin bootstrap paths, in priority order.
 ///
 /// 1. If any admin already exists, no-op.
-/// 2. If `MEMOIR_DEV_MODE=true`, create an admin from `MEMOIR_DEV_ADMIN_*`
+/// 2. If `DEV_MODE=true`, create an admin from `DEV_ADMIN_*`
 ///    env vars and emit a loud warning.
 /// 3. Otherwise, generate a one-time bootstrap token, hash it, persist with
 ///    a 24h TTL, and log the plaintext to stdout for the operator to consume
@@ -170,7 +170,7 @@ async fn bootstrap_dev_mode(db: &DatabaseConnection) -> crate::Result<()> {
     }
 
     tracing::warn!(
-        "MEMOIR_DEV_MODE is active. Creating bootstrap admin from env vars. \
+        "DEV_MODE is active. Creating bootstrap admin from env vars. \
          This path is for local development only — do not use in production."
     );
 
