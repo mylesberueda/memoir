@@ -295,11 +295,12 @@ impl TestClient {
     #[cfg(feature = "knowledge-graph")]
     pub fn fresh_scope_in_org(&mut self, org_id: &str) -> Scope {
         let suffix = nanoid::nanoid!(8, &TEST_ID_ALPHABET);
-        let scope = Scope {
-            agent_id: format!("agent_{suffix}"),
-            org_id: org_id.to_string(),
-            user_id: format!("user_{suffix}"),
-        };
+        let scope = Scope::builder()
+            .user_id(format!("user_{suffix}"))
+            .org(org_id)
+            .agent(format!("agent_{suffix}"))
+            .build()
+            .expect("fresh_scope_in_org values are always valid");
         self.cleanup_scopes.push(scope.clone());
         scope
     }
@@ -342,6 +343,17 @@ pub fn fresh_scope() -> Scope {
         .agent(format!("agent_{suffix}"))
         .build()
         .expect("fresh_scope values are always valid")
+}
+
+/// A fresh, unique `user_id` for tests that build several scopes under one user.
+///
+/// Read-widening tests need multiple scopes that share a `user_id` but vary
+/// `org`/`agent`; mint the user once with this, then build each scope from it.
+/// The schema/collection drop on `TestClient::drop` cleans up regardless of how
+/// many scopes a test wrote under the user, so these scopes need no separate
+/// registration.
+pub fn fresh_user_id() -> String {
+    format!("user_{}", nanoid::nanoid!(8, &TEST_ID_ALPHABET))
 }
 
 /// Polls until a `pid` is observable via `search`, or returns an error on timeout.
@@ -464,9 +476,9 @@ pub async fn wait_until_graph_committed(
     while Instant::now() < deadline {
         let snapshot = client
             .inspect_graph()
-            .agent(scope.agent_id.clone())
-            .org(scope.org_id.clone())
-            .user(scope.user_id.clone())
+            .agent(scope.agent_id().expect("graph test scope has an agent"))
+            .org(scope.org_id().expect("graph test scope has an org"))
+            .user(scope.user_id())
             .await
             .context("inspect_graph probe failed")?;
         if ready(&snapshot) {

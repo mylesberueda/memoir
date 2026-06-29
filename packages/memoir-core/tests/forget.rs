@@ -5,7 +5,7 @@
 use std::time::Duration;
 
 use memoir_core::client::ClientError;
-use memoir_core::memory::{Confidence, ForgetTarget, MemoryKind, Scope};
+use memoir_core::memory::{Confidence, ForgetTarget, MemoryKind};
 use memoir_core::store::{MemoryStore, NewMemory, StoreError};
 use memoir_core::vector::VectorIndex;
 use qdrant_client::qdrant::{Condition, Filter, ScrollPointsBuilder};
@@ -92,24 +92,6 @@ async fn should_forget_return_empty_for_unknown_pid() -> anyhow::Result<()> {
     assert!(
         deleted.is_empty(),
         "forget of unknown pid is success-with-zero, not an error; got {deleted:?}"
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn should_forget_reject_empty_scope_fields() -> anyhow::Result<()> {
-    let client = common::fresh_client().await?;
-
-    let empty = Scope {
-        agent_id: "".to_string(),
-        org_id: "".to_string(),
-        user_id: "".to_string(),
-    };
-    let result = client.forget(ForgetTarget::Scope(empty)).await;
-    assert!(
-        matches!(result, Err(ClientError::Store(StoreError::InvalidScope(_)))),
-        "empty scope must be rejected as InvalidScope; got {result:?}"
     );
 
     Ok(())

@@ -1260,11 +1260,11 @@ mod tests {
     }
 
     #[test]
-    fn should_reject_scope_with_empty_agent_id() {
+    fn should_reject_scope_with_empty_user_id() {
         let proto = ProtoScope {
-            agent_id: String::new(),
-            org_id: "o".into(),
-            user_id: "u".into(),
+            agent_id: Some("a".to_string()),
+            org_id: Some("o".to_string()),
+            user_id: String::new(),
         };
         let err = scope_from_proto(Some(proto)).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
@@ -1272,12 +1272,18 @@ mod tests {
 
     #[test]
     fn should_round_trip_scope() {
-        let original = LibScope {
-            agent_id: "a".into(),
-            org_id: "o".into(),
-            user_id: "u".into(),
-        };
+        let original = LibScope::builder().user_id("u").org("o").agent("a").build().unwrap();
         let proto = scope_to_proto(original.clone());
+        let back = scope_from_proto(Some(proto)).unwrap();
+        assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_round_trip_unscoped_scope() {
+        let original = LibScope::builder().user_id("u").build().unwrap();
+        let proto = scope_to_proto(original.clone());
+        assert_eq!(proto.org_id, None, "an unscoped org maps to an absent proto field");
+        assert_eq!(proto.agent_id, None, "an unscoped agent maps to an absent proto field");
         let back = scope_from_proto(Some(proto)).unwrap();
         assert_eq!(back, original);
     }
@@ -1305,11 +1311,7 @@ mod tests {
         let now: chrono::DateTime<chrono::FixedOffset> = chrono::Utc::now().into();
         LibMemory {
             pid: "m".into(),
-            scope: LibScope {
-                agent_id: "a".into(),
-                org_id: "o".into(),
-                user_id: "u".into(),
-            },
+            scope: LibScope::builder().user_id("u").org("o").agent("a").build().unwrap(),
             content: content.into(),
             metadata: serde_json::json!({}),
             kind: memoir_core::memory::MemoryKind::Episodic,
@@ -1618,9 +1620,9 @@ mod tests {
 
     fn timeline_scope() -> ProtoScope {
         ProtoScope {
-            agent_id: "a".into(),
-            org_id: "o".into(),
-            user_id: "u".into(),
+            agent_id: Some("a".to_string()),
+            org_id: Some("o".to_string()),
+            user_id: "u".to_string(),
         }
     }
 

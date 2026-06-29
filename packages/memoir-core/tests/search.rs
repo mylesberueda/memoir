@@ -414,7 +414,7 @@ async fn should_reject_scope_widening_via_caller_supplied_must() -> anyhow::Resu
     let widen_attempt = MemoryFilter {
         must: vec![FilterCondition::Equals {
             field: "agent_id".into(),
-            value: MatchValue::Keyword(scope_a.agent_id.clone()),
+            value: MatchValue::Keyword(scope_a.agent_id().expect("fresh scope has an agent").to_string()),
         }],
         ..MemoryFilter::default()
     };
@@ -450,7 +450,7 @@ async fn should_not_leak_other_scope_rows_when_caller_uses_must_not() -> anyhow:
     let dodge_attempt = MemoryFilter {
         must_not: vec![FilterCondition::Equals {
             field: "user_id".into(),
-            value: MatchValue::Keyword(scope_a.user_id.clone()),
+            value: MatchValue::Keyword(scope_a.user_id().to_string()),
         }],
         ..MemoryFilter::default()
     };

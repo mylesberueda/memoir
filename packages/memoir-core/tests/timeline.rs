@@ -109,9 +109,9 @@ async fn should_filter_by_kind_when_episodic() -> anyhow::Result<()> {
         "#,
         [
             Value::from("test_timeline_semantic"),
-            Value::from(scope.agent_id.as_str()),
-            Value::from(scope.org_id.as_str()),
-            Value::from(scope.user_id.as_str()),
+            Value::from(scope.agent_id().expect("fresh scope has an agent")),
+            Value::from(scope.org_id().expect("fresh scope has an org")),
+            Value::from(scope.user_id()),
             Value::from("semantic row"),
             Value::from(episodic.pid.as_str()),
         ],
