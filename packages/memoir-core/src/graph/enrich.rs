@@ -87,9 +87,9 @@ pub(super) async fn neighbors<G: GraphStore + ?Sized>(
     let depth = depth.clamp(1, MAX_ENRICHMENT_DEPTH);
 
     let mut params = HashMap::from([
-        ("agent_id".to_string(), scope.agent_id.clone().into()),
-        ("org_id".to_string(), scope.org_id.clone().into()),
-        ("user_id".to_string(), scope.user_id.clone().into()),
+        ("agent_id".to_string(), scope.agent_id_or_sentinel().into()),
+        ("org_id".to_string(), scope.org_id_or_sentinel().into()),
+        ("user_id".to_string(), scope.user_id().into()),
     ]);
     for (i, pid) in seed_pids.iter().enumerate() {
         params.insert(format!("pid{i}"), (*pid).into());
@@ -148,7 +148,10 @@ fn build_context(rows: &[GraphRow]) -> GraphContext {
         }
     }
 
-    GraphContext { entities, relationships }
+    GraphContext {
+        entities,
+        relationships,
+    }
 }
 
 /// Returns the value of the column named `name` in a result row.
@@ -166,11 +169,12 @@ mod tests {
     use crate::graph::{GraphParam, GraphRows};
 
     fn scope() -> Scope {
-        Scope {
-            agent_id: "agent".to_string(),
-            org_id: "org".to_string(),
-            user_id: "user".to_string(),
-        }
+        Scope::builder()
+            .user_id("user")
+            .org("org")
+            .agent("agent")
+            .build()
+            .expect("test scope is valid")
     }
 
     fn row(pairs: &[(&str, &str)]) -> GraphRow {

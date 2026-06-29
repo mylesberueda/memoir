@@ -8,6 +8,27 @@ use crate::memory::{ExtractionStat, ForgetTarget, Memory, MemoryKind, Scope, Sta
 
 const PID_LENGTH: usize = 21;
 
+/// Appends a **read** scope filter to a growing `WHERE`-clause / value list.
+///
+/// `user_id` is always filtered (the required floor). `org_id`/`agent_id` are
+/// filtered only when the scope supplies them; an unset dimension is left
+/// unconstrained ("any") by omitting its clause — it is never matched against
+/// the unscoped sentinel, which is a write-only projection. Values ride as
+/// bound `$N` parameters (no value interpolation); `$N` tracks `values.len()`
+/// so this composes with any clauses pushed before or after it.
+fn push_scope_filter(scope: &Scope, where_clauses: &mut Vec<String>, values: &mut Vec<SeaOrmValue>) {
+    values.push(SeaOrmValue::String(Some(scope.user_id().to_string())));
+    where_clauses.push(format!("m.user_id = ${}", values.len()));
+    if let Some(agent_id) = scope.agent_id() {
+        values.push(SeaOrmValue::String(Some(agent_id.to_string())));
+        where_clauses.push(format!("m.agent_id = ${}", values.len()));
+    }
+    if let Some(org_id) = scope.org_id() {
+        values.push(SeaOrmValue::String(Some(org_id.to_string())));
+        where_clauses.push(format!("m.org_id = ${}", values.len()));
+    }
+}
+
 /// Column list shared by every `Memory::try_from`-bound SELECT.
 ///
 /// `supersession_at` is sourced from the `supersession_events` audit table
@@ -75,7 +96,6 @@ impl MemoryStore for PostgresStore {
             event_at,
             confidence,
         } = new;
-        scope.validate()?;
 
         let pid = nanoid::nanoid!(PID_LENGTH);
 
@@ -92,9 +112,9 @@ impl MemoryStore for PostgresStore {
             "#,
             [
                 SeaOrmValue::String(Some(pid)),
-                SeaOrmValue::String(Some(scope.agent_id.clone())),
-                SeaOrmValue::String(Some(scope.org_id.clone())),
-                SeaOrmValue::String(Some(scope.user_id.clone())),
+                SeaOrmValue::String(Some(scope.agent_id_or_sentinel().to_string())),
+                SeaOrmValue::String(Some(scope.org_id_or_sentinel().to_string())),
+                SeaOrmValue::String(Some(scope.user_id().to_string())),
                 SeaOrmValue::String(Some(content)),
                 SeaOrmValue::Json(Some(Box::new(metadata))),
                 SeaOrmValue::String(Some(kind.to_string())),
@@ -242,18 +262,9 @@ impl MemoryStore for PostgresStore {
     }
 
     async fn timeline(&self, scope: Scope, params: TimelineParams) -> Result<Vec<Memory>, StoreError> {
-        scope.validate()?;
-
-        let mut where_clauses: Vec<String> = vec![
-            "m.agent_id = $1".into(),
-            "m.org_id = $2".into(),
-            "m.user_id = $3".into(),
-        ];
-        let mut values: Vec<SeaOrmValue> = vec![
-            SeaOrmValue::String(Some(scope.agent_id)),
-            SeaOrmValue::String(Some(scope.org_id)),
-            SeaOrmValue::String(Some(scope.user_id)),
-        ];
+        let mut where_clauses: Vec<String> = Vec::new();
+        let mut values: Vec<SeaOrmValue> = Vec::new();
+        push_scope_filter(&scope, &mut where_clauses, &mut values);
 
         let included = params.kinds.included_kinds();
         if included.is_empty() {
@@ -320,30 +331,22 @@ impl MemoryStore for PostgresStore {
     }
 
     async fn memories_as_of(&self, scope: Scope, params: AsOfParams) -> Result<Vec<Memory>, StoreError> {
-        scope.validate()?;
-
         let included = params.kinds.included_kinds();
         if included.is_empty() {
             return Ok(Vec::new());
         }
 
-        let mut where_clauses: Vec<String> = vec![
-            "m.agent_id = $1".into(),
-            "m.org_id = $2".into(),
-            "m.user_id = $3".into(),
-            "m.created_at <= $4".into(),
-            "latest_event.winner_pid IS NULL".into(),
-            // Retirement is current-state (no decided_at history), so it is
-            // applied uniformly even to this point-in-time read: a
-            // rejected/stale row is scrubbed from every view (epic 0011).
-            "m.retirement_reason IS NULL".into(),
-        ];
-        let mut values: Vec<SeaOrmValue> = vec![
-            SeaOrmValue::String(Some(scope.agent_id)),
-            SeaOrmValue::String(Some(scope.org_id)),
-            SeaOrmValue::String(Some(scope.user_id)),
-            SeaOrmValue::ChronoDateTimeWithTimeZone(Some(params.as_of)),
-        ];
+        let mut where_clauses: Vec<String> = Vec::new();
+        let mut values: Vec<SeaOrmValue> = Vec::new();
+        push_scope_filter(&scope, &mut where_clauses, &mut values);
+
+        values.push(SeaOrmValue::ChronoDateTimeWithTimeZone(Some(params.as_of)));
+        where_clauses.push(format!("m.created_at <= ${}", values.len()));
+        where_clauses.push("latest_event.winner_pid IS NULL".into());
+        // Retirement is current-state (no decided_at history), so it is
+        // applied uniformly even to this point-in-time read: a
+        // rejected/stale row is scrubbed from every view (epic 0011).
+        where_clauses.push("m.retirement_reason IS NULL".into());
 
         if !params.kinds.includes_all() {
             let placeholders: Vec<String> = included
@@ -435,11 +438,11 @@ impl MemoryStore for PostgresStore {
 
         let mut scopes = Vec::with_capacity(rows.len());
         for row in &rows {
-            scopes.push(Scope {
-                agent_id: row.try_get::<String>("", "agent_id")?,
-                org_id: row.try_get::<String>("", "org_id")?,
-                user_id: row.try_get::<String>("", "user_id")?,
-            });
+            scopes.push(Scope::from_storage(
+                row.try_get::<String>("", "agent_id")?,
+                row.try_get::<String>("", "org_id")?,
+                row.try_get::<String>("", "user_id")?,
+            ));
         }
         Ok(scopes)
     }
@@ -467,8 +470,6 @@ impl MemoryStore for PostgresStore {
     }
 
     async fn indexed_pids_in_scope(&self, scope: &Scope) -> Result<Vec<String>, StoreError> {
-        scope.validate()?;
-
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             r#"
@@ -477,9 +478,9 @@ impl MemoryStore for PostgresStore {
               AND qdrant_status = 'indexed'
             "#,
             [
-                SeaOrmValue::String(Some(scope.agent_id.clone())),
-                SeaOrmValue::String(Some(scope.org_id.clone())),
-                SeaOrmValue::String(Some(scope.user_id.clone())),
+                SeaOrmValue::String(Some(scope.agent_id_or_sentinel().to_string())),
+                SeaOrmValue::String(Some(scope.org_id_or_sentinel().to_string())),
+                SeaOrmValue::String(Some(scope.user_id().to_string())),
             ],
         );
 
@@ -709,15 +710,13 @@ impl PostgresStore {
     }
 
     async fn forget_scope(&self, scope: Scope) -> Result<Vec<String>, StoreError> {
-        scope.validate()?;
-
         let stmt = Statement::from_sql_and_values(
             sea_orm::DatabaseBackend::Postgres,
             "DELETE FROM memories WHERE agent_id = $1 AND org_id = $2 AND user_id = $3 RETURNING pid",
             [
-                SeaOrmValue::String(Some(scope.agent_id)),
-                SeaOrmValue::String(Some(scope.org_id)),
-                SeaOrmValue::String(Some(scope.user_id)),
+                SeaOrmValue::String(Some(scope.agent_id_or_sentinel().to_string())),
+                SeaOrmValue::String(Some(scope.org_id_or_sentinel().to_string())),
+                SeaOrmValue::String(Some(scope.user_id().to_string())),
             ],
         );
         let rows = self.db.query_all_raw(stmt).await?;
@@ -788,11 +787,7 @@ impl TryFrom<&sea_orm::QueryResult> for Memory {
 
         Ok(Memory {
             pid,
-            scope: Scope {
-                agent_id,
-                org_id,
-                user_id,
-            },
+            scope: Scope::from_storage(agent_id, org_id, user_id),
             content,
             metadata,
             kind,

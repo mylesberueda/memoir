@@ -67,7 +67,10 @@ impl CardinalityPolicy {
         S: Into<String>,
     {
         Self {
-            single_valued: relations.into_iter().map(|relation| relation.into().to_lowercase()).collect(),
+            single_valued: relations
+                .into_iter()
+                .map(|relation| relation.into().to_lowercase())
+                .collect(),
         }
     }
 
@@ -251,7 +254,10 @@ impl<C: EdgeCatalog> EdgeResolver for TemporalEdgeResolver<C> {
             });
         }
 
-        let current = self.catalog.current_edges(scope, &edge.subject_key, &edge.relation).await?;
+        let current = self
+            .catalog
+            .current_edges(scope, &edge.subject_key, &edge.relation)
+            .await?;
         let mut open = edge;
         let mut close = Vec::new();
         for existing in current {
@@ -275,11 +281,12 @@ mod tests {
     use super::*;
 
     fn scope() -> Scope {
-        Scope {
-            agent_id: "agent".to_string(),
-            org_id: "org".to_string(),
-            user_id: "user".to_string(),
-        }
+        Scope::builder()
+            .user_id("user")
+            .org("org")
+            .agent("agent")
+            .build()
+            .expect("test scope is valid")
     }
 
     fn at(day: u32) -> DateTime<FixedOffset> {
@@ -304,7 +311,9 @@ mod tests {
 
     impl InMemoryEdgeCatalog {
         fn with(edges: Vec<ExistingEdge>) -> Self {
-            Self { edges: Mutex::new(edges) }
+            Self {
+                edges: Mutex::new(edges),
+            }
         }
     }
 

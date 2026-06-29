@@ -176,11 +176,12 @@ mod tests {
         use chrono::Utc;
 
         let index = StubIndex::default();
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "o".to_string(),
-            user_id: "u".to_string(),
-        };
+        let scope = Scope::builder()
+            .user_id("u")
+            .org("o")
+            .agent("a")
+            .build()
+            .expect("stub scope is valid");
         let now: chrono::DateTime<chrono::FixedOffset> = Utc::now().into();
         let memory = Memory {
             pid: "pid1".to_string(),

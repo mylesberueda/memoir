@@ -1,38 +1,198 @@
 //! Memory domain types.
 
+use bon::bon;
 use chrono::{DateTime, FixedOffset};
 
-/// Tenant + agent + user partition for a memory.
+/// Reserved-value prefix memoir uses for internal scope sentinels.
 ///
-/// Memories written under one scope are never returned under another. All
-/// fields must be non-empty; callers that violate this get a runtime error
-/// from the storage layer.
+/// No consumer-supplied scope value may begin with this prefix; doing so would
+/// let a real org or agent collide with memoir's "unscoped" markers. The
+/// builder rejects any such value (see [`Scope::builder`]).
+pub(crate) const RESERVED_SCOPE_PREFIX: &str = "__MEMOIR_";
+
+/// Stored `org_id` for a memory written without an org (`org_id` unset).
+pub(crate) const NO_ORG_SENTINEL: &str = "__MEMOIR_NO_ORG__";
+
+/// Stored `agent_id` for a memory written without an agent (`agent_id` unset).
+pub(crate) const NO_AGENT_SENTINEL: &str = "__MEMOIR_NO_AGENT__";
+
+/// User, plus optional org and agent, that a memory belongs to.
+///
+/// `user_id` is the required floor — every read and write is confined to one
+/// user, so memories never cross users. `org_id` and `agent_id` are optional:
+/// `None` means the memory is *unscoped* on that dimension (a genuine address,
+/// e.g. a user-wide preference that belongs to no single project).
+///
+/// `None` is read and written **asymmetrically**, and this asymmetry is
+/// deliberate:
+///
+/// - On a **write**, an unset `org_id`/`agent_id` is a concrete unscoped
+///   address. The storage layer normalizes it to an internal sentinel so the
+///   underlying columns stay non-null.
+/// - On a **read**, an unset `org_id`/`agent_id` is *unconstrained*: that
+///   dimension is not filtered, so the read matches any value. Omitting a
+///   constraint widens; supplying one narrows. No field ever means "all".
+///
+/// A `Scope` is always valid by construction (see [`Scope::builder`]); the
+/// fields are private so an invalid scope cannot exist.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Scope {
-    pub agent_id: String,
-    pub org_id: String,
-    pub user_id: String,
+    agent_id: Option<String>,
+    org_id: Option<String>,
+    user_id: String,
 }
 
-/// Reasons a [`Scope`] fails validation.
+/// Reasons a [`Scope`] cannot be constructed.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ScopeError {
-    #[error("scope: agent_id, org_id, and user_id must all be non-empty")]
-    Empty,
+    /// `user_id` was empty. It is the required floor and must be non-empty.
+    #[error("scope: user_id must be non-empty")]
+    EmptyUserId,
+
+    /// An `org_id` or `agent_id` was supplied as the empty string. Use an unset
+    /// value to mean "unscoped"; an empty string is a bug, not an intent.
+    #[error("scope: {field} must be a non-empty value or unset, not an empty string")]
+    EmptyValue {
+        /// The offending field name (`org_id` or `agent_id`).
+        field: &'static str,
+    },
+
+    /// A supplied value used memoir's reserved sentinel prefix. Consumers may
+    /// never pass a value beginning with [`RESERVED_SCOPE_PREFIX`]; an unset
+    /// value is the only way to express "unscoped".
+    #[error("scope: {field} must not begin with the reserved prefix {RESERVED_SCOPE_PREFIX:?}")]
+    Reserved {
+        /// The offending field name (`org_id` or `agent_id`).
+        field: &'static str,
+    },
 }
 
+#[bon]
 impl Scope {
-    /// Returns `Ok(())` when every field is non-empty.
+    /// Builds a validated [`Scope`] from a required user and optional org/agent.
+    ///
+    /// Omit `org`/`agent` to write or read an *unscoped* memory on that
+    /// dimension. See the [`Scope`] type docs for the write-vs-read meaning of
+    /// an unset field.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use memoir_core::memory::Scope;
+    ///
+    /// let user_global = Scope::builder().user_id("user-42").build()?;
+    /// let scoped = Scope::builder()
+    ///     .user_id("user-42")
+    ///     .org("acme")
+    ///     .agent("support-bot")
+    ///     .build()?;
+    /// # Ok::<(), memoir_core::memory::ScopeError>(())
+    /// ```
     ///
     /// # Errors
     ///
-    /// Returns [`ScopeError::Empty`] when any of `agent_id`, `org_id`, or
-    /// `user_id` is the empty string.
-    pub fn validate(&self) -> Result<(), ScopeError> {
-        if self.agent_id.is_empty() || self.org_id.is_empty() || self.user_id.is_empty() {
-            return Err(ScopeError::Empty);
+    /// Returns [`ScopeError::EmptyUserId`] when `user_id` is empty,
+    /// [`ScopeError::EmptyValue`] when `org`/`agent` is supplied as an empty
+    /// string, and [`ScopeError::Reserved`] when `org`/`agent` begins with
+    /// memoir's reserved sentinel prefix.
+    #[builder(start_fn = builder, finish_fn = build)]
+    pub fn new(
+        #[builder(into)] user_id: String,
+        #[builder(into)] org: Option<String>,
+        #[builder(into)] agent: Option<String>,
+    ) -> Result<Self, ScopeError> {
+        if user_id.is_empty() {
+            return Err(ScopeError::EmptyUserId);
         }
-        Ok(())
+        Self::check_optional("org_id", org.as_deref())?;
+        Self::check_optional("agent_id", agent.as_deref())?;
+        Ok(Self {
+            agent_id: agent,
+            org_id: org,
+            user_id,
+        })
+    }
+}
+
+impl Scope {
+    /// The required user this scope is confined to.
+    pub fn user_id(&self) -> &str {
+        &self.user_id
+    }
+
+    /// The org, or `None` when the memory is unscoped on the org dimension.
+    pub fn org_id(&self) -> Option<&str> {
+        self.org_id.as_deref()
+    }
+
+    /// The agent, or `None` when the memory is unscoped on the agent dimension.
+    pub fn agent_id(&self) -> Option<&str> {
+        self.agent_id.as_deref()
+    }
+
+    /// Reconstructs a [`Scope`] from already-stored column values.
+    ///
+    /// The inverse of the `*_or_sentinel` write projection: a stored sentinel
+    /// becomes `None`, so the sentinel never leaks back to a consumer. Storage
+    /// values are trusted and may legitimately equal a sentinel, so this
+    /// bypasses the public builder's validation rather than rejecting them.
+    pub(crate) fn from_storage(
+        agent_id: impl Into<String>,
+        org_id: impl Into<String>,
+        user_id: impl Into<String>,
+    ) -> Self {
+        let unsentinel = |value: String, sentinel: &str| (value != sentinel).then_some(value);
+        Self {
+            agent_id: unsentinel(agent_id.into(), NO_AGENT_SENTINEL),
+            org_id: unsentinel(org_id.into(), NO_ORG_SENTINEL),
+            user_id: user_id.into(),
+        }
+    }
+
+    /// The org as a storage value: the real org, or the unscoped sentinel.
+    ///
+    /// This is the **write** projection — an unscoped org is materialized as
+    /// [`NO_ORG_SENTINEL`] so storage columns stay non-null. Never use this to
+    /// build a read filter; on a read an unset org means "any", not the
+    /// sentinel (see the [`Scope`] type docs).
+    pub(crate) fn org_id_or_sentinel(&self) -> &str {
+        self.org_id.as_deref().unwrap_or(NO_ORG_SENTINEL)
+    }
+
+    /// The agent as a storage value: the real agent, or the unscoped sentinel.
+    ///
+    /// The **write** projection, mirroring [`Self::org_id_or_sentinel`]. Not for
+    /// read filters.
+    pub(crate) fn agent_id_or_sentinel(&self) -> &str {
+        self.agent_id.as_deref().unwrap_or(NO_AGENT_SENTINEL)
+    }
+
+    /// Whether `self` (a stored scope) is selected by `filter` (a read scope).
+    ///
+    /// `user_id` must match exactly (the floor). An unset `org_id`/`agent_id` on
+    /// the filter is *unconstrained* — it matches any stored value — while a set
+    /// one must match exactly. This is the read-widen rule: omitting a
+    /// constraint widens, supplying one narrows. Equality (`==`) is the wrong
+    /// test for reads, as it would force the filter's unset dimensions to mean
+    /// "unscoped only" instead of "any".
+    #[cfg(test)]
+    pub(crate) fn matches_read_filter(&self, filter: &Scope) -> bool {
+        self.user_id == filter.user_id
+            && filter
+                .agent_id
+                .as_ref()
+                .is_none_or(|a| Some(a) == self.agent_id.as_ref())
+            && filter.org_id.as_ref().is_none_or(|o| Some(o) == self.org_id.as_ref())
+    }
+
+    /// Rejects an optional value that is empty or uses the reserved prefix.
+    fn check_optional(field: &'static str, value: Option<&str>) -> Result<(), ScopeError> {
+        match value {
+            None => Ok(()),
+            Some("") => Err(ScopeError::EmptyValue { field }),
+            Some(v) if v.starts_with(RESERVED_SCOPE_PREFIX) => Err(ScopeError::Reserved { field }),
+            Some(_) => Ok(()),
+        }
     }
 }
 
@@ -481,11 +641,12 @@ mod tests {
         let now: DateTime<FixedOffset> = Utc::now().into();
         Memory {
             pid: "test".into(),
-            scope: Scope {
-                agent_id: "a".into(),
-                org_id: "o".into(),
-                user_id: "u".into(),
-            },
+            scope: Scope::builder()
+                .user_id("u")
+                .org("o")
+                .agent("a")
+                .build()
+                .expect("fixture scope is valid"),
             content: content.into(),
             metadata: serde_json::json!({}),
             kind: MemoryKind::Episodic,
@@ -523,7 +684,10 @@ mod tests {
     #[test]
     fn should_round_trip_retirement_reason_through_str() {
         use std::str::FromStr as _;
-        assert_eq!(RetirementReason::from_str("rejected").unwrap(), RetirementReason::Rejected);
+        assert_eq!(
+            RetirementReason::from_str("rejected").unwrap(),
+            RetirementReason::Rejected
+        );
         assert_eq!(RetirementReason::from_str("stale").unwrap(), RetirementReason::Stale);
         assert!(RetirementReason::from_str("superseded").is_err());
         assert!(RetirementReason::from_str("nonsense").is_err());
@@ -635,42 +799,49 @@ mod tests {
     }
 
     #[test]
-    fn should_reject_scope_with_empty_agent_id() {
-        let scope = Scope {
-            agent_id: "".to_string(),
-            org_id: "o".to_string(),
-            user_id: "u".to_string(),
-        };
-        assert_eq!(scope.validate(), Err(ScopeError::Empty));
+    fn should_accept_when_org_and_agent_are_none() {
+        let scope = Scope::builder().user_id("u").build();
+        let scope = scope.expect("user-only scope is valid");
+        assert_eq!(scope.user_id(), "u");
+        assert_eq!(scope.org_id(), None);
+        assert_eq!(scope.agent_id(), None);
     }
 
     #[test]
-    fn should_reject_scope_with_empty_org_id() {
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "".to_string(),
-            user_id: "u".to_string(),
-        };
-        assert_eq!(scope.validate(), Err(ScopeError::Empty));
+    fn should_accept_when_org_and_agent_are_supplied() {
+        let scope = Scope::builder().user_id("u").org("o").agent("a").build();
+        let scope = scope.expect("fully scoped scope is valid");
+        assert_eq!(scope.org_id(), Some("o"));
+        assert_eq!(scope.agent_id(), Some("a"));
     }
 
     #[test]
-    fn should_reject_scope_with_empty_user_id() {
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "o".to_string(),
-            user_id: "".to_string(),
-        };
-        assert_eq!(scope.validate(), Err(ScopeError::Empty));
+    fn should_reject_when_user_id_empty() {
+        let result = Scope::builder().user_id("").build();
+        assert_eq!(result, Err(ScopeError::EmptyUserId));
     }
 
     #[test]
-    fn should_accept_scope_with_all_non_empty_fields() {
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "o".to_string(),
-            user_id: "u".to_string(),
-        };
-        assert!(scope.validate().is_ok());
+    fn should_reject_when_org_id_is_empty_string() {
+        let result = Scope::builder().user_id("u").org("").build();
+        assert_eq!(result, Err(ScopeError::EmptyValue { field: "org_id" }));
+    }
+
+    #[test]
+    fn should_reject_when_agent_id_is_empty_string() {
+        let result = Scope::builder().user_id("u").agent("").build();
+        assert_eq!(result, Err(ScopeError::EmptyValue { field: "agent_id" }));
+    }
+
+    #[test]
+    fn should_reject_when_org_id_is_reserved_sentinel() {
+        let result = Scope::builder().user_id("u").org(NO_ORG_SENTINEL).build();
+        assert_eq!(result, Err(ScopeError::Reserved { field: "org_id" }));
+    }
+
+    #[test]
+    fn should_reject_when_agent_id_uses_reserved_prefix_with_unknown_suffix() {
+        let result = Scope::builder().user_id("u").agent("__MEMOIR_FUTURE__").build();
+        assert_eq!(result, Err(ScopeError::Reserved { field: "agent_id" }));
     }
 }
