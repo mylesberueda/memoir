@@ -563,15 +563,19 @@ impl ApiKeyStatus {
 }
 // ─── Scope ──────────────────────────────────────────────────────────────────
 
-/// Scope uniquely identifies a memory partition. Memories written under one
-/// scope are never returned under another. The triple matches the manifesto's
-/// SDK pseudocode and the Tier-1 integration shape.
+/// Scope identifies the memories an operation applies to. user_id is required.
+/// org_id and agent_id are optional, and an absent field means different things
+/// by direction: on a WRITE, an absent org/agent means the memory is unscoped on
+/// that dimension (a real address); on a READ, an absent org/agent is
+/// unconstrained and matches any value. Omitting a constraint on a read widens;
+/// supplying one narrows. An empty string is not a valid value — omit the field
+/// to mean "unscoped"/"any".
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Scope {
-    #[prost(string, tag="1")]
-    pub agent_id: ::prost::alloc::string::String,
-    #[prost(string, tag="2")]
-    pub org_id: ::prost::alloc::string::String,
+    #[prost(string, optional, tag="1")]
+    pub agent_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag="2")]
+    pub org_id: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, tag="3")]
     pub user_id: ::prost::alloc::string::String,
 }
@@ -843,6 +847,9 @@ pub struct SearchResponse {
     /// Prompt-ready text: the resolved preamble, then one `- content` bullet
     /// per hit, rendered by memoir-core's `Memories`. Always populated; the
     /// preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`.
+    /// With zero hits this is the preamble alone (no bullets) — gate on the
+    /// hits list before injecting, or you tell the model it has memories it
+    /// doesn't.
     #[prost(string, tag="3")]
     pub rendered: ::prost::alloc::string::String,
 }
@@ -966,7 +973,8 @@ pub struct TimelineResponse {
     /// Prompt-ready text: the resolved preamble, then one `- content` bullet
     /// per memory in the requested order, rendered by memoir-core's `Memories`.
     /// Always populated; the preamble is `template` when set, else
-    /// `DEFAULT_SYSTEM_PROMPT`.
+    /// `DEFAULT_SYSTEM_PROMPT`. With no memories this is the preamble alone (no
+    /// bullets) — gate on the list before injecting.
     #[prost(string, tag="2")]
     pub rendered: ::prost::alloc::string::String,
 }
@@ -1002,7 +1010,9 @@ pub struct RecallAsOfResponse {
     pub memories: ::prost::alloc::vec::Vec<Memory>,
     /// Prompt-ready text: the resolved preamble, then one `- content` bullet
     /// per memory, rendered by memoir-core's `Memories`. Always populated; the
-    /// preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`.
+    /// preamble is `template` when set, else `DEFAULT_SYSTEM_PROMPT`. With no
+    /// memories this is the preamble alone (no bullets) — gate on the list
+    /// before injecting.
     #[prost(string, tag="2")]
     pub rendered: ::prost::alloc::string::String,
 }
@@ -1194,7 +1204,8 @@ pub struct QueryResponse {
     /// `MemoryContext`. Query is the one read whose bullets carry the date
     /// bracket — that mirrors the library, where only `query` renders dates.
     /// Always populated; the preamble is `template` when set, else
-    /// `DEFAULT_SYSTEM_PROMPT`.
+    /// `DEFAULT_SYSTEM_PROMPT`. With zero hits this is the preamble alone (no
+    /// bullets) — gate on the hits list before injecting.
     #[prost(string, tag="4")]
     pub rendered: ::prost::alloc::string::String,
 }

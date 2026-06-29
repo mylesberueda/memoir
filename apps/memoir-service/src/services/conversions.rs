@@ -57,38 +57,37 @@ use tonic::Status;
 
 use crate::services::wire::WireMemory;
 
-/// Converts a wire `Scope` into the library shape, rejecting empty fields.
+/// Converts a wire `Scope` into the library shape via its checked builder.
 ///
-/// Empty `agent_id` / `org_id` / `user_id` is a misuse from a misconfigured
-/// caller — proto3 fills unset string fields with `""` on the wire, so a
-/// client that "forgot to set" a scope field arrives here with empties.
-/// We reject with `InvalidArgument` rather than letting memoir-core's
-/// storage layer silently treat empty as a literal scope value.
+/// `user_id` is required; absent `org_id` / `agent_id` (proto3 presence) map to
+/// an unscoped dimension. The builder enforces memoir's scope invariants — a
+/// non-empty `user_id`, no empty-string values, and no reserved-sentinel values
+/// — so a misconfigured caller is rejected here rather than reaching storage.
 ///
 /// # Errors
 ///
-/// Returns [`Status::invalid_argument`] when the scope is unset or any
-/// field is empty.
+/// Returns [`Status::invalid_argument`] when the scope message is unset or its
+/// fields violate a scope invariant (empty `user_id`, an empty-string or
+/// reserved value for `org_id` / `agent_id`).
 pub(crate) fn scope_from_proto(scope: Option<ProtoScope>) -> Result<LibScope, Status> {
     let scope = scope.ok_or_else(|| Status::invalid_argument("scope: required"))?;
-    if scope.agent_id.is_empty() || scope.org_id.is_empty() || scope.user_id.is_empty() {
-        return Err(Status::invalid_argument(
-            "scope: agent_id, org_id, and user_id must all be non-empty",
-        ));
-    }
-    Ok(LibScope {
-        agent_id: scope.agent_id,
-        org_id: scope.org_id,
-        user_id: scope.user_id,
-    })
+    LibScope::builder()
+        .user_id(scope.user_id)
+        .maybe_org(scope.org_id)
+        .maybe_agent(scope.agent_id)
+        .build()
+        .map_err(|err| Status::invalid_argument(err.to_string()))
 }
 
 /// Converts a library `Scope` back to the wire shape. Infallible.
+///
+/// An unscoped dimension maps to an absent proto field, so memoir's internal
+/// unscoped sentinel never reaches a consumer.
 pub(crate) fn scope_to_proto(scope: LibScope) -> ProtoScope {
     ProtoScope {
-        agent_id: scope.agent_id,
-        org_id: scope.org_id,
-        user_id: scope.user_id,
+        agent_id: scope.agent_id().map(str::to_string),
+        org_id: scope.org_id().map(str::to_string),
+        user_id: scope.user_id().to_string(),
     }
 }
 

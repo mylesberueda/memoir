@@ -106,19 +106,12 @@ async fn chat(
     if req.message.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "message: required").into_response());
     }
-    if req.scope.agent_id.is_empty() || req.scope.org_id.is_empty() || req.scope.user_id.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "scope: agent_id, org_id, and user_id must all be non-empty",
-        )
-            .into_response());
-    }
-
-    let scope = Scope {
-        agent_id: req.scope.agent_id,
-        org_id: req.scope.org_id,
-        user_id: req.scope.user_id,
-    };
+    let scope = Scope::builder()
+        .user_id(req.scope.user_id)
+        .maybe_org((!req.scope.org_id.is_empty()).then_some(req.scope.org_id))
+        .maybe_agent((!req.scope.agent_id.is_empty()).then_some(req.scope.agent_id))
+        .build()
+        .map_err(|err| (StatusCode::BAD_REQUEST, err.to_string()).into_response())?;
     let history: Vec<ChatTurn> = req
         .history
         .into_iter()
@@ -136,9 +129,9 @@ async fn chat(
         name: "memoir.api.playground.chat.invoked",
         tracing::Level::INFO,
         caller.pid = %caller_pid,
-        scope.agent_id = %scope.agent_id,
-        scope.org_id = %scope.org_id,
-        scope.user_id = %scope.user_id,
+        scope.agent_id = ?scope.agent_id(),
+        scope.org_id = ?scope.org_id(),
+        scope.user_id = %scope.user_id(),
         message.len = req.message.len(),
         history.turns = history.len(),
         "playground chat invoked",

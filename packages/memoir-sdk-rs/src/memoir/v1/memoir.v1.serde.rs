@@ -9965,21 +9965,21 @@ impl serde::Serialize for Scope {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.agent_id.is_empty() {
+        if self.agent_id.is_some() {
             len += 1;
         }
-        if !self.org_id.is_empty() {
+        if self.org_id.is_some() {
             len += 1;
         }
         if !self.user_id.is_empty() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("memoir.v1.Scope", len)?;
-        if !self.agent_id.is_empty() {
-            struct_ser.serialize_field("agentId", &self.agent_id)?;
+        if let Some(v) = self.agent_id.as_ref() {
+            struct_ser.serialize_field("agentId", v)?;
         }
-        if !self.org_id.is_empty() {
-            struct_ser.serialize_field("orgId", &self.org_id)?;
+        if let Some(v) = self.org_id.as_ref() {
+            struct_ser.serialize_field("orgId", v)?;
         }
         if !self.user_id.is_empty() {
             struct_ser.serialize_field("userId", &self.user_id)?;
@@ -10059,13 +10059,13 @@ impl<'de> serde::Deserialize<'de> for Scope {
                             if agent_id__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("agentId"));
                             }
-                            agent_id__ = Some(map_.next_value()?);
+                            agent_id__ = map_.next_value()?;
                         }
                         GeneratedField::OrgId => {
                             if org_id__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("orgId"));
                             }
-                            org_id__ = Some(map_.next_value()?);
+                            org_id__ = map_.next_value()?;
                         }
                         GeneratedField::UserId => {
                             if user_id__.is_some() {
@@ -10076,8 +10076,8 @@ impl<'de> serde::Deserialize<'de> for Scope {
                     }
                 }
                 Ok(Scope {
-                    agent_id: agent_id__.unwrap_or_default(),
-                    org_id: org_id__.unwrap_or_default(),
+                    agent_id: agent_id__,
+                    org_id: org_id__,
                     user_id: user_id__.unwrap_or_default(),
                 })
             }
