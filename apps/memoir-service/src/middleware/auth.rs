@@ -66,6 +66,15 @@ pub(crate) enum Principal {
     ApiKey { pid: String },
 }
 
+impl Principal {
+    pub(crate) fn pid(&self) -> &str {
+        match self {
+            Self::User { pid } => pid,
+            Self::ApiKey { pid } => pid,
+        }
+    }
+}
+
 /// Authenticated caller of the current RPC.
 ///
 /// Constructed by [`Authenticator::authenticate`]; inspected by handlers

@@ -48,7 +48,7 @@ use memoir_sdk::memoir::v1::{
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
-use crate::middleware::auth::{Authenticator, Principal};
+use crate::middleware::auth::Authenticator;
 use crate::services::conversions::{
     WireExtractionStat, WireFailedJob, WireInspectGraphResponse, WireReconcileResponse, WireRetryArgs, WireStatsFilter,
     u64_count_to_proto,
@@ -89,14 +89,6 @@ impl Admin {
     }
 }
 
-/// Returns the pid of the principal as a borrowed string for tracing.
-fn principal_pid(principal: &Principal) -> &str {
-    match principal {
-        Principal::User { pid } => pid,
-        Principal::ApiKey { pid } => pid,
-    }
-}
-
 #[tonic::async_trait]
 impl AdminService for Admin {
     /// Lists failed jobs newest-first, capped at `limit`.
@@ -110,7 +102,7 @@ impl AdminService for Admin {
     ) -> Result<Response<ListFailedJobsResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
-        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let admin_pid = caller.principal.pid().to_owned();
         let ListFailedJobsRequest { limit } = request.into_inner();
 
         let resolved_limit = resolve_failed_jobs_limit(limit);
@@ -142,7 +134,7 @@ impl AdminService for Admin {
     ) -> Result<Response<PendingJobsCountResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
-        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let admin_pid = caller.principal.pid().to_owned();
 
         tracing::event!(
             name: "memoir.service.admin.pending_jobs_count.invoked",
@@ -165,7 +157,7 @@ impl AdminService for Admin {
     async fn retry_job(&self, request: Request<RetryJobRequest>) -> Result<Response<RetryJobResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
-        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let admin_pid = caller.principal.pid().to_owned();
         let RetryJobRequest { id } = request.into_inner();
 
         tracing::event!(
@@ -193,7 +185,7 @@ impl AdminService for Admin {
     ) -> Result<Response<DeleteFailedJobResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
-        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let admin_pid = caller.principal.pid().to_owned();
         let DeleteFailedJobRequest { id } = request.into_inner();
 
         tracing::event!(
@@ -224,7 +216,7 @@ impl AdminService for Admin {
     ) -> Result<Response<RetryFailedJobsResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
-        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let admin_pid = caller.principal.pid().to_owned();
         let WireRetryArgs { of_kind, dry_run } = WireRetryArgs::try_from(request.into_inner())?;
 
         tracing::event!(
@@ -261,7 +253,7 @@ impl AdminService for Admin {
     async fn unsupersede(&self, request: Request<UnsupersedeRequest>) -> Result<Response<UnsupersedeResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
-        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let admin_pid = caller.principal.pid().to_owned();
         let UnsupersedeRequest { pid } = request.into_inner();
 
         if pid.is_empty() {
@@ -295,7 +287,7 @@ impl AdminService for Admin {
     async fn reconcile(&self, request: Request<ReconcileRequest>) -> Result<Response<ReconcileResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
-        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let admin_pid = caller.principal.pid().to_owned();
         let ReconcileRequest {
             only_retry_failed,
             only_clean_orphans,
@@ -339,7 +331,7 @@ impl AdminService for Admin {
     ) -> Result<Response<ExtractionStatsResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
-        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let admin_pid = caller.principal.pid().to_owned();
         let filter = WireStatsFilter::from(request.into_inner()).0;
 
         tracing::event!(
@@ -385,7 +377,7 @@ impl AdminService for Admin {
     ) -> Result<Response<InspectGraphResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
         caller.require_admin()?;
-        let admin_pid = principal_pid(&caller.principal).to_owned();
+        let admin_pid = caller.principal.pid().to_owned();
         let InspectGraphRequest {
             agent_id,
             org_id,
