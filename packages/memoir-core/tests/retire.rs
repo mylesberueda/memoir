@@ -119,9 +119,9 @@ async fn should_compute_extraction_accuracy_from_rejected_over_total() -> anyhow
     // counts rejected vs total: 1 of 2 → 50% accuracy for this model.
     let stats = client
         .extraction_stats()
-        .org(&scope.org_id)
-        .user(&scope.user_id)
-        .agent(&scope.agent_id)
+        .org(scope.org_id().expect("fresh scope has an org"))
+        .user(scope.user_id())
+        .agent(scope.agent_id().expect("fresh scope has an agent"))
         .await?;
 
     assert_eq!(stats.len(), 1, "one (provider, model) pair in this scope; got {stats:?}");

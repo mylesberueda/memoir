@@ -7,8 +7,8 @@
 //! rig. The assistant turn is NOT written back to memoir in this release —
 //! streaming-and-buffering for the post-stream write is deferred.
 //!
-//! Auth runs as middleware via [`Authenticator::authenticate_credentials`],
-//! sharing precedence and verification logic with the gRPC handlers.
+//! Auth runs as middleware via [`Authenticator::authenticate`], sharing
+//! precedence and verification logic with the gRPC handlers.
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -43,14 +43,7 @@ pub(crate) fn router(ctx: Arc<AppContext>) -> Router {
 }
 
 async fn auth_layer(State(ctx): State<Arc<AppContext>>, mut request: Request, next: Next) -> Response {
-    let headers = request.headers();
-    let api_key = headers.get("x-api-key").and_then(|v| v.to_str().ok());
-    let bearer = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|raw| raw.strip_prefix("Bearer "));
-
-    match ctx.auth.authenticate_credentials(api_key, bearer).await {
+    match ctx.auth.authenticate(request.headers()).await {
         Ok(identity) => {
             request.extensions_mut().insert(identity);
             next.run(request).await
@@ -106,19 +99,12 @@ async fn chat(
     if req.message.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "message: required").into_response());
     }
-    if req.scope.agent_id.is_empty() || req.scope.org_id.is_empty() || req.scope.user_id.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "scope: agent_id, org_id, and user_id must all be non-empty",
-        )
-            .into_response());
-    }
-
-    let scope = Scope {
-        agent_id: req.scope.agent_id,
-        org_id: req.scope.org_id,
-        user_id: req.scope.user_id,
-    };
+    let scope = Scope::builder()
+        .user_id(req.scope.user_id)
+        .maybe_org((!req.scope.org_id.is_empty()).then_some(req.scope.org_id))
+        .maybe_agent((!req.scope.agent_id.is_empty()).then_some(req.scope.agent_id))
+        .build()
+        .map_err(|err| (StatusCode::BAD_REQUEST, err.to_string()).into_response())?;
     let history: Vec<ChatTurn> = req
         .history
         .into_iter()
@@ -136,9 +122,9 @@ async fn chat(
         name: "memoir.api.playground.chat.invoked",
         tracing::Level::INFO,
         caller.pid = %caller_pid,
-        scope.agent_id = %scope.agent_id,
-        scope.org_id = %scope.org_id,
-        scope.user_id = %scope.user_id,
+        scope.agent_id = ?scope.agent_id(),
+        scope.org_id = ?scope.org_id(),
+        scope.user_id = %scope.user_id(),
         message.len = req.message.len(),
         history.turns = history.len(),
         "playground chat invoked",

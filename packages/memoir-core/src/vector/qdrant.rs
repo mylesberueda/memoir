@@ -163,9 +163,9 @@ impl VectorIndex for QdrantIndex {
         // template convention (rig-service `models/messages.rs:139`).
         let mut payload: HashMap<String, Value> = HashMap::new();
         payload.insert(PID_PAYLOAD_KEY.to_string(), Value::from(memory.pid.clone()));
-        payload.insert("agent_id".to_string(), Value::from(memory.scope.agent_id.clone()));
-        payload.insert("org_id".to_string(), Value::from(memory.scope.org_id.clone()));
-        payload.insert("user_id".to_string(), Value::from(memory.scope.user_id.clone()));
+        payload.insert("agent_id".to_string(), Value::from(memory.scope.agent_id_or_sentinel()));
+        payload.insert("org_id".to_string(), Value::from(memory.scope.org_id_or_sentinel()));
+        payload.insert("user_id".to_string(), Value::from(memory.scope.user_id()));
         payload.insert("kind".to_string(), Value::from(memory.kind.to_string()));
         payload.insert(
             CREATED_AT_PAYLOAD_KEY.to_string(),
@@ -231,16 +231,13 @@ impl VectorIndex for QdrantIndex {
             return Ok(Vec::new());
         }
 
-        // Scope conditions go in `must` first so an `extra_filter.must` cannot
-        // accidentally widen scope: a caller-supplied `must` adds to AND, not
-        // replaces. A caller-supplied `must_not` on `agent_id` (or any scope
-        // field) would only narrow further, not widen — Qdrant evaluates
-        // `must AND NOT must_not`.
-        let mut must = vec![
-            Condition::matches("agent_id", scope.agent_id),
-            Condition::matches("org_id", scope.org_id),
-            Condition::matches("user_id", scope.user_id),
-        ];
+        let mut must = vec![Condition::matches("user_id", scope.user_id().to_string())];
+        if let Some(agent_id) = scope.agent_id() {
+            must.push(Condition::matches("agent_id", agent_id.to_string()));
+        }
+        if let Some(org_id) = scope.org_id() {
+            must.push(Condition::matches("org_id", org_id.to_string()));
+        }
         if !kinds.includes_all() {
             let names: Vec<String> = kinds.included_kinds().into_iter().map(|k| k.to_string()).collect();
             must.push(Condition::matches("kind", names));
@@ -305,9 +302,9 @@ impl VectorIndex for QdrantIndex {
 
     async fn list_pids_in_scope(&self, scope: Scope, page_size: usize) -> Result<Vec<String>, VectorError> {
         let filter = Filter::must(vec![
-            Condition::matches("agent_id", scope.agent_id),
-            Condition::matches("org_id", scope.org_id),
-            Condition::matches("user_id", scope.user_id),
+            Condition::matches("agent_id", scope.agent_id_or_sentinel().to_string()),
+            Condition::matches("org_id", scope.org_id_or_sentinel().to_string()),
+            Condition::matches("user_id", scope.user_id().to_string()),
         ]);
 
         let mut pids = Vec::new();

@@ -65,9 +65,9 @@ pub(super) async fn forget_scope<G: GraphStore + ?Sized>(store: &G, scope: &Scop
 /// Builds the scope parameter map shared by every forget statement.
 fn scope_params(scope: &Scope) -> HashMap<String, GraphParam> {
     HashMap::from([
-        ("agent_id".to_string(), scope.agent_id.clone().into()),
-        ("org_id".to_string(), scope.org_id.clone().into()),
-        ("user_id".to_string(), scope.user_id.clone().into()),
+        ("agent_id".to_string(), scope.agent_id_or_sentinel().into()),
+        ("org_id".to_string(), scope.org_id_or_sentinel().into()),
+        ("user_id".to_string(), scope.user_id().into()),
     ])
 }
 
@@ -79,11 +79,12 @@ mod tests {
     use crate::graph::{GraphRows, GraphStore};
 
     fn scope() -> Scope {
-        Scope {
-            agent_id: "agent".to_string(),
-            org_id: "org".to_string(),
-            user_id: "user".to_string(),
-        }
+        Scope::builder()
+            .user_id("user")
+            .org("org")
+            .agent("agent")
+            .build()
+            .expect("test scope is valid")
     }
 
     /// Records every (cypher, params) call so tests assert what forget issues.

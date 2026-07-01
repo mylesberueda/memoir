@@ -18,6 +18,7 @@
 //! `RefreshToken`) simply do not call this.
 
 use common_rs::crypto::hashing::{parse_api_key, verify_password};
+use http::HeaderMap;
 use memoir_sdk::memoir::v1::ApiKeyRole;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use tonic::{Request, Status};
@@ -53,6 +54,73 @@ const ROLE_ADMIN: &str = "admin";
 /// String value persisted in `api_keys.role` for integration keys.
 const ROLE_INTEGRATION: &str = "integration";
 
+/// A transport that carries authentication headers.
+///
+/// tonic's `Request<T>` (gRPC metadata) and axum's request (raw headers)
+/// both surface an [`HeaderMap`]; this trait lets [`Authenticator`] read
+/// credentials from either without knowing which transport it holds.
+pub(crate) trait CredentialSource {
+    /// Returns the request's headers.
+    fn headers(&self) -> &HeaderMap;
+}
+
+impl<T> CredentialSource for Request<T> {
+    fn headers(&self) -> &HeaderMap {
+        self.metadata().as_ref()
+    }
+}
+
+impl CredentialSource for HeaderMap {
+    fn headers(&self) -> &HeaderMap {
+        self
+    }
+}
+
+/// The single credential a request authenticates with.
+///
+/// A request may carry both an `x-api-key` and an `authorization: Bearer`
+/// header. Precedence — API key wins — is resolved in [`Self::extract`], so
+/// verification sees exactly one credential and never re-decides.
+#[derive(Debug)]
+enum Credential<'a> {
+    ApiKey(&'a str),
+    Bearer(&'a str),
+}
+
+impl<'a> Credential<'a> {
+    /// Reads the winning credential from a request's headers.
+    ///
+    /// `x-api-key` takes precedence over `authorization`: explicit
+    /// service-to-service credentials beat fallthrough user sessions.
+    ///
+    /// # Errors
+    ///
+    /// [`Status::unauthenticated`] when a header is present but its value is
+    /// non-ASCII, or when `authorization` does not use the `Bearer` scheme.
+    fn extract(source: &'a impl CredentialSource) -> Result<Option<Self>, Status> {
+        let headers = source.headers();
+
+        if let Some(value) = headers.get(API_KEY_HEADER) {
+            let raw = value
+                .to_str()
+                .map_err(|_| Status::unauthenticated("invalid x-api-key metadata"))?;
+            return Ok(Some(Self::ApiKey(raw)));
+        }
+
+        if let Some(value) = headers.get(AUTH_HEADER) {
+            let raw = value
+                .to_str()
+                .map_err(|_| Status::unauthenticated("invalid authorization metadata"))?;
+            let token = raw
+                .strip_prefix(BEARER_PREFIX)
+                .ok_or_else(|| Status::unauthenticated("authorization must use Bearer scheme"))?;
+            return Ok(Some(Self::Bearer(token)));
+        }
+
+        Ok(None)
+    }
+}
+
 /// Identifies which credential type authenticated the request.
 ///
 /// Carries the pid of the principal so handlers can audit "user X did this"
@@ -64,6 +132,15 @@ pub(crate) enum Principal {
 
     /// A service-to-service call, authenticated via an API key.
     ApiKey { pid: String },
+}
+
+impl Principal {
+    pub(crate) fn pid(&self) -> &str {
+        match self {
+            Self::User { pid } => pid,
+            Self::ApiKey { pid } => pid,
+        }
+    }
 }
 
 /// Authenticated caller of the current RPC.
@@ -134,33 +211,12 @@ impl Authenticator {
     /// - [`Status::internal`] when a DB error prevents an API-key lookup.
     ///   The underlying error is logged at error level; the client sees
     ///   only a generic message.
-    pub(crate) async fn authenticate<T>(&self, request: &Request<T>) -> Result<CallerIdentity, Status> {
-        self.authenticate_credentials(extract_api_key(request)?, extract_jwt(request)?)
-            .await
-    }
-
-    /// Verifies pre-extracted credential strings.
-    ///
-    /// Transport-independent shared core of [`Self::authenticate`]. The
-    /// tonic path extracts from `Request<T>` metadata; an axum middleware
-    /// extracts from `http::HeaderMap`. Both arrive here with the same
-    /// precedence: API key wins when both are present.
-    ///
-    /// # Errors
-    ///
-    /// Same as [`Self::authenticate`].
-    pub(crate) async fn authenticate_credentials(
-        &self,
-        api_key: Option<&str>,
-        bearer: Option<&str>,
-    ) -> Result<CallerIdentity, Status> {
-        if let Some(api_key) = api_key {
-            return self.verify_api_key(api_key).await;
+    pub(crate) async fn authenticate(&self, source: &impl CredentialSource) -> Result<CallerIdentity, Status> {
+        match Credential::extract(source)? {
+            Some(Credential::ApiKey(key)) => self.verify_api_key(key).await,
+            Some(Credential::Bearer(jwt)) => self.verify_jwt(jwt).await,
+            None => Err(Status::unauthenticated("missing credentials")),
         }
-        if let Some(jwt) = bearer {
-            return self.verify_jwt(jwt).await;
-        }
-        Err(Status::unauthenticated("missing credentials"))
     }
 
     async fn verify_api_key(&self, token: &str) -> Result<CallerIdentity, Status> {
@@ -235,25 +291,64 @@ impl Authenticator {
     }
 }
 
-fn extract_api_key<T>(request: &Request<T>) -> Result<Option<&str>, Status> {
-    let Some(value) = request.metadata().get(API_KEY_HEADER) else {
-        return Ok(None);
-    };
-    let raw = value
-        .to_str()
-        .map_err(|_| Status::unauthenticated("invalid x-api-key metadata"))?;
-    Ok(Some(raw))
-}
+#[cfg(test)]
+mod tests {
+    use http::{HeaderMap, HeaderName, HeaderValue};
 
-fn extract_jwt<T>(request: &Request<T>) -> Result<Option<&str>, Status> {
-    let Some(value) = request.metadata().get(AUTH_HEADER) else {
-        return Ok(None);
-    };
-    let raw = value
-        .to_str()
-        .map_err(|_| Status::unauthenticated("invalid authorization metadata"))?;
-    let token = raw
-        .strip_prefix(BEARER_PREFIX)
-        .ok_or_else(|| Status::unauthenticated("authorization must use Bearer scheme"))?;
-    Ok(Some(token))
+    use super::*;
+
+    fn headers(pairs: &[(&str, &str)]) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (key, value) in pairs {
+            map.insert(
+                HeaderName::from_bytes(key.as_bytes()).expect("valid header name"),
+                HeaderValue::from_str(value).expect("valid header value"),
+            );
+        }
+        map
+    }
+
+    #[test]
+    fn should_prefer_api_key_when_both_headers_present() {
+        let headers = headers(&[(API_KEY_HEADER, "mk.abc.secret"), (AUTH_HEADER, "Bearer jwt.token")]);
+        assert!(matches!(
+            Credential::extract(&headers),
+            Ok(Some(Credential::ApiKey("mk.abc.secret")))
+        ));
+    }
+
+    #[test]
+    fn should_prefer_api_key_when_authorization_is_malformed() {
+        // A valid api-key short-circuits before the authorization header is
+        // parsed, so a malformed bearer does not poison a request that also
+        // carries a valid api-key. Webapps vary here (accept either, or reject
+        // if either is malformed); this pins our choice: api-key wins outright.
+        let mut headers = headers(&[(API_KEY_HEADER, "mk.abc.secret")]);
+        headers.insert(AUTH_HEADER, HeaderValue::from_bytes(b"\xff\xfe").expect("bytes"));
+        assert!(matches!(
+            Credential::extract(&headers),
+            Ok(Some(Credential::ApiKey("mk.abc.secret")))
+        ));
+    }
+
+    #[test]
+    fn should_return_none_when_no_credential_header() {
+        assert!(matches!(Credential::extract(&HeaderMap::new()), Ok(None)));
+    }
+
+    #[test]
+    fn should_reject_when_authorization_is_not_bearer_scheme() {
+        let headers = headers(&[(AUTH_HEADER, "Basic dXNlcjpwYXNz")]);
+        let error = Credential::extract(&headers).expect_err("non-Bearer scheme is rejected");
+        assert_eq!(error.code(), tonic::Code::Unauthenticated);
+    }
+
+    #[test]
+    fn should_extract_bearer_when_only_authorization_present() {
+        let headers = headers(&[(AUTH_HEADER, "Bearer jwt.token")]);
+        assert!(matches!(
+            Credential::extract(&headers),
+            Ok(Some(Credential::Bearer("jwt.token")))
+        ));
+    }
 }

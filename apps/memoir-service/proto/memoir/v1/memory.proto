@@ -73,12 +73,16 @@ service MemoryService {
 
 // ─── Scope ──────────────────────────────────────────────────────────────────
 
-// Scope uniquely identifies a memory partition. Memories written under one
-// scope are never returned under another. The triple matches the manifesto's
-// SDK pseudocode and the Tier-1 integration shape.
+// Scope identifies the memories an operation applies to. user_id is required.
+// org_id and agent_id are optional, and an absent field means different things
+// by direction: on a WRITE, an absent org/agent means the memory is unscoped on
+// that dimension (a real address); on a READ, an absent org/agent is
+// unconstrained and matches any value. Omitting a constraint on a read widens;
+// supplying one narrows. An empty string is not a valid value — omit the field
+// to mean "unscoped"/"any".
 message Scope {
-  string agent_id = 1;
-  string org_id = 2;
+  optional string agent_id = 1;
+  optional string org_id = 2;
   string user_id = 3;
 }
 

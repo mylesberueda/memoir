@@ -266,11 +266,7 @@ pub struct MemoryContext {
 }
 
 impl MemoryContext {
-    pub(super) fn new(
-        memories: Vec<Memory>,
-        system_prompt: Option<String>,
-        strategy: RankingStrategy,
-    ) -> Self {
+    pub(super) fn new(memories: Vec<Memory>, system_prompt: Option<String>, strategy: RankingStrategy) -> Self {
         Self {
             memories,
             system_prompt,
@@ -579,15 +575,10 @@ fn rank_score(strategy: &RankingStrategy, cosine: f32, memory: &Memory, now: Dat
             // dominate regardless of weight.
             let confidence = f32::from(memory.confidence.get()) / 100.0;
             let category_bonus = match &memory.category {
-                Some(category) if weights.preferred_categories.iter().any(|c| c == category) => {
-                    weights.category_bonus
-                }
+                Some(category) if weights.preferred_categories.iter().any(|c| c == category) => weights.category_bonus,
                 _ => 0.0,
             };
-            weights.cosine * cosine
-                + weights.confidence * confidence
-                + weights.recency * recency
-                + category_bonus
+            weights.cosine * cosine + weights.confidence * confidence + weights.recency * recency + category_bonus
         }
     }
 }
@@ -629,16 +620,20 @@ async fn execute(builder: QueryBuilder<'_>) -> Result<MemoryContext, ClientError
     let query_vector = inner.embedder.embed(&query).await?;
     let hits = inner
         .index
-        .search(scope, query_vector, candidate_limit, kinds, combined_filter, min_similarity)
+        .search(
+            scope,
+            query_vector,
+            candidate_limit,
+            kinds,
+            combined_filter,
+            min_similarity,
+        )
         .await?;
 
     let pids: Vec<&str> = hits.iter().map(|(pid, _)| pid.as_str()).collect();
     let mut rows = inner.store.find_by_pids(&pids).await?;
 
-    let cosine: std::collections::HashMap<&str, f32> = hits
-        .iter()
-        .map(|(pid, score)| (pid.as_str(), *score))
-        .collect();
+    let cosine: std::collections::HashMap<&str, f32> = hits.iter().map(|(pid, score)| (pid.as_str(), *score)).collect();
 
     let now: DateTime<FixedOffset> = Utc::now().into();
     let mut scored: Vec<(f32, Memory)> = rows
@@ -712,7 +707,10 @@ mod tests {
             scale: chrono::Duration::days(7),
         };
         let v = decay.evaluate(chrono::Duration::days(7));
-        assert!((v - 0.5).abs() < 1e-3, "reciprocal decay at scale should be 0.5, got {v}");
+        assert!(
+            (v - 0.5).abs() < 1e-3,
+            "reciprocal decay at scale should be 0.5, got {v}"
+        );
     }
 
     #[test]
@@ -743,11 +741,12 @@ mod tests {
     fn scored_fixture(now: DateTime<FixedOffset>, confidence: i8, category: Option<&str>) -> Memory {
         Memory {
             pid: "p".into(),
-            scope: Scope {
-                agent_id: "a".into(),
-                org_id: "o".into(),
-                user_id: "u".into(),
-            },
+            scope: Scope::builder()
+                .user_id("u")
+                .org("o")
+                .agent("a")
+                .build()
+                .expect("test scope is valid"),
             content: "c".into(),
             metadata: serde_json::json!({}),
             kind: crate::memory::MemoryKind::Semantic,
@@ -776,7 +775,10 @@ mod tests {
         let strategy = balanced_blend();
         let high = rank_score(&strategy, 0.8, &scored_fixture(now, 95, None), now);
         let low = rank_score(&strategy, 0.8, &scored_fixture(now, 10, None), now);
-        assert!(high > low, "high confidence ({high}) must outrank low ({low}) at equal cosine");
+        assert!(
+            high > low,
+            "high confidence ({high}) must outrank low ({low}) at equal cosine"
+        );
     }
 
     #[test]

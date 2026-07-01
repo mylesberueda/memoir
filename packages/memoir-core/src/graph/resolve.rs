@@ -240,7 +240,7 @@ impl<E: EmbeddingModel, C: EntityCatalog> EntityResolver for EmbeddingEntityReso
 /// use memoir_core::memory::Scope;
 ///
 /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
-/// let scope = Scope { agent_id: "a".into(), org_id: "o".into(), user_id: "u".into() };
+/// let scope = Scope::builder().user_id("u").org("o").agent("a").build()?;
 /// let catalog = InMemoryEntityCatalog::new();
 /// catalog.insert(&scope, EntityVector { key: "e1".into(), name: "Alice".into(), embedding: vec![1.0, 0.0] });
 ///
@@ -288,11 +288,12 @@ mod tests {
     use super::*;
 
     fn scope(user: &str) -> Scope {
-        Scope {
-            agent_id: "agent".to_string(),
-            org_id: "org".to_string(),
-            user_id: user.to_string(),
-        }
+        Scope::builder()
+            .user_id(user)
+            .org("org")
+            .agent("agent")
+            .build()
+            .expect("test scope is valid")
     }
 
     /// Embeds a name to a fixed unit vector so cosine is deterministic in tests.

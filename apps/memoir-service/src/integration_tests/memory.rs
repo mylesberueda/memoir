@@ -211,22 +211,22 @@ async fn should_reject_unauthenticated_requests() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn should_reject_empty_scope_fields() {
+async fn should_reject_scope_with_empty_user_id() {
     let harness = TestHarness::start().await.expect("harness");
     let mut memory = harness.memory.clone();
 
     let err = memory
         .remember(harness.authed(RememberRequest {
             scope: Some(ProtoScope {
-                agent_id: String::new(),
-                org_id: "org_ok".into(),
-                user_id: "user_ok".into(),
+                agent_id: Some("agent_ok".to_owned()),
+                org_id: Some("org_ok".to_owned()),
+                user_id: String::new(),
             }),
             content: "rejected".to_owned(),
             metadata: None,
         }))
         .await
-        .expect_err("empty scope field must be rejected");
+        .expect_err("empty user_id must be rejected");
     assert_eq!(err.code(), Code::InvalidArgument);
 }
 

@@ -87,11 +87,11 @@ async fn main() -> Result<(), BoxError> {
     // Scope is the (agent_id, org_id, user_id) partition. memoir-core never
     // returns rows from a different scope. In a real app, derive the scope
     // from your auth context.
-    let scope = Scope {
-        agent_id: "example-agent".to_string(),
-        org_id: "example-org".to_string(),
-        user_id: "example-user".to_string(),
-    };
+    let scope = Scope::builder()
+        .user_id("example-user")
+        .org("example-org")
+        .agent("example-agent")
+        .build()?;
 
     println!("→ Writing three episodic memories...");
     let _ = client.remember("the user is learning Rust", scope.clone()).await?;

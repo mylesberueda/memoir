@@ -269,9 +269,9 @@ async fn close_edge<G: GraphStore + ?Sized>(
 /// Builds the scope parameter map shared by every node/edge write.
 fn scope_params(scope: &Scope) -> HashMap<String, GraphParam> {
     HashMap::from([
-        ("agent_id".to_string(), scope.agent_id.clone().into()),
-        ("org_id".to_string(), scope.org_id.clone().into()),
-        ("user_id".to_string(), scope.user_id.clone().into()),
+        ("agent_id".to_string(), scope.agent_id_or_sentinel().into()),
+        ("org_id".to_string(), scope.org_id_or_sentinel().into()),
+        ("user_id".to_string(), scope.user_id().into()),
     ])
 }
 
@@ -308,9 +308,7 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::graph::{
-        EntityVector, ExactStringResolver, GraphRows, InMemoryEntityCatalog, NaiveAppendResolver,
-    };
+    use crate::graph::{EntityVector, ExactStringResolver, GraphRows, InMemoryEntityCatalog, NaiveAppendResolver};
 
     /// Embeds every name to the same fixed vector — node writes need only that
     /// an embedding is produced and stored, not its content, in these tests.
@@ -327,11 +325,12 @@ mod tests {
     }
 
     fn scope() -> Scope {
-        Scope {
-            agent_id: "agent".to_string(),
-            org_id: "org".to_string(),
-            user_id: "user".to_string(),
-        }
+        Scope::builder()
+            .user_id("user")
+            .org("org")
+            .agent("agent")
+            .build()
+            .expect("test scope is valid")
     }
 
     fn now() -> DateTime<FixedOffset> {
@@ -385,9 +384,16 @@ mod tests {
         let entities = ExactStringResolver::new(InMemoryEntityCatalog::new());
         let edges = NaiveAppendResolver::new();
 
-        let committed = commit_triples(&store, &StubEmbedding, &entities, &edges, &ctx(), &one_triple("Alice", "works at", "Acme"))
-            .await
-            .unwrap();
+        let committed = commit_triples(
+            &store,
+            &StubEmbedding,
+            &entities,
+            &edges,
+            &ctx(),
+            &one_triple("Alice", "works at", "Acme"),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(committed, 1);
         let calls = store.calls();
@@ -403,9 +409,16 @@ mod tests {
         let edges = NaiveAppendResolver::new();
 
         let injection = r#"Acme"}) DETACH DELETE n //"#;
-        commit_triples(&store, &StubEmbedding, &entities, &edges, &ctx(), &one_triple("Alice", "works at", injection))
-            .await
-            .unwrap();
+        commit_triples(
+            &store,
+            &StubEmbedding,
+            &entities,
+            &edges,
+            &ctx(),
+            &one_triple("Alice", "works at", injection),
+        )
+        .await
+        .unwrap();
 
         let calls = store.calls();
         for (cypher, _) in &calls {
@@ -424,9 +437,16 @@ mod tests {
         let entities = ExactStringResolver::new(InMemoryEntityCatalog::new());
         let edges = NaiveAppendResolver::new();
 
-        commit_triples(&store, &StubEmbedding, &entities, &edges, &ctx(), &one_triple("Alice", "knows", "Bob"))
-            .await
-            .unwrap();
+        commit_triples(
+            &store,
+            &StubEmbedding,
+            &entities,
+            &edges,
+            &ctx(),
+            &one_triple("Alice", "knows", "Bob"),
+        )
+        .await
+        .unwrap();
 
         for (_, params) in store.calls() {
             assert_eq!(params.get("agent_id"), Some(&GraphParam::Str("agent".to_string())));
@@ -440,9 +460,16 @@ mod tests {
         let entities = ExactStringResolver::new(InMemoryEntityCatalog::new());
         let edges = NaiveAppendResolver::new();
 
-        let committed = commit_triples(&store, &StubEmbedding, &entities, &edges, &ctx(), &one_triple("Alice", "is", "Alice"))
-            .await
-            .unwrap();
+        let committed = commit_triples(
+            &store,
+            &StubEmbedding,
+            &entities,
+            &edges,
+            &ctx(),
+            &one_triple("Alice", "is", "Alice"),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(committed, 0);
         assert!(store.calls().is_empty());
@@ -456,9 +483,16 @@ mod tests {
         let entities = ExactStringResolver::new(InMemoryEntityCatalog::new());
         let edges = NaiveAppendResolver::new();
 
-        let committed = commit_triples(&store, &StubEmbedding, &entities, &edges, &ctx(), &one_triple("Alice", "works at", "   "))
-            .await
-            .unwrap();
+        let committed = commit_triples(
+            &store,
+            &StubEmbedding,
+            &entities,
+            &edges,
+            &ctx(),
+            &one_triple("Alice", "works at", "   "),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(committed, 0);
         assert!(store.calls().is_empty(), "blank entity must write nothing");
@@ -481,9 +515,16 @@ mod tests {
         let entities = ExactStringResolver::new(catalog);
         let edges = NaiveAppendResolver::new();
 
-        commit_triples(&store, &StubEmbedding, &entities, &edges, &ctx(), &one_triple("Alice", "likes", "Tea"))
-            .await
-            .unwrap();
+        commit_triples(
+            &store,
+            &StubEmbedding,
+            &entities,
+            &edges,
+            &ctx(),
+            &one_triple("Alice", "likes", "Tea"),
+        )
+        .await
+        .unwrap();
 
         let alice = GraphParam::Str("Alice".to_string());
         let subject_merge = store

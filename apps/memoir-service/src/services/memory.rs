@@ -37,7 +37,7 @@ use memoir_sdk::memoir::v1::{
 use tonic::{Request, Response, Status};
 
 use crate::AppContext;
-use crate::middleware::auth::{Authenticator, Principal};
+use crate::middleware::auth::Authenticator;
 use crate::services::conversions::{
     EditArgs, FeedbackArgs, Metadata, QueryArgs, RecallAsOfArgs, SupersessionHistoryArgs, TimelineArgs,
     WireGraphEnrichment, WireMemoryFilter, WireQueryResponse, WireRecallAsOfResponse, WireSupersessionEvent,
@@ -64,14 +64,6 @@ impl Memory {
     }
 }
 
-/// Returns the pid of the principal as a borrowed string for tracing.
-fn principal_pid(principal: &Principal) -> &str {
-    match principal {
-        Principal::User { pid } => pid,
-        Principal::ApiKey { pid } => pid,
-    }
-}
-
 #[tonic::async_trait]
 impl MemoryService for Memory {
     /// Searches indexed memories under a scope by vector similarity.
@@ -83,7 +75,7 @@ impl MemoryService for Memory {
     /// it are dropped by the vector backend before they reach the response.
     async fn search(&self, request: Request<SearchRequest>) -> Result<Response<SearchResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let SearchRequest {
             scope,
             query,
@@ -107,9 +99,9 @@ impl MemoryService for Memory {
             name: "memoir.service.memory.search.invoked",
             tracing::Level::INFO,
             caller.pid = %pid,
-            scope.agent_id = %scope.agent_id,
-            scope.org_id = %scope.org_id,
-            scope.user_id = %scope.user_id,
+            scope.agent_id = ?scope.agent_id(),
+            scope.org_id = ?scope.org_id(),
+            scope.user_id = %scope.user_id(),
             query.len = query.len(),
             limit = limit,
             metadata_filter.present = metadata_filter.is_some(),
@@ -175,7 +167,7 @@ impl MemoryService for Memory {
     /// Looks up a memory by pid at any lifecycle state.
     async fn recall(&self, request: Request<RecallRequest>) -> Result<Response<RecallResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let RecallRequest {
             pid: memory_pid,
             template,
@@ -217,7 +209,7 @@ impl MemoryService for Memory {
     /// completes.
     async fn remember(&self, request: Request<RememberRequest>) -> Result<Response<RememberResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let RememberRequest {
             scope,
             content,
@@ -234,9 +226,9 @@ impl MemoryService for Memory {
             name: "memoir.service.memory.remember.invoked",
             tracing::Level::INFO,
             caller.pid = %pid,
-            scope.agent_id = %scope.agent_id,
-            scope.org_id = %scope.org_id,
-            scope.user_id = %scope.user_id,
+            scope.agent_id = ?scope.agent_id(),
+            scope.org_id = ?scope.org_id(),
+            scope.user_id = %scope.user_id(),
             content.len = content.len(),
             "MemoryService.Remember invoked",
         );
@@ -263,7 +255,7 @@ impl MemoryService for Memory {
     /// flag.
     async fn forget(&self, request: Request<ForgetRequest>) -> Result<Response<ForgetResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let request = request.into_inner();
         let hard_delete = request.hard_delete;
         let target = forget_target_from_proto(request)?;
@@ -288,7 +280,7 @@ impl MemoryService for Memory {
     /// auth posture as `Search` / `Recall`.
     async fn timeline(&self, request: Request<TimelineRequest>) -> Result<Response<TimelineResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let TimelineArgs {
             scope,
             params,
@@ -299,9 +291,9 @@ impl MemoryService for Memory {
             name: "memoir.service.memory.timeline.invoked",
             tracing::Level::INFO,
             caller.pid = %pid,
-            scope.agent_id = %scope.agent_id,
-            scope.org_id = %scope.org_id,
-            scope.user_id = %scope.user_id,
+            scope.agent_id = ?scope.agent_id(),
+            scope.org_id = ?scope.org_id(),
+            scope.user_id = %scope.user_id(),
             limit = params.limit,
             include_superseded = params.include_superseded,
             "MemoryService.Timeline invoked",
@@ -345,7 +337,7 @@ impl MemoryService for Memory {
     /// point-in-time read is auditable ("who checked what memoir knew, when").
     async fn recall_as_of(&self, request: Request<RecallAsOfRequest>) -> Result<Response<RecallAsOfResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let RecallAsOfArgs {
             scope,
             params,
@@ -356,9 +348,9 @@ impl MemoryService for Memory {
             name: "memoir.service.memory.recall_as_of.invoked",
             tracing::Level::INFO,
             caller.pid = %pid,
-            scope.agent_id = %scope.agent_id,
-            scope.org_id = %scope.org_id,
-            scope.user_id = %scope.user_id,
+            scope.agent_id = ?scope.agent_id(),
+            scope.org_id = ?scope.org_id(),
+            scope.user_id = %scope.user_id(),
             memory.as_of = %params.as_of,
             limit = params.limit,
             "MemoryService.RecallAsOf invoked",
@@ -386,16 +378,16 @@ impl MemoryService for Memory {
     /// own rendering.
     async fn query(&self, request: Request<QueryRequest>) -> Result<Response<QueryResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let args: QueryArgs = request.into_inner().try_into()?;
 
         tracing::event!(
             name: "memoir.service.memory.query.invoked",
             tracing::Level::INFO,
             caller.pid = %pid,
-            scope.agent_id = %args.scope.agent_id,
-            scope.org_id = %args.scope.org_id,
-            scope.user_id = %args.scope.user_id,
+            scope.agent_id = ?args.scope.agent_id(),
+            scope.org_id = ?args.scope.org_id(),
+            scope.user_id = %args.scope.user_id(),
             query.len = args.query.len(),
             limit = args.limit,
             "MemoryService.Query invoked",
@@ -454,7 +446,7 @@ impl MemoryService for Memory {
     /// library error via `WireError`.
     async fn edit(&self, request: Request<EditRequest>) -> Result<Response<EditResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let args: EditArgs = request.into_inner().try_into()?;
 
         tracing::event!(
@@ -487,7 +479,7 @@ impl MemoryService for Memory {
 
     async fn feedback(&self, request: Request<FeedbackRequest>) -> Result<Response<FeedbackResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let args: FeedbackArgs = request.into_inner().try_into()?;
 
         tracing::event!(
@@ -513,7 +505,7 @@ impl MemoryService for Memory {
         request: Request<SupersessionHistoryRequest>,
     ) -> Result<Response<SupersessionHistoryResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let args: SupersessionHistoryArgs = request.into_inner().try_into()?;
 
         let events = self
@@ -539,7 +531,7 @@ impl MemoryService for Memory {
 
     async fn list_agents(&self, request: Request<ListAgentsRequest>) -> Result<Response<ListAgentsResponse>, Status> {
         let caller = self.auth().authenticate(&request).await?;
-        let pid = principal_pid(&caller.principal).to_owned();
+        let pid = caller.principal.pid().to_owned();
         let req = request.into_inner();
 
         if req.org_id.is_empty() || req.user_id.is_empty() {
@@ -573,17 +565,17 @@ mod tests {
     // `services/conversions.rs` carry the unit-test burden for boundary
     // logic; the handler bodies are too thin to mock-test meaningfully.
 
-    use super::*;
+    use crate::middleware::auth::Principal;
 
     #[test]
     fn should_extract_user_pid_from_principal() {
         let principal = Principal::User { pid: "user-abc".into() };
-        assert_eq!(principal_pid(&principal), "user-abc");
+        assert_eq!(principal.pid(), "user-abc");
     }
 
     #[test]
     fn should_extract_api_key_pid_from_principal() {
         let principal = Principal::ApiKey { pid: "key-xyz".into() };
-        assert_eq!(principal_pid(&principal), "key-xyz");
+        assert_eq!(principal.pid(), "key-xyz");
     }
 }

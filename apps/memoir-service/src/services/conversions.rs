@@ -57,38 +57,37 @@ use tonic::Status;
 
 use crate::services::wire::WireMemory;
 
-/// Converts a wire `Scope` into the library shape, rejecting empty fields.
+/// Converts a wire `Scope` into the library shape via its checked builder.
 ///
-/// Empty `agent_id` / `org_id` / `user_id` is a misuse from a misconfigured
-/// caller — proto3 fills unset string fields with `""` on the wire, so a
-/// client that "forgot to set" a scope field arrives here with empties.
-/// We reject with `InvalidArgument` rather than letting memoir-core's
-/// storage layer silently treat empty as a literal scope value.
+/// `user_id` is required; absent `org_id` / `agent_id` (proto3 presence) map to
+/// an unscoped dimension. The builder enforces memoir's scope invariants — a
+/// non-empty `user_id`, no empty-string values, and no reserved-sentinel values
+/// — so a misconfigured caller is rejected here rather than reaching storage.
 ///
 /// # Errors
 ///
-/// Returns [`Status::invalid_argument`] when the scope is unset or any
-/// field is empty.
+/// Returns [`Status::invalid_argument`] when the scope message is unset or its
+/// fields violate a scope invariant (empty `user_id`, an empty-string or
+/// reserved value for `org_id` / `agent_id`).
 pub(crate) fn scope_from_proto(scope: Option<ProtoScope>) -> Result<LibScope, Status> {
     let scope = scope.ok_or_else(|| Status::invalid_argument("scope: required"))?;
-    if scope.agent_id.is_empty() || scope.org_id.is_empty() || scope.user_id.is_empty() {
-        return Err(Status::invalid_argument(
-            "scope: agent_id, org_id, and user_id must all be non-empty",
-        ));
-    }
-    Ok(LibScope {
-        agent_id: scope.agent_id,
-        org_id: scope.org_id,
-        user_id: scope.user_id,
-    })
+    LibScope::builder()
+        .user_id(scope.user_id)
+        .maybe_org(scope.org_id)
+        .maybe_agent(scope.agent_id)
+        .build()
+        .map_err(|err| Status::invalid_argument(err.to_string()))
 }
 
 /// Converts a library `Scope` back to the wire shape. Infallible.
+///
+/// An unscoped dimension maps to an absent proto field, so memoir's internal
+/// unscoped sentinel never reaches a consumer.
 pub(crate) fn scope_to_proto(scope: LibScope) -> ProtoScope {
     ProtoScope {
-        agent_id: scope.agent_id,
-        org_id: scope.org_id,
-        user_id: scope.user_id,
+        agent_id: scope.agent_id().map(str::to_string),
+        org_id: scope.org_id().map(str::to_string),
+        user_id: scope.user_id().to_string(),
     }
 }
 
@@ -1261,11 +1260,11 @@ mod tests {
     }
 
     #[test]
-    fn should_reject_scope_with_empty_agent_id() {
+    fn should_reject_scope_with_empty_user_id() {
         let proto = ProtoScope {
-            agent_id: String::new(),
-            org_id: "o".into(),
-            user_id: "u".into(),
+            agent_id: Some("a".to_string()),
+            org_id: Some("o".to_string()),
+            user_id: String::new(),
         };
         let err = scope_from_proto(Some(proto)).unwrap_err();
         assert_eq!(err.code(), tonic::Code::InvalidArgument);
@@ -1273,12 +1272,18 @@ mod tests {
 
     #[test]
     fn should_round_trip_scope() {
-        let original = LibScope {
-            agent_id: "a".into(),
-            org_id: "o".into(),
-            user_id: "u".into(),
-        };
+        let original = LibScope::builder().user_id("u").org("o").agent("a").build().unwrap();
         let proto = scope_to_proto(original.clone());
+        let back = scope_from_proto(Some(proto)).unwrap();
+        assert_eq!(back, original);
+    }
+
+    #[test]
+    fn should_round_trip_unscoped_scope() {
+        let original = LibScope::builder().user_id("u").build().unwrap();
+        let proto = scope_to_proto(original.clone());
+        assert_eq!(proto.org_id, None, "an unscoped org maps to an absent proto field");
+        assert_eq!(proto.agent_id, None, "an unscoped agent maps to an absent proto field");
         let back = scope_from_proto(Some(proto)).unwrap();
         assert_eq!(back, original);
     }
@@ -1306,11 +1311,7 @@ mod tests {
         let now: chrono::DateTime<chrono::FixedOffset> = chrono::Utc::now().into();
         LibMemory {
             pid: "m".into(),
-            scope: LibScope {
-                agent_id: "a".into(),
-                org_id: "o".into(),
-                user_id: "u".into(),
-            },
+            scope: LibScope::builder().user_id("u").org("o").agent("a").build().unwrap(),
             content: content.into(),
             metadata: serde_json::json!({}),
             kind: memoir_core::memory::MemoryKind::Episodic,
@@ -1619,9 +1620,9 @@ mod tests {
 
     fn timeline_scope() -> ProtoScope {
         ProtoScope {
-            agent_id: "a".into(),
-            org_id: "o".into(),
-            user_id: "u".into(),
+            agent_id: Some("a".to_string()),
+            org_id: Some("o".to_string()),
+            user_id: "u".to_string(),
         }
     }
 

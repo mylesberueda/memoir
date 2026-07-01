@@ -140,9 +140,9 @@ fn column<'a>(row: &'a GraphRow, name: &str) -> Option<&'a str> {
 /// Builds the scope parameter map shared by the catalog reads.
 fn scope_params(scope: &Scope) -> HashMap<String, GraphParam> {
     HashMap::from([
-        ("agent_id".to_string(), scope.agent_id.clone().into()),
-        ("org_id".to_string(), scope.org_id.clone().into()),
-        ("user_id".to_string(), scope.user_id.clone().into()),
+        ("agent_id".to_string(), scope.agent_id_or_sentinel().into()),
+        ("org_id".to_string(), scope.org_id_or_sentinel().into()),
+        ("user_id".to_string(), scope.user_id().into()),
     ])
 }
 
@@ -189,12 +189,14 @@ mod tests {
 
     #[test]
     fn should_skip_edge_with_unparseable_valid_from() {
-        assert!(existing_edge_from_row(&row(&[
-            ("subject", "Alice"),
-            ("relation", "works at"),
-            ("object", "Acme"),
-            ("valid_from", "null"),
-        ]))
-        .is_none());
+        assert!(
+            existing_edge_from_row(&row(&[
+                ("subject", "Alice"),
+                ("relation", "works at"),
+                ("object", "Acme"),
+                ("valid_from", "null"),
+            ]))
+            .is_none()
+        );
     }
 }

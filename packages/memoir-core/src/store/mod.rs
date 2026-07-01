@@ -592,9 +592,9 @@ mod tests {
                 if m.kind != MemoryKind::Semantic {
                     continue;
                 }
-                if filter.agent_id.as_ref().is_some_and(|a| a != &m.scope.agent_id)
-                    || filter.org_id.as_ref().is_some_and(|o| o != &m.scope.org_id)
-                    || filter.user_id.as_ref().is_some_and(|u| u != &m.scope.user_id)
+                if filter.agent_id.as_deref().is_some_and(|a| Some(a) != m.scope.agent_id())
+                    || filter.org_id.as_deref().is_some_and(|o| Some(o) != m.scope.org_id())
+                    || filter.user_id.as_deref().is_some_and(|u| u != m.scope.user_id())
                 {
                     continue;
                 }
@@ -619,12 +619,11 @@ mod tests {
         }
 
         async fn timeline(&self, scope: Scope, params: TimelineParams) -> Result<Vec<Memory>, StoreError> {
-            scope.validate()?;
             let memories = self.memories.lock().unwrap();
 
             let mut filtered: Vec<Memory> = memories
                 .iter()
-                .filter(|m| m.scope == scope)
+                .filter(|m| m.scope.matches_read_filter(&scope))
                 .filter(|m| match m.kind {
                     MemoryKind::Episodic => params.kinds.episodic,
                     MemoryKind::Semantic => params.kinds.semantic,
@@ -654,13 +653,12 @@ mod tests {
         }
 
         async fn memories_as_of(&self, scope: Scope, params: AsOfParams) -> Result<Vec<Memory>, StoreError> {
-            scope.validate()?;
             let memories = self.memories.lock().unwrap();
             let events = self.events.lock().unwrap();
 
             let mut filtered: Vec<Memory> = memories
                 .iter()
-                .filter(|m| m.scope == scope)
+                .filter(|m| m.scope.matches_read_filter(&scope))
                 .filter(|m| m.created_at <= params.as_of)
                 .filter(|m| match m.kind {
                     MemoryKind::Episodic => params.kinds.episodic,
@@ -754,8 +752,8 @@ mod tests {
                 .lock()
                 .unwrap()
                 .iter()
-                .filter(|m| m.scope.org_id == org_id && m.scope.user_id == user_id)
-                .map(|m| m.scope.agent_id.clone())
+                .filter(|m| m.scope.org_id() == Some(org_id) && m.scope.user_id() == user_id)
+                .filter_map(|m| m.scope.agent_id().map(str::to_string))
                 .collect();
             Ok(agent_ids.into_iter().collect())
         }
@@ -858,11 +856,12 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_implement_trait_with_in_test_stub() {
         let store = StubStore::default();
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "o".to_string(),
-            user_id: "u".to_string(),
-        };
+        let scope = Scope::builder()
+            .user_id("u")
+            .org("o")
+            .agent("a")
+            .build()
+            .expect("test scope is valid");
 
         let memory = store
             .remember(NewMemory {
@@ -894,11 +893,12 @@ mod tests {
         let remember = async |agent: &str, org: &str, user: &str| {
             store
                 .remember(NewMemory {
-                    scope: Scope {
-                        agent_id: agent.to_string(),
-                        org_id: org.to_string(),
-                        user_id: user.to_string(),
-                    },
+                    scope: Scope::builder()
+                        .user_id(user)
+                        .org(org)
+                        .agent(agent)
+                        .build()
+                        .expect("test scope is valid"),
                     content: "c".to_string(),
                     metadata: serde_json::json!({}),
                     kind: MemoryKind::Episodic,
@@ -948,11 +948,12 @@ mod tests {
     #[tokio::test]
     async fn should_count_only_rejected_rows_in_extraction_numerator() {
         let store = StubStore::default();
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "o".to_string(),
-            user_id: "u".to_string(),
-        };
+        let scope = Scope::builder()
+            .user_id("u")
+            .org("o")
+            .agent("a")
+            .build()
+            .expect("test scope is valid");
 
         // Four extractions from one model: one rejected, one stale, one
         // superseded, one untouched. Only the rejected one is a model error.
@@ -979,11 +980,12 @@ mod tests {
     #[tokio::test]
     async fn should_break_extraction_stats_down_per_provider_and_model() {
         let store = StubStore::default();
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "o".to_string(),
-            user_id: "u".to_string(),
-        };
+        let scope = Scope::builder()
+            .user_id("u")
+            .org("o")
+            .agent("a")
+            .build()
+            .expect("test scope is valid");
 
         let weak = write_semantic(&store, scope.clone(), "ollama", "llama3.2:1b").await;
         write_semantic(&store, scope.clone(), "ollama", "llama3.2:1b").await;
@@ -1003,16 +1005,18 @@ mod tests {
     #[tokio::test]
     async fn should_scope_extraction_stats_to_the_filtered_subset() {
         let store = StubStore::default();
-        let mine = Scope {
-            agent_id: "a".to_string(),
-            org_id: "acme".to_string(),
-            user_id: "u".to_string(),
-        };
-        let theirs = Scope {
-            agent_id: "a".to_string(),
-            org_id: "other".to_string(),
-            user_id: "u".to_string(),
-        };
+        let mine = Scope::builder()
+            .user_id("u")
+            .org("acme")
+            .agent("a")
+            .build()
+            .expect("test scope is valid");
+        let theirs = Scope::builder()
+            .user_id("u")
+            .org("other")
+            .agent("a")
+            .build()
+            .expect("test scope is valid");
 
         write_semantic(&store, mine.clone(), "ollama", "m").await;
         write_semantic(&store, theirs.clone(), "ollama", "m").await;
@@ -1035,11 +1039,12 @@ mod tests {
     }
 
     async fn write(store: &StubStore, content: &str) -> Memory {
-        let scope = Scope {
-            agent_id: "a".to_string(),
-            org_id: "o".to_string(),
-            user_id: "u".to_string(),
-        };
+        let scope = Scope::builder()
+            .user_id("u")
+            .org("o")
+            .agent("a")
+            .build()
+            .expect("test scope is valid");
         store
             .remember(NewMemory {
                 scope,

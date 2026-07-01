@@ -16,7 +16,7 @@ docker/
 |---|---|---|---|
 | `memoir-service` | `ghcr.io/mylesberueda/memoir/memoir-service` | gRPC memory API | `5153` |
 | `memoir-ui` | `ghcr.io/mylesberueda/memoir/memoir-ui` | Admin web console | `3000` |
-| `postgres` | `pgvector/pgvector:pg17` | Source of truth | `54321` |
+| `postgres` | `postgres:17` | Source of truth | `54321` |
 | `qdrant` | `qdrant/qdrant` | Vector index | `6333` / `6334` |
 | `redis` | `redis:alpine` | UI sessions | `63791` |
 | `falkordb` | `falkordb/falkordb` | Knowledge graph (opt-in) | `63792` |

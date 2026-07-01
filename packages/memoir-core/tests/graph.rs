@@ -403,9 +403,9 @@ async fn should_leave_no_graph_residue_after_a_tracked_scope_is_dropped() -> any
     let client = common::fresh_graph_client().await?;
     let snapshot = client
         .inspect_graph()
-        .agent(scope.agent_id.clone())
-        .org(scope.org_id.clone())
-        .user(scope.user_id.clone())
+        .agent(scope.agent_id().expect("fresh scope has an agent"))
+        .org(scope.org_id().expect("fresh scope has an org"))
+        .user(scope.user_id())
         .await?;
 
     assert!(

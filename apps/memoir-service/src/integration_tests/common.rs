@@ -197,8 +197,8 @@ impl TestHarness {
     pub fn fresh_scope(&self) -> ProtoScope {
         let suffix = nanoid::nanoid!(8, &TEST_ID_ALPHABET);
         ProtoScope {
-            agent_id: format!("agent_{suffix}"),
-            org_id: format!("org_{suffix}"),
+            agent_id: Some(format!("agent_{suffix}")),
+            org_id: Some(format!("org_{suffix}")),
             user_id: format!("user_{suffix}"),
         }
     }
