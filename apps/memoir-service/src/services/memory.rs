@@ -565,17 +565,17 @@ mod tests {
     // `services/conversions.rs` carry the unit-test burden for boundary
     // logic; the handler bodies are too thin to mock-test meaningfully.
 
-    use super::*;
+    use crate::middleware::auth::Principal;
 
     #[test]
     fn should_extract_user_pid_from_principal() {
         let principal = Principal::User { pid: "user-abc".into() };
-        assert_eq!(principal_pid(&principal), "user-abc");
+        assert_eq!(principal.pid(), "user-abc");
     }
 
     #[test]
     fn should_extract_api_key_pid_from_principal() {
         let principal = Principal::ApiKey { pid: "key-xyz".into() };
-        assert_eq!(principal_pid(&principal), "key-xyz");
+        assert_eq!(principal.pid(), "key-xyz");
     }
 }
