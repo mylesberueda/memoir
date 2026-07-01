@@ -11,7 +11,7 @@ services:
   # You can run these services by themselves with `docker compose --profile dbs up`
   postgres:
     container_name: memoir-postgres
-    image: pgvector/pgvector:pg17
+    image: postgres:17
     ports:
       - $DB_PORT:5432
     environment:

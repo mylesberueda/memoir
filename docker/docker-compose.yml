@@ -8,7 +8,7 @@ volumes:
 
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    image: postgres:17
     environment:
       POSTGRES_USER: ${MEMOIR_SERVICE_DB_USER}
       POSTGRES_PASSWORD: ${MEMOIR_SERVICE_DB_PASS}
