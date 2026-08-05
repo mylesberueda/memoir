@@ -59,26 +59,37 @@ async fn should_commit_entities_and_edge_when_episodic_memory_is_written() -> an
 }
 
 /// Synthesis is enqueued by whichever extraction parent finishes last, so a
-/// parent that returns early without firing the fan-in strands the sibling's
-/// staged triples and the graph never commits.
+/// parent that returns early without firing the fan-in leaves the sibling's
+/// triples staged forever — `graph_triple_staging` is cleared only by a
+/// synthesis that ran.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn should_commit_graph_for_a_bare_relation_between_two_entities() -> anyhow::Result<()> {
+async fn should_leave_no_staged_triples_once_the_pipeline_drains() -> anyhow::Result<()> {
+    use sea_orm::{ConnectionTrait as _, Statement, Value};
+
     let mut client = common::fresh_graph_client().await?;
     let scope = client.fresh_scope();
 
-    client
-        .remember("Bramwell Quibb knows Tolliver Vance", scope.clone())
-        .await?;
-
-    let snapshot = common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        s.has_edge_between("Quibb", "Vance")
+    let written = client.remember("Alice works at Acme", scope.clone()).await?;
+    common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
+        s.has_edge_between("Alice", "Acme")
     })
     .await?;
 
-    assert!(
-        snapshot.has_edge_between("Quibb", "Vance"),
-        "expected a Quibb<->Vance edge, got {:?}",
-        snapshot.edges,
+    let db = client.raw_db().await?;
+    let staged = db
+        .query_one_raw(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT COUNT(*) AS remaining FROM graph_triple_staging WHERE source_pid = $1",
+            [Value::from(written.pid.as_str())],
+        ))
+        .await?
+        .expect("count query returns a row");
+    let remaining: i64 = staged.try_get("", "remaining")?;
+
+    assert_eq!(
+        remaining, 0,
+        "synthesis must clear staging; a surviving row means the fan-in never fired for {}",
+        written.pid,
     );
     Ok(())
 }
