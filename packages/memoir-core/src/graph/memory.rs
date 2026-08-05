@@ -18,7 +18,7 @@ use super::{GraphError, GraphParam, GraphRows, GraphStore};
 /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
 /// let store = InMemoryGraphStore::new();
 /// store.ensure_graph().await?;
-/// store.stage_rows(vec![vec![("n".to_string(), "Alice".to_string())]]);
+/// store.stage_rows(vec![vec![("n".to_string(), "Alice".to_string())].into()]);
 /// let rows = store.query("MATCH (n) RETURN n", &Default::default()).await?;
 /// assert_eq!(rows[0][0].1, "Alice");
 /// # Ok(())

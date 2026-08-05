@@ -175,10 +175,7 @@ async fn execute(builder: ReconcileBuilder<'_>) -> Result<ReconcileSummary, Clie
         let rows = inner.store.find_failed(failed_batch).await?;
         summary.failed_retried = rows.len();
         for row in rows {
-            if matches!(
-                inner.embed_and_index(row).await,
-                super::embed::EmbedOutcome::Indexed
-            ) {
+            if matches!(inner.embed_and_index(row).await, super::embed::EmbedOutcome::Indexed) {
                 summary.failed_recovered += 1;
             }
         }
@@ -194,16 +191,8 @@ async fn execute(builder: ReconcileBuilder<'_>) -> Result<ReconcileSummary, Clie
     if clean_orphans {
         let scopes = inner.store.list_scopes().await?;
         for scope in scopes {
-            let postgres_pids: HashSet<String> = inner
-                .store
-                .indexed_pids_in_scope(&scope)
-                .await?
-                .into_iter()
-                .collect();
-            let index_pids = inner
-                .index
-                .list_pids_in_scope(scope.clone(), scroll_page_size)
-                .await?;
+            let postgres_pids: HashSet<String> = inner.store.indexed_pids_in_scope(&scope).await?.into_iter().collect();
+            let index_pids = inner.index.list_pids_in_scope(scope.clone(), scroll_page_size).await?;
             let orphans: Vec<&str> = index_pids
                 .iter()
                 .filter(|pid| !postgres_pids.contains(pid.as_str()))
@@ -264,6 +253,17 @@ async fn rebuild_graph(
     let Some(graph) = inner.graph.as_deref() else {
         return Ok(0);
     };
+
+    // The relational handler needs the triple-extraction LLM as well as the
+    // graph; without it every enqueued job would claim, no-op, and complete.
+    if inner.llms.get(crate::llm::LlmRole::Relational).is_none() {
+        event!(
+            name: "memoir.reconcile.rebuild_skipped",
+            Level::WARN,
+            "no relational llm configured; skipping graph rebuild",
+        );
+        return Ok(0);
+    }
 
     if let Err(err) = graph.forget_scope(&scope).await {
         event!(
