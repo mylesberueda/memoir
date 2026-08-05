@@ -3,7 +3,7 @@ include!("mod.rs");
 pub mod auth;
 
 #[doc(inline)]
-pub use auth::BearerAuth;
+pub use auth::{ApiKeyAuth, BearerAuth};
 
 pub mod google {
     pub mod protobuf {

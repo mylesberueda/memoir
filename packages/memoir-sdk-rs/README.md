@@ -81,11 +81,18 @@ reads render `- content`, mirroring the library.
 
 ## Authenticated requests
 
-Authenticated requests need an `Authorization` header on each call. The SDK
-ships `BearerAuth`, a `tonic` interceptor that attaches it:
+Every authenticated call carries a credential header, and which header depends
+on the credential you hold. The SDK ships a `tonic` interceptor for each:
+
+| Credential | Header | Interceptor |
+|---|---|---|
+| API key (`mk.<id>.<secret>`) from `CreateApiKey` | `x-api-key` | `ApiKeyAuth` |
+| User JWT from `Login` | `authorization: Bearer` | `BearerAuth` |
+
+Service-to-service integrations hold an API key, so they want `ApiKeyAuth`:
 
 ```rust,no_run
-use memoir_sdk::BearerAuth;
+use memoir_sdk::ApiKeyAuth;
 use memoir_sdk::memoir::v1::memory_service_client::MemoryServiceClient;
 
 #[tokio::main]
@@ -93,11 +100,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let channel = tonic::transport::Channel::from_static("http://localhost:5153")
         .connect()
         .await?;
-    let auth = BearerAuth::new("my-api-token")?;
+    let auth = ApiKeyAuth::new("mk.abc123.xyz789")?;
     let mut client = MemoryServiceClient::with_interceptor(channel, auth);
     Ok(())
 }
 ```
+
+Swap in `BearerAuth::new(access_token)` when the credential is a JWT from
+`Login`. The two are not interchangeable — memoir-service verifies each header
+by a different path, and a key sent on the wrong one comes back
+`unauthenticated`. `ApiKeyAuth::new` rejects anything without the `mk.` prefix
+up front so that mismatch surfaces locally instead of as a server-side 401.
 
 See the
 [memoir-service authentication guide](https://github.com/mylesberueda/memoir/blob/dev/apps/memoir-service/README.md#authentication)
