@@ -28,24 +28,18 @@ mod resolve;
 mod synthesis;
 
 pub use commit::{CommitContext, CommitError};
-pub use enrich::{
-    DEFAULT_ENRICHMENT_DEPTH, GraphContext, GraphEntity, GraphRelationship, MAX_ENRICHMENT_DEPTH,
-};
 pub use edge::{
     CardinalityPolicy, Edge, EdgeCatalog, EdgeError, EdgeResolution, EdgeResolver, ExistingEdge, NaiveAppendResolver,
     RelationCardinality, TemporalEdgeResolver,
 };
+pub use enrich::{DEFAULT_ENRICHMENT_DEPTH, GraphContext, GraphEntity, GraphRelationship, MAX_ENRICHMENT_DEPTH};
 pub use error::GraphError;
-pub use extraction::{
-    DEFAULT_TRIPLE_PROMPT, LlmExtractor, TRIPLE_REPLY_MAX_CHARS, Triple, TripleExtractor, TripleSet,
-};
-pub use inspect::{
-    DEFAULT_INSPECTION_LIMIT, GraphEdge, GraphNode, GraphSnapshot, MAX_INSPECTION_LIMIT,
-};
+pub use extraction::{DEFAULT_TRIPLE_PROMPT, LlmExtractor, TRIPLE_REPLY_MAX_CHARS, Triple, TripleExtractor, TripleSet};
+pub use inspect::{DEFAULT_INSPECTION_LIMIT, GraphEdge, GraphNode, GraphSnapshot, MAX_INSPECTION_LIMIT, ScopeFilter};
 pub use memory::InMemoryGraphStore;
 pub use resolve::{
     EmbeddingEntityResolver, EntityCatalog, EntityResolver, EntityVector, ExactStringResolver, InMemoryEntityCatalog,
-    Resolution, ResolveError, MIN_ENTITY_SIMILARITY,
+    MIN_ENTITY_SIMILARITY, Resolution, ResolveError,
 };
 pub use synthesis::{
     EmbeddingSynthesizer, MIN_CORROBORATION_SIMILARITY, PassthroughSynthesizer, SemanticFact, SynthesisError,
@@ -80,12 +74,70 @@ use std::future::Future;
 /// per deployment so two memoir instances never collide on one engine.
 pub const DEFAULT_GRAPH_NAME: &str = "memoir";
 
+/// The name of a column in a Cypher `RETURN` clause.
+pub type Column = String;
+
+/// A Cypher scalar rendered to text.
+pub type Value = String;
+
 /// One row of a Cypher result, mapping each returned column to a scalar value.
 ///
 /// Scalars are rendered to `String` so the public surface never leaks a
 /// backend-specific value type. Columns preserve the order of the `RETURN`
-/// clause.
-pub type GraphRow = Vec<(String, String)>;
+/// clause. Derefs to the underlying `Vec`, so slice and iterator methods work
+/// directly.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GraphRow(Vec<(Column, Value)>);
+
+impl GraphRow {
+    /// Returns the value of the column named `name`.
+    pub fn column(&self, name: &str) -> Option<&str> {
+        self.0
+            .iter()
+            .find(|(column, _)| column == name)
+            .map(|(_, value)| value.as_str())
+    }
+
+    /// Returns the column named `name`, treating a backend null sentinel
+    /// (an absent column, `"null"`, or empty) as absent.
+    pub fn present(&self, name: &str) -> Option<String> {
+        match self.column(name) {
+            None => None,
+            Some(value) if value == "null" || value.is_empty() => None,
+            Some(value) => Some(value.to_string()),
+        }
+    }
+
+    /// Returns the `memory_pids` JSON array, empty for any other shape.
+    ///
+    /// Provenance is best-effort: an unparseable list yields no pids rather
+    /// than dropping the node or edge that carries it.
+    pub fn memory_pids(&self) -> Vec<String> {
+        self.column("memory_pids")
+            .and_then(|pids| serde_json::from_str(pids).ok())
+            .unwrap_or_default()
+    }
+}
+
+impl std::ops::Deref for GraphRow {
+    type Target = Vec<(Column, Value)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl FromIterator<(Column, Value)> for GraphRow {
+    fn from_iter<I: IntoIterator<Item = (Column, Value)>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl From<Vec<(Column, Value)>> for GraphRow {
+    fn from(columns: Vec<(Column, Value)>) -> Self {
+        Self(columns)
+    }
+}
 
 /// The rows produced by a Cypher [`GraphStore::query`], in result order.
 pub type GraphRows = Vec<GraphRow>;
@@ -258,7 +310,42 @@ pub trait GraphStore: Send + Sync + 'static {
         scope: &crate::memory::Scope,
         depth: usize,
     ) -> impl Future<Output = Result<GraphContext, GraphError>> + Send {
-        enrich::neighbors(self, seed_pids, scope, depth)
+        async move {
+            if seed_pids.is_empty() {
+                return Ok(GraphContext::default());
+            }
+            let depth = depth.clamp(1, MAX_ENRICHMENT_DEPTH);
+
+            let mut params = HashMap::from([
+                ("agent_id".to_string(), scope.agent_id_or_sentinel().into()),
+                ("org_id".to_string(), scope.org_id_or_sentinel().into()),
+                ("user_id".to_string(), scope.user_id().into()),
+            ]);
+            for (i, pid) in seed_pids.iter().enumerate() {
+                params.insert(format!("pid{i}"), (*pid).into());
+            }
+            let pid_list = (0..seed_pids.len())
+                .map(|i| format!("$pid{i}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            // Seed = entities in scope whose memory_pids intersects the hit pids. Walk
+            // current edges (valid_to null) out to `depth` hops, returning each edge's
+            // endpoints + properties. The depth is interpolated (it is a clamped
+            // integer, never user text), the rest binds as parameters.
+            let cypher = format!(
+                "MATCH (seed:Entity {{agent_id: $agent_id, org_id: $org_id, user_id: $user_id}}) \
+                 WHERE any(p IN seed.memory_pids WHERE p IN [{pid_list}]) \
+                 MATCH (seed)-[r*1..{depth}]-(related:Entity) \
+                 WITH seed, related, r \
+                 UNWIND r AS edge \
+                 WITH seed, related, edge WHERE edge.valid_to IS NULL \
+                 RETURN startNode(edge).name AS subject, edge.relation AS relation, \
+                        endNode(edge).name AS object, edge.confidence AS confidence, related.name AS related_name"
+            );
+
+            Ok(GraphContext::from_rows(&self.query(&cypher, &params).await?))
+        }
     }
 
     /// Returns a whole-scope snapshot of the graph for admin inspection.
@@ -277,14 +364,49 @@ pub trait GraphStore: Send + Sync + 'static {
     /// # Errors
     ///
     /// Returns [`GraphError`] if the backend rejects either read.
+    /// Nodes and edges are read in two separate queries rather than one
+    /// path-match: an edge-anchored traversal would drop isolated entities,
+    /// which are real graph data the admin view must show.
     fn inspect_scope(
         &self,
-        agent_id: Option<&str>,
-        org_id: Option<&str>,
-        user_id: Option<&str>,
+        filter: &ScopeFilter,
         limit: usize,
     ) -> impl Future<Output = Result<GraphSnapshot, GraphError>> + Send {
-        inspect::inspect_scope(self, agent_id, org_id, user_id, limit)
+        async move {
+            let limit = limit.clamp(1, MAX_INSPECTION_LIMIT);
+
+            let (mut params, node_where, edge_where) = filter.bind("n", "s");
+            params.insert("lim".to_string(), GraphParam::Int(limit as i64));
+
+            let node_cypher = format!(
+                "MATCH (n:Entity){node_where} \
+                 RETURN n.name AS name, n.memory_pids AS memory_pids, n.first_seen_at AS first_seen_at \
+                 ORDER BY n.first_seen_at, n.name \
+                 LIMIT $lim"
+            );
+
+            let edge_cypher = format!(
+                "MATCH (s:Entity)-[r]->(o:Entity){edge_where} \
+                 RETURN s.name AS subject, r.relation AS relation, o.name AS object, \
+                        r.confidence AS confidence, r.valid_from AS valid_from, r.valid_to AS valid_to, \
+                        r.memory_pids AS memory_pids \
+                 ORDER BY r.valid_from \
+                 LIMIT $lim"
+            );
+
+            let node_rows = self.query(&node_cypher, &params).await?;
+            let edge_rows = self.query(&edge_cypher, &params).await?;
+
+            let nodes: Vec<GraphNode> = node_rows.iter().filter_map(GraphNode::from_row).collect();
+            let edges: Vec<GraphEdge> = edge_rows.iter().filter_map(GraphEdge::from_row).collect();
+            let truncated = nodes.len() >= limit || edges.len() >= limit;
+
+            Ok(GraphSnapshot {
+                nodes,
+                edges,
+                truncated,
+            })
+        }
     }
 }
 
@@ -309,7 +431,10 @@ mod tests {
 
     #[test]
     fn should_escape_embedded_single_quote_in_string_param() {
-        assert_eq!(GraphParam::Str("O'Brien".to_string()).to_cypher_literal(), r"'O\'Brien'");
+        assert_eq!(
+            GraphParam::Str("O'Brien".to_string()).to_cypher_literal(),
+            r"'O\'Brien'"
+        );
     }
 
     #[test]

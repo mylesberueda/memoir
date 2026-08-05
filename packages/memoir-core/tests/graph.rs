@@ -21,63 +21,12 @@ mod common;
 
 use std::time::Duration;
 
-use memoir_core::graph::GraphSnapshot;
-
 /// Generous ceiling for a real-LLM relational-extraction + synthesis round.
 ///
 /// The graph commit waits on two LLM passes (semantic extract + relational
 /// extract) plus synthesis; a cold large model can take tens of seconds per
 /// call. Mirrors the lease/timeout discipline the harness documents.
 const GRAPH_COMMIT_TIMEOUT: Duration = Duration::from_secs(120);
-
-/// Returns whether the snapshot holds an edge between two entities, either way.
-///
-/// Direction-agnostic and label-agnostic on purpose: the LLM decides relation
-/// phrasing and triple direction, so a test asserts only that the two entities
-/// are related at all. Names match case-insensitively on a substring so
-/// "Alice" matches a committed "Alice Smith".
-fn has_edge_between(snapshot: &GraphSnapshot, a: &str, b: &str) -> bool {
-    let a = a.to_lowercase();
-    let b = b.to_lowercase();
-    snapshot.edges.iter().any(|e| {
-        let s = e.subject.to_lowercase();
-        let o = e.object.to_lowercase();
-        (s.contains(&a) && o.contains(&b)) || (s.contains(&b) && o.contains(&a))
-    })
-}
-
-/// Returns whether the snapshot holds an entity whose name contains `name`.
-fn has_entity(snapshot: &GraphSnapshot, name: &str) -> bool {
-    let name = name.to_lowercase();
-    snapshot.nodes.iter().any(|n| n.name.to_lowercase().contains(&name))
-}
-
-/// Counts entities whose name contains `name` (case-insensitive substring).
-fn count_entities(snapshot: &GraphSnapshot, name: &str) -> usize {
-    let name = name.to_lowercase();
-    snapshot
-        .nodes
-        .iter()
-        .filter(|n| n.name.to_lowercase().contains(&name))
-        .count()
-}
-
-/// Returns the edges whose subject and object span the two entities, either way.
-fn edges_between<'a>(snapshot: &'a GraphSnapshot, a: &str, b: &str) -> Vec<&'a memoir_core::graph::GraphEdge> {
-    let a = a.to_lowercase();
-    let b = b.to_lowercase();
-    snapshot
-        .edges
-        .iter()
-        .filter(|e| {
-            let s = e.subject.to_lowercase();
-            let o = e.object.to_lowercase();
-            (s.contains(&a) && o.contains(&b)) || (s.contains(&b) && o.contains(&a))
-        })
-        .collect()
-}
-
-// ─── c3: write → commit ──────────────────────────────────────────────────────
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_commit_entities_and_edge_when_episodic_memory_is_written() -> anyhow::Result<()> {
@@ -87,29 +36,52 @@ async fn should_commit_entities_and_edge_when_episodic_memory_is_written() -> an
     client.remember("Alice works at Acme", scope.clone()).await?;
 
     let snapshot = common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        has_edge_between(s, "Alice", "Acme")
+        s.has_edge_between("Alice", "Acme")
     })
     .await?;
 
     assert!(
-        has_entity(&snapshot, "Alice"),
+        snapshot.has_entity("Alice"),
         "expected an Alice entity, got {:?}",
         snapshot.nodes
     );
     assert!(
-        has_entity(&snapshot, "Acme"),
+        snapshot.has_entity("Acme"),
         "expected an Acme entity, got {:?}",
         snapshot.nodes
     );
     assert!(
-        has_edge_between(&snapshot, "Alice", "Acme"),
+        snapshot.has_edge_between("Alice", "Acme"),
         "expected an Alice<->Acme edge, got {:?}",
         snapshot.edges,
     );
     Ok(())
 }
 
-// ─── c4: synthesis is idempotent — one source commits one set of triples ─────
+/// Synthesis is enqueued by whichever extraction parent finishes last, so a
+/// parent that returns early without firing the fan-in strands the sibling's
+/// staged triples and the graph never commits.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn should_commit_graph_for_a_bare_relation_between_two_entities() -> anyhow::Result<()> {
+    let mut client = common::fresh_graph_client().await?;
+    let scope = client.fresh_scope();
+
+    client
+        .remember("Bramwell Quibb knows Tolliver Vance", scope.clone())
+        .await?;
+
+    let snapshot = common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
+        s.has_edge_between("Quibb", "Vance")
+    })
+    .await?;
+
+    assert!(
+        snapshot.has_edge_between("Quibb", "Vance"),
+        "expected a Quibb<->Vance edge, got {:?}",
+        snapshot.edges,
+    );
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_commit_a_single_node_per_entity_when_one_source_is_synthesized() -> anyhow::Result<()> {
@@ -124,32 +96,30 @@ async fn should_commit_a_single_node_per_entity_when_one_source_is_synthesized()
 
     client.remember("Alice works at Acme", scope.clone()).await?;
     let snapshot = common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        has_edge_between(s, "Alice", "Acme")
+        s.has_edge_between("Alice", "Acme")
     })
     .await?;
 
     assert_eq!(
-        count_entities(&snapshot, "Alice"),
+        snapshot.count_entities("Alice"),
         1,
         "Alice must be one node, got {:?}",
         snapshot.nodes
     );
     assert_eq!(
-        count_entities(&snapshot, "Acme"),
+        snapshot.count_entities("Acme"),
         1,
         "Acme must be one node, got {:?}",
         snapshot.nodes
     );
     assert_eq!(
-        edges_between(&snapshot, "Alice", "Acme").len(),
+        snapshot.edges_between("Alice", "Acme").count(),
         1,
         "exactly one Alice<->Acme edge, got {:?}",
         snapshot.edges,
     );
     Ok(())
 }
-
-// ─── c5: entity resolution dedup ─────────────────────────────────────────────
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_resolve_to_one_entity_when_a_later_memory_names_it_more_fully() -> anyhow::Result<()> {
@@ -160,7 +130,7 @@ async fn should_resolve_to_one_entity_when_a_later_memory_names_it_more_fully() 
 
     client.remember("Alice works at Acme", scope.clone()).await?;
     common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        has_edge_between(s, "Alice", "Acme")
+        s.has_edge_between("Alice", "Acme")
     })
     .await?;
 
@@ -176,15 +146,13 @@ async fn should_resolve_to_one_entity_when_a_later_memory_names_it_more_fully() 
     .await?;
 
     assert_eq!(
-        count_entities(&snapshot, "Alice"),
+        snapshot.count_entities("Alice"),
         1,
         "Alice and Alice Smith must dedup to one node, got {:?}",
         snapshot.nodes,
     );
     Ok(())
 }
-
-// ─── c6: contradiction = temporal invalidation, not delete ───────────────────
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_invalidate_old_edge_and_preserve_history_when_a_fact_is_superseded() -> anyhow::Result<()> {
@@ -195,22 +163,22 @@ async fn should_invalidate_old_edge_and_preserve_history_when_a_fact_is_supersed
 
     client.remember("Alice works at Acme", scope.clone()).await?;
     common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        has_edge_between(s, "Alice", "Acme")
+        s.has_edge_between("Alice", "Acme")
     })
     .await?;
 
     client.remember("Alice now works at Globex", scope.clone()).await?;
     let snapshot = common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        has_edge_between(s, "Alice", "Globex")
+        s.has_edge_between("Alice", "Globex")
     })
     .await?;
 
     assert!(
-        has_edge_between(&snapshot, "Alice", "Globex"),
+        snapshot.has_edge_between("Alice", "Globex"),
         "new Globex edge must exist, got {:?}",
         snapshot.edges,
     );
-    let acme_edges = edges_between(&snapshot, "Alice", "Acme");
+    let acme_edges: Vec<_> = snapshot.edges_between("Alice", "Acme").collect();
     assert!(
         !acme_edges.is_empty(),
         "old Acme edge must be preserved as history, not deleted, got {:?}",
@@ -224,8 +192,6 @@ async fn should_invalidate_old_edge_and_preserve_history_when_a_fact_is_supersed
     Ok(())
 }
 
-// ─── c7: search enrichment ───────────────────────────────────────────────────
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_enrich_search_results_with_graph_context_when_requested() -> anyhow::Result<()> {
     let mut client = common::fresh_graph_client().await?;
@@ -233,7 +199,7 @@ async fn should_enrich_search_results_with_graph_context_when_requested() -> any
 
     client.remember("Alice works at Acme", scope.clone()).await?;
     common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        has_edge_between(s, "Alice", "Acme")
+        s.has_edge_between("Alice", "Acme")
     })
     .await?;
 
@@ -248,8 +214,6 @@ async fn should_enrich_search_results_with_graph_context_when_requested() -> any
     Ok(())
 }
 
-// ─── c8: forget ref-counts ───────────────────────────────────────────────────
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_remove_graph_nodes_when_their_only_source_memory_is_forgotten() -> anyhow::Result<()> {
     use memoir_core::memory::ForgetTarget;
@@ -259,26 +223,24 @@ async fn should_remove_graph_nodes_when_their_only_source_memory_is_forgotten() 
 
     let written = client.remember("Alice works at Acme", scope.clone()).await?;
     common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        has_edge_between(s, "Alice", "Acme")
+        s.has_edge_between("Alice", "Acme")
     })
     .await?;
 
     client.forget(ForgetTarget::Pid(written.pid.clone())).await?;
 
     let snapshot = common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        !has_edge_between(s, "Alice", "Acme")
+        !s.has_edge_between("Alice", "Acme")
     })
     .await?;
 
     assert!(
-        !has_edge_between(&snapshot, "Alice", "Acme"),
+        !snapshot.has_edge_between("Alice", "Acme"),
         "forgetting the only source must remove the edge, got {:?}",
         snapshot.edges,
     );
     Ok(())
 }
-
-// ─── inherited 0012: live cross-scope inspect ────────────────────────────────
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_return_whole_org_when_inspect_scope_omits_agent_and_user() -> anyhow::Result<()> {
@@ -291,31 +253,29 @@ async fn should_return_whole_org_when_inspect_scope_omits_agent_and_user() -> an
 
     client.remember("Alice works at Acme", scope_a.clone()).await?;
     common::wait_until_graph_committed(&client, &scope_a, GRAPH_COMMIT_TIMEOUT, |s| {
-        has_edge_between(s, "Alice", "Acme")
+        s.has_edge_between("Alice", "Acme")
     })
     .await?;
     client.remember("Bob works at Globex", scope_b.clone()).await?;
     common::wait_until_graph_committed(&client, &scope_b, GRAPH_COMMIT_TIMEOUT, |s| {
-        has_edge_between(s, "Bob", "Globex")
+        s.has_edge_between("Bob", "Globex")
     })
     .await?;
 
     let snapshot = client.inspect_graph().org(org.clone()).await?;
 
     assert!(
-        has_entity(&snapshot, "Alice"),
+        snapshot.has_entity("Alice"),
         "org-wide inspect must see scope_a's Alice, got {:?}",
         snapshot.nodes
     );
     assert!(
-        has_entity(&snapshot, "Bob"),
+        snapshot.has_entity("Bob"),
         "org-wide inspect must see scope_b's Bob, got {:?}",
         snapshot.nodes
     );
     Ok(())
 }
-
-// ─── c9 + inherited 0013: reconcile rebuild + same-created_at page boundary ──
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_rebuild_every_memory_exactly_once_across_a_same_timestamp_page_boundary() -> anyhow::Result<()> {
@@ -337,7 +297,7 @@ async fn should_rebuild_every_memory_exactly_once_across_a_same_timestamp_page_b
         pids.push(written.pid);
     }
     common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        has_edge_between(s, "Erin", "Acme")
+        s.has_edge_between("Erin", "Acme")
     })
     .await?;
 
@@ -369,13 +329,13 @@ async fn should_rebuild_every_memory_exactly_once_across_a_same_timestamp_page_b
     );
 
     let snapshot = common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-        people.iter().all(|p| has_entity(s, p))
+        people.iter().all(|p| s.has_entity(p))
     })
     .await?;
 
     for person in people {
         assert_eq!(
-            count_entities(&snapshot, person),
+            snapshot.count_entities(person),
             1,
             "{person} must rebuild exactly once (no skip, no dup), got {:?}",
             snapshot.nodes,
@@ -384,8 +344,6 @@ async fn should_rebuild_every_memory_exactly_once_across_a_same_timestamp_page_b
     Ok(())
 }
 
-// ─── cleanup: the teardown guard actually wipes a scope ──────────────────────
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn should_leave_no_graph_residue_after_a_tracked_scope_is_dropped() -> anyhow::Result<()> {
     let scope = {
@@ -393,7 +351,7 @@ async fn should_leave_no_graph_residue_after_a_tracked_scope_is_dropped() -> any
         let scope = client.fresh_scope();
         client.remember("Alice works at Acme", scope.clone()).await?;
         common::wait_until_graph_committed(&client, &scope, GRAPH_COMMIT_TIMEOUT, |s| {
-            has_edge_between(s, "Alice", "Acme")
+            s.has_edge_between("Alice", "Acme")
         })
         .await?;
         scope

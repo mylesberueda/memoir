@@ -21,7 +21,7 @@
 
 use std::collections::HashMap;
 
-use super::{GraphError, GraphParam, GraphRow, GraphStore};
+use super::{GraphParam, GraphRow};
 
 /// Default cap on the nodes and on the edges a single inspection returns.
 ///
@@ -36,6 +36,88 @@ pub const DEFAULT_INSPECTION_LIMIT: usize = 500;
 /// Clamps an over-large request so an admin cannot ask for an unbounded scan;
 /// mirrors the failed-jobs limit discipline (`services/admin.rs`).
 pub const MAX_INSPECTION_LIMIT: usize = 5_000;
+
+/// A partial scope selecting which slice of the graph to inspect.
+///
+/// Each dimension is independently optional, and an absent one imposes no
+/// filter — the admin read is the one cross-scope path in memoir. Contrast
+/// [`Scope`](crate::memory::Scope), which models a complete write-side tuple.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ScopeFilter {
+    agent_id: Option<String>,
+    org_id: Option<String>,
+    user_id: Option<String>,
+}
+
+impl ScopeFilter {
+    /// Narrows the filter to one agent id.
+    #[must_use]
+    pub fn agent(mut self, agent_id: impl Into<String>) -> Self {
+        self.agent_id = Some(agent_id.into());
+        self
+    }
+
+    /// Narrows the filter to one org id.
+    #[must_use]
+    pub fn org(mut self, org_id: impl Into<String>) -> Self {
+        self.org_id = Some(org_id.into());
+        self
+    }
+
+    /// Narrows the filter to one user id.
+    #[must_use]
+    pub fn user(mut self, user_id: impl Into<String>) -> Self {
+        self.user_id = Some(user_id.into());
+        self
+    }
+
+    /// The agent id this filter selects, if any.
+    pub fn agent_id(&self) -> Option<&str> {
+        self.agent_id.as_deref()
+    }
+
+    /// The org id this filter selects, if any.
+    pub fn org_id(&self) -> Option<&str> {
+        self.org_id.as_deref()
+    }
+
+    /// The user id this filter selects, if any.
+    pub fn user_id(&self) -> Option<&str> {
+        self.user_id.as_deref()
+    }
+
+    /// Binds the present dimensions as query parameters and returns the `WHERE`
+    /// clauses that reference them, one set per alias.
+    ///
+    /// Scope values bind as parameters rather than interpolating into Cypher.
+    pub(super) fn bind(&self, node_alias: &str, edge_alias: &str) -> (HashMap<String, GraphParam>, String, String) {
+        let mut params = HashMap::new();
+        let mut node_terms: Vec<String> = Vec::new();
+        let mut edge_terms: Vec<String> = Vec::new();
+
+        for (column, value) in [
+            ("agent_id", self.agent_id()),
+            ("org_id", self.org_id()),
+            ("user_id", self.user_id()),
+        ] {
+            let Some(value) = value else { continue };
+            params.insert(column.to_string(), value.into());
+            node_terms.push(format!("{node_alias}.{column} = ${column}"));
+            edge_terms.push(format!("{edge_alias}.{column} = ${column}"));
+        }
+
+        (params, Self::where_clause(&node_terms), Self::where_clause(&edge_terms))
+    }
+
+    /// Joins scope predicates into a `WHERE` clause, or empty when unconstrained.
+    fn where_clause(terms: &[String]) -> String {
+        if terms.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", terms.join(" AND "))
+        }
+    }
+}
 
 /// An entity node in an admin graph snapshot.
 ///
@@ -97,133 +179,81 @@ impl GraphSnapshot {
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty() && self.edges.is_empty()
     }
-}
 
-/// Backs [`GraphStore::inspect_scope`]; see that method for semantics.
-///
-/// Nodes and edges are read in two separate queries rather than one path-match:
-/// an edge-anchored traversal would drop isolated entities, which are real graph
-/// data the admin view must show.
-pub(super) async fn inspect_scope<G: GraphStore + ?Sized>(
-    store: &G,
-    agent_id: Option<&str>,
-    org_id: Option<&str>,
-    user_id: Option<&str>,
-    limit: usize,
-) -> Result<GraphSnapshot, GraphError> {
-    let limit = limit.clamp(1, MAX_INSPECTION_LIMIT);
-
-    let mut params = HashMap::new();
-    let mut node_terms: Vec<&str> = Vec::new();
-    let mut edge_terms: Vec<&str> = Vec::new();
-    if let Some(agent_id) = agent_id {
-        params.insert("agent_id".to_string(), agent_id.into());
-        node_terms.push("n.agent_id = $agent_id");
-        edge_terms.push("s.agent_id = $agent_id");
+    /// Returns whether any entity's name contains `name`, ignoring case.
+    ///
+    /// Substring rather than equality because extraction picks the canonical
+    /// name: a caller looking for "Alice" should find a committed "Alice Smith".
+    pub fn has_entity(&self, name: &str) -> bool {
+        self.entities(name).next().is_some()
     }
-    if let Some(org_id) = org_id {
-        params.insert("org_id".to_string(), org_id.into());
-        node_terms.push("n.org_id = $org_id");
-        edge_terms.push("s.org_id = $org_id");
+
+    /// Counts the entities whose name contains `name`, ignoring case.
+    ///
+    /// A count above one means entity resolution left duplicates that should
+    /// have merged into a single node.
+    pub fn count_entities(&self, name: &str) -> usize {
+        self.entities(name).count()
     }
-    if let Some(user_id) = user_id {
-        params.insert("user_id".to_string(), user_id.into());
-        node_terms.push("n.user_id = $user_id");
-        edge_terms.push("s.user_id = $user_id");
+
+    /// Returns whether `a` and `b` are related by any edge, in either direction.
+    ///
+    /// Direction- and label-agnostic: the extractor chooses relation phrasing
+    /// and triple direction, so "related at all" is the strongest claim a
+    /// caller can make about two names without pinning model output.
+    pub fn has_edge_between(&self, a: &str, b: &str) -> bool {
+        self.edges_between(a, b).next().is_some()
     }
-    params.insert("lim".to_string(), GraphParam::Int(limit as i64));
 
-    let node_where = where_clause(&node_terms);
-    let node_cypher = format!(
-        "MATCH (n:Entity){node_where} \
-         RETURN n.name AS name, n.memory_pids AS memory_pids, n.first_seen_at AS first_seen_at \
-         ORDER BY n.first_seen_at, n.name \
-         LIMIT $lim"
-    );
+    /// Returns every edge spanning `a` and `b`, in either direction.
+    ///
+    /// Includes superseded edges — check [`GraphEdge::valid_to`] to filter to
+    /// current relationships.
+    pub fn edges_between<'a>(&'a self, a: &'a str, b: &'a str) -> impl Iterator<Item = &'a GraphEdge> {
+        let a = a.to_lowercase();
+        let b = b.to_lowercase();
+        self.edges.iter().filter(move |edge| {
+            let subject = edge.subject.to_lowercase();
+            let object = edge.object.to_lowercase();
+            (subject.contains(&a) && object.contains(&b)) || (subject.contains(&b) && object.contains(&a))
+        })
+    }
 
-    let edge_where = where_clause(&edge_terms);
-    let edge_cypher = format!(
-        "MATCH (s:Entity)-[r]->(o:Entity){edge_where} \
-         RETURN s.name AS subject, r.relation AS relation, o.name AS object, \
-                r.confidence AS confidence, r.valid_from AS valid_from, r.valid_to AS valid_to, \
-                r.memory_pids AS memory_pids \
-         ORDER BY r.valid_from \
-         LIMIT $lim"
-    );
-
-    let node_rows = store.query(&node_cypher, &params).await?;
-    let edge_rows = store.query(&edge_cypher, &params).await?;
-
-    let nodes: Vec<GraphNode> = node_rows.iter().filter_map(node_from_row).collect();
-    let edges: Vec<GraphEdge> = edge_rows.iter().filter_map(edge_from_row).collect();
-    let truncated = nodes.len() >= limit || edges.len() >= limit;
-
-    Ok(GraphSnapshot { nodes, edges, truncated })
-}
-
-/// Joins scope predicates into a `WHERE` clause, or empty when unconstrained.
-fn where_clause(terms: &[&str]) -> String {
-    if terms.is_empty() {
-        String::new()
-    } else {
-        format!(" WHERE {}", terms.join(" AND "))
+    fn entities<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a GraphNode> {
+        let name = name.to_lowercase();
+        self.nodes
+            .iter()
+            .filter(move |node| node.name.to_lowercase().contains(&name))
     }
 }
 
-/// Parses a [`GraphNode`] from a node result row.
-///
-/// A row missing its `name` is skipped — one malformed node should not break the
-/// whole snapshot. `memory_pids` parses from the JSON array the commit writes;
-/// an unparseable value yields an empty list rather than dropping the node.
-fn node_from_row(row: &GraphRow) -> Option<GraphNode> {
-    let name = column(row, "name")?.to_string();
-    Some(GraphNode {
-        name,
-        memory_pids: parse_pids(column(row, "memory_pids")),
-        first_seen_at: present(column(row, "first_seen_at")),
-    })
-}
-
-/// Parses a [`GraphEdge`] from an edge result row.
-///
-/// A row missing subject, relation, or object is skipped. `valid_to` carries
-/// through as `None` for a current edge (the backend renders null as the absent
-/// sentinel), `Some` for a superseded one.
-fn edge_from_row(row: &GraphRow) -> Option<GraphEdge> {
-    let subject = column(row, "subject")?.to_string();
-    let relation = column(row, "relation")?.to_string();
-    let object = column(row, "object")?.to_string();
-    let confidence = column(row, "confidence").and_then(|c| c.parse().ok()).unwrap_or(1.0);
-    Some(GraphEdge {
-        subject,
-        relation,
-        object,
-        confidence,
-        valid_from: present(column(row, "valid_from")),
-        valid_to: present(column(row, "valid_to")),
-        memory_pids: parse_pids(column(row, "memory_pids")),
-    })
-}
-
-/// Parses the `memory_pids` JSON array, defaulting to empty on any other shape.
-fn parse_pids(value: Option<&str>) -> Vec<String> {
-    value.and_then(|v| serde_json::from_str(v).ok()).unwrap_or_default()
-}
-
-/// Maps a backend null sentinel (absent column or `"null"`) to `None`.
-fn present(value: Option<&str>) -> Option<String> {
-    match value {
-        None => None,
-        Some(v) if v == "null" || v.is_empty() => None,
-        Some(v) => Some(v.to_string()),
+impl GraphNode {
+    /// Parses a node from a result row, or `None` when it carries no `name`.
+    ///
+    /// One malformed node is skipped rather than failing the whole snapshot.
+    pub(super) fn from_row(row: &GraphRow) -> Option<Self> {
+        Some(Self {
+            name: row.column("name")?.to_string(),
+            memory_pids: row.memory_pids(),
+            first_seen_at: row.present("first_seen_at"),
+        })
     }
 }
 
-/// Returns the value of the column named `name` in a result row.
-fn column<'a>(row: &'a GraphRow, name: &str) -> Option<&'a str> {
-    row.iter()
-        .find(|(column, _)| column == name)
-        .map(|(_, value)| value.as_str())
+impl GraphEdge {
+    /// Parses an edge from a result row, or `None` when subject, relation, or
+    /// object is missing.
+    pub(super) fn from_row(row: &GraphRow) -> Option<Self> {
+        Some(Self {
+            subject: row.column("subject")?.to_string(),
+            relation: row.column("relation")?.to_string(),
+            object: row.column("object")?.to_string(),
+            confidence: row.column("confidence").and_then(|c| c.parse().ok()).unwrap_or(1.0),
+            valid_from: row.present("valid_from"),
+            valid_to: row.present("valid_to"),
+            memory_pids: row.memory_pids(),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -231,7 +261,7 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::graph::GraphRows;
+    use crate::graph::{GraphError, GraphRows, GraphStore};
 
     fn row(pairs: &[(&str, &str)]) -> GraphRow {
         pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
@@ -282,7 +312,10 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_bind_full_scope_as_params() {
         let store = StagedStore::empty();
-        inspect_scope(&store, Some("a"), Some("o"), Some("u"), 100).await.unwrap();
+        store
+            .inspect_scope(&ScopeFilter::default().agent("a").org("o").user("u"), 100)
+            .await
+            .unwrap();
 
         let (node_cypher, params) = &store.calls()[0];
         assert!(!node_cypher.contains("\"a\""), "scope must not be interpolated");
@@ -295,7 +328,10 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_omit_absent_scope_dimensions() {
         let store = StagedStore::empty();
-        inspect_scope(&store, None, Some("o"), None, 100).await.unwrap();
+        store
+            .inspect_scope(&ScopeFilter::default().org("o"), 100)
+            .await
+            .unwrap();
 
         let (node_cypher, params) = &store.calls()[0];
         assert!(node_cypher.contains("n.org_id = $org_id"));
@@ -307,7 +343,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_emit_no_where_clause_for_empty_scope() {
         let store = StagedStore::empty();
-        inspect_scope(&store, None, None, None, 100).await.unwrap();
+        store.inspect_scope(&ScopeFilter::default(), 100).await.unwrap();
 
         let (node_cypher, _) = &store.calls()[0];
         assert!(!node_cypher.contains("WHERE"), "no scope -> whole-graph dump");
@@ -316,7 +352,10 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_read_both_current_and_superseded_edges() {
         let store = StagedStore::empty();
-        inspect_scope(&store, Some("a"), Some("o"), Some("u"), 100).await.unwrap();
+        store
+            .inspect_scope(&ScopeFilter::default().agent("a").org("o").user("u"), 100)
+            .await
+            .unwrap();
 
         let edge_cypher = &store.calls()[1].0;
         assert!(
@@ -329,7 +368,8 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_clamp_limit_to_max() {
         let store = StagedStore::empty();
-        inspect_scope(&store, None, None, None, MAX_INSPECTION_LIMIT * 10)
+        store
+            .inspect_scope(&ScopeFilter::default(), MAX_INSPECTION_LIMIT * 10)
             .await
             .unwrap();
         assert_eq!(
@@ -357,7 +397,7 @@ mod tests {
             ])],
         ]);
 
-        let snapshot = inspect_scope(&store, None, None, None, 100).await.unwrap();
+        let snapshot = store.inspect_scope(&ScopeFilter::default(), 100).await.unwrap();
 
         assert_eq!(snapshot.nodes.len(), 1);
         assert_eq!(snapshot.nodes[0].name, "Alice");
@@ -383,7 +423,7 @@ mod tests {
             ])],
         ]);
 
-        let snapshot = inspect_scope(&store, None, None, None, 100).await.unwrap();
+        let snapshot = store.inspect_scope(&ScopeFilter::default(), 100).await.unwrap();
         assert_eq!(snapshot.edges[0].valid_to.as_deref(), Some("2026-06-01T00:00:00+00:00"));
     }
 
@@ -391,21 +431,24 @@ mod tests {
     async fn should_flag_truncated_when_limit_reached() {
         let store = StagedStore::new(vec![vec![row(&[("name", "Alice")]), row(&[("name", "Bob")])], vec![]]);
 
-        let snapshot = inspect_scope(&store, None, None, None, 2).await.unwrap();
+        let snapshot = store.inspect_scope(&ScopeFilter::default(), 2).await.unwrap();
         assert!(snapshot.truncated, "node count == limit -> truncated");
     }
 
     #[tokio::test(flavor = "current_thread")]
     async fn should_skip_node_missing_name() {
         let store = StagedStore::new(vec![vec![row(&[("memory_pids", "[\"mem1\"]")])], vec![]]);
-        let snapshot = inspect_scope(&store, None, None, None, 100).await.unwrap();
+        let snapshot = store.inspect_scope(&ScopeFilter::default(), 100).await.unwrap();
         assert!(snapshot.nodes.is_empty());
     }
 
     #[tokio::test(flavor = "current_thread")]
     async fn should_default_pids_empty_when_unparseable() {
-        let store = StagedStore::new(vec![vec![row(&[("name", "Alice"), ("memory_pids", "not json")])], vec![]]);
-        let snapshot = inspect_scope(&store, None, None, None, 100).await.unwrap();
+        let store = StagedStore::new(vec![
+            vec![row(&[("name", "Alice"), ("memory_pids", "not json")])],
+            vec![],
+        ]);
+        let snapshot = store.inspect_scope(&ScopeFilter::default(), 100).await.unwrap();
         assert!(snapshot.nodes[0].memory_pids.is_empty());
     }
 }
