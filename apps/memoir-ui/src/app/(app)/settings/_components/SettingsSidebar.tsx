@@ -1,12 +1,13 @@
 'use client';
 
 import ResponsiveDock, { type DockLinkItem } from '@components/ResponsiveDock';
-import { Cable, Cpu, Shield } from 'lucide-react';
+import { Cable, Cpu, KeyRound, Shield } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 const NAV_ITEMS = [
 	{ id: 'security', href: '/settings/security', icon: Shield, label: 'Security' },
+	{ id: 'api-keys', href: '/settings/api-keys', icon: KeyRound, label: 'API Keys' },
 	{ id: 'providers', href: '/settings/providers', icon: Cable, label: 'Providers' },
 	{ id: 'models', href: '/settings/models', icon: Cpu, label: 'Models' },
 ] as const;

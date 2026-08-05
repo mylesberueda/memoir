@@ -1,5 +1,5 @@
 import { getCurrentUser } from '@actions/auth';
-import { ArrowUpRight, Clock, GitBranch, History, MessageSquare, Search } from 'lucide-react';
+import { ArrowUpRight, Clock, GitBranch, History, KeyRound, MessageSquare, Search } from 'lucide-react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
@@ -42,6 +42,13 @@ const SURFACES = [
 		eyebrow: 'Memory',
 		title: 'Audit',
 		body: 'Trace supersession events — how a fact was edited, replaced, or revised over time.',
+	},
+	{
+		href: '/settings/api-keys',
+		icon: KeyRound,
+		eyebrow: 'Settings',
+		title: 'API Keys',
+		body: 'Issue keys for downstream services. Shown once at creation — regenerate to replace a lost key.',
 	},
 ];
 
