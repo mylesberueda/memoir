@@ -200,10 +200,11 @@ async fn execute(builder: RememberBuilder<'_>) -> Result<Memory, ClientError> {
     }
 
     // Relational extraction fans out from the same episodic write as Extract,
-    // in parallel. Enqueue only when a graph store is wired, so the job is not
-    // left unclaimable (mirrors the Extract/Categorize capability gates).
+    // in parallel. Needs both a graph to commit into and the LLM that derives
+    // the triples — the handler requires both, so gating on one leaves the
+    // other's absence to be discovered at claim time as a no-op.
     #[cfg(feature = "knowledge-graph")]
-    if inner.graph.is_some() {
+    if inner.graph.is_some() && inner.llms.get(crate::llm::LlmRole::Relational).is_some() {
         inner
             .jobs
             .enqueue(

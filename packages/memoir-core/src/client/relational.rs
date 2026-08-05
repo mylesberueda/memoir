@@ -48,9 +48,24 @@ impl ClientInner {
     /// no-op success rather than a failure.
     pub(super) async fn run_relational_extract(self: &Arc<Self>, job: Job) -> Result<(), RelationalExtractError> {
         let span = info_span!("memoir.relational", source_pid = %job.source_pid);
-        async move { self.run_relational_extract_inner(job).await }
+        let source_pid = job.source_pid.clone();
+        let job_id = job.id;
+
+        let outcome = async move { self.run_relational_extract_inner(job).await }
             .instrument(span)
-            .await
+            .await;
+
+        // Fires outside the body so an early return cannot skip it: synthesis
+        // is enqueued by whichever parent finishes last, so a parent that
+        // returns without firing strands the sibling's staged triples.
+        if outcome.is_ok() {
+            self.jobs
+                .enqueue_synthesis_if_ready(&source_pid, job_id)
+                .await
+                .map_err(|err| RelationalExtractError::Staging(err.to_string()))?;
+        }
+
+        outcome
     }
 
     async fn run_relational_extract_inner(self: &Arc<Self>, job: Job) -> Result<(), RelationalExtractError> {
@@ -90,11 +105,6 @@ impl ClientInner {
         // sibling finishes last, then try to fire the fan-in.
         self.triple_staging
             .stage(&source.pid, &triples)
-            .await
-            .map_err(|err| RelationalExtractError::Staging(err.to_string()))?;
-
-        self.jobs
-            .enqueue_synthesis_if_ready(&source.pid, job.id)
             .await
             .map_err(|err| RelationalExtractError::Staging(err.to_string()))?;
 

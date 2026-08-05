@@ -114,12 +114,41 @@ impl ClientInner {
     /// Returns [`ExtractError::LlmCall`] / [`ExtractError::Parse`] on LLM
     /// failures and [`ExtractError::Persist`] when a row or follow-on job
     /// cannot be written.
-    #[cfg_attr(not(feature = "knowledge-graph"), allow(unused_variables))]
+    #[cfg_attr(
+        not(feature = "knowledge-graph"),
+        expect(unused_variables, reason = "caller_job_id only feeds the synthesis fan-in")
+    )]
     pub(super) async fn re_extract_source(
         self: &Arc<Self>,
         source: &crate::memory::Memory,
         correction: Option<&str>,
         caller_job_id: i64,
+    ) -> Result<(), ExtractError> {
+        let outcome = self.extract_semantics(source, correction).await;
+
+        // Fires outside the body so an early return cannot skip it: synthesis
+        // is enqueued by whichever parent finishes last, so a parent that
+        // returns without firing strands the sibling's staged triples.
+        #[cfg(feature = "knowledge-graph")]
+        if outcome.is_ok() && self.graph.is_some() {
+            self.jobs
+                .enqueue_synthesis_if_ready(&source.pid, caller_job_id)
+                .await
+                .map_err(|err: JobsError| ExtractError::Persist(err.to_string()))?;
+        }
+
+        outcome
+    }
+
+    /// Derives and persists semantic rows for `source`.
+    ///
+    /// Every early return here is a success that produced no rows — a missing
+    /// extraction LLM, or an LLM reply with no facts. Callers own the
+    /// synthesis fan-in; see [`Self::re_extract_source`].
+    async fn extract_semantics(
+        self: &Arc<Self>,
+        source: &crate::memory::Memory,
+        correction: Option<&str>,
     ) -> Result<(), ExtractError> {
         let source_pid = source.pid.clone();
 
@@ -258,19 +287,6 @@ impl ClientInner {
             semantic_count = persisted_pids.len(),
             "extraction persisted {{semantic_count}} semantic row(s) for {{source_pid}}",
         );
-
-        // Semantic extraction is one of the two synthesis parents. On success,
-        // try to fire synthesis: it only fires once the relational sibling is
-        // also done (the guard is a no-op while it is still pending), and only
-        // when a graph is configured (otherwise no relational sibling was ever
-        // enqueued, so there is nothing to synthesize).
-        #[cfg(feature = "knowledge-graph")]
-        if self.graph.is_some() {
-            self.jobs
-                .enqueue_synthesis_if_ready(&source_pid, caller_job_id)
-                .await
-                .map_err(|err: JobsError| ExtractError::Persist(err.to_string()))?;
-        }
 
         Ok(())
     }
