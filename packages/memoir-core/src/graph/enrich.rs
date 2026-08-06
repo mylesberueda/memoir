@@ -8,11 +8,7 @@
 //! [`GraphContext`]. Traversal is scope-confined and reads only current edges
 //! (`valid_to = null`); superseded edges are history, not "related now".
 
-use std::collections::HashMap;
-
-use crate::memory::Scope;
-
-use super::{GraphError, GraphRow, GraphStore};
+use super::GraphRow;
 
 /// Maximum traversal depth — the manifesto's "1-2 hop" upper bound.
 ///
@@ -72,101 +68,51 @@ impl GraphContext {
     pub fn is_empty(&self) -> bool {
         self.entities.is_empty() && self.relationships.is_empty()
     }
-}
 
-/// Backs [`GraphStore::neighbors`]; see that method for semantics.
-pub(super) async fn neighbors<G: GraphStore + ?Sized>(
-    store: &G,
-    seed_pids: &[&str],
-    scope: &Scope,
-    depth: usize,
-) -> Result<GraphContext, GraphError> {
-    if seed_pids.is_empty() {
-        return Ok(GraphContext::default());
-    }
-    let depth = depth.clamp(1, MAX_ENRICHMENT_DEPTH);
+    /// Assembles a deduplicated context from traversal result rows.
+    ///
+    /// Deduplication preserves traversal order, so it compares against the
+    /// accumulated lists rather than hashing — the row count is bounded by
+    /// [`MAX_ENRICHMENT_DEPTH`].
+    pub(super) fn from_rows(rows: &[GraphRow]) -> Self {
+        let mut context = Self::default();
 
-    let mut params = HashMap::from([
-        ("agent_id".to_string(), scope.agent_id_or_sentinel().into()),
-        ("org_id".to_string(), scope.org_id_or_sentinel().into()),
-        ("user_id".to_string(), scope.user_id().into()),
-    ]);
-    for (i, pid) in seed_pids.iter().enumerate() {
-        params.insert(format!("pid{i}"), (*pid).into());
-    }
-    let pid_list = (0..seed_pids.len())
-        .map(|i| format!("$pid{i}"))
-        .collect::<Vec<_>>()
-        .join(", ");
+        for row in rows {
+            if let Some(name) = row.column("related_name") {
+                let entity = GraphEntity { name: name.to_string() };
+                if !context.entities.contains(&entity) {
+                    context.entities.push(entity);
+                }
+            }
 
-    // Seed = entities in scope whose memory_pids intersects the hit pids. Walk
-    // current edges (valid_to null) out to `depth` hops, returning each edge's
-    // endpoints + properties. The depth is interpolated (it is a clamped
-    // integer, never user text), the rest binds as parameters.
-    let cypher = format!(
-        "MATCH (seed:Entity {{agent_id: $agent_id, org_id: $org_id, user_id: $user_id}}) \
-         WHERE any(p IN seed.memory_pids WHERE p IN [{pid_list}]) \
-         MATCH (seed)-[r*1..{depth}]-(related:Entity) \
-         WITH seed, related, r \
-         UNWIND r AS edge \
-         WITH seed, related, edge WHERE edge.valid_to IS NULL \
-         RETURN startNode(edge).name AS subject, edge.relation AS relation, \
-                endNode(edge).name AS object, edge.confidence AS confidence, related.name AS related_name"
-    );
-
-    let rows = store.query(&cypher, &params).await?;
-    Ok(build_context(&rows))
-}
-
-/// Assembles a deduplicated [`GraphContext`] from traversal result rows.
-fn build_context(rows: &[GraphRow]) -> GraphContext {
-    let mut entities: Vec<GraphEntity> = Vec::new();
-    let mut relationships: Vec<GraphRelationship> = Vec::new();
-
-    for row in rows {
-        if let Some(name) = column(row, "related_name") {
-            let entity = GraphEntity { name: name.to_string() };
-            if !entities.contains(&entity) {
-                entities.push(entity);
+            let (Some(subject), Some(relation), Some(object)) =
+                (row.column("subject"), row.column("relation"), row.column("object"))
+            else {
+                continue;
+            };
+            let relationship = GraphRelationship {
+                subject: subject.to_string(),
+                relation: relation.to_string(),
+                object: object.to_string(),
+                confidence: row.column("confidence").and_then(|c| c.parse().ok()).unwrap_or(1.0),
+            };
+            if !context.relationships.contains(&relationship) {
+                context.relationships.push(relationship);
             }
         }
 
-        let (Some(subject), Some(relation), Some(object)) =
-            (column(row, "subject"), column(row, "relation"), column(row, "object"))
-        else {
-            continue;
-        };
-        let confidence = column(row, "confidence").and_then(|c| c.parse().ok()).unwrap_or(1.0);
-        let relationship = GraphRelationship {
-            subject: subject.to_string(),
-            relation: relation.to_string(),
-            object: object.to_string(),
-            confidence,
-        };
-        if !relationships.contains(&relationship) {
-            relationships.push(relationship);
-        }
+        context
     }
-
-    GraphContext {
-        entities,
-        relationships,
-    }
-}
-
-/// Returns the value of the column named `name` in a result row.
-fn column<'a>(row: &'a GraphRow, name: &str) -> Option<&'a str> {
-    row.iter()
-        .find(|(column, _)| column == name)
-        .map(|(_, value)| value.as_str())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::Mutex;
 
     use super::*;
-    use crate::graph::{GraphParam, GraphRows};
+    use crate::graph::{GraphError, GraphParam, GraphRows, GraphStore};
+    use crate::memory::Scope;
 
     fn scope() -> Scope {
         Scope::builder()
@@ -215,7 +161,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_return_empty_for_no_seeds() {
         let store = StagedStore::default();
-        let ctx = neighbors(&store, &[], &scope(), 1).await.unwrap();
+        let ctx = store.neighbors(&[], &scope(), 1).await.unwrap();
         assert!(ctx.is_empty());
         assert!(store.calls().is_empty(), "no seeds -> no query");
     }
@@ -223,7 +169,7 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_bind_seeds_and_scope_as_params() {
         let store = StagedStore::default();
-        neighbors(&store, &["mem1", "mem2"], &scope(), 1).await.unwrap();
+        store.neighbors(&["mem1", "mem2"], &scope(), 1).await.unwrap();
 
         let (cypher, params) = &store.calls()[0];
         assert!(!cypher.contains("mem1"), "pids must not be interpolated");
@@ -235,14 +181,14 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn should_filter_current_edges_only() {
         let store = StagedStore::default();
-        neighbors(&store, &["mem1"], &scope(), 1).await.unwrap();
+        store.neighbors(&["mem1"], &scope(), 1).await.unwrap();
         assert!(store.calls()[0].0.contains("edge.valid_to IS NULL"));
     }
 
     #[tokio::test(flavor = "current_thread")]
     async fn should_clamp_depth_into_range() {
         let store = StagedStore::default();
-        neighbors(&store, &["mem1"], &scope(), 99).await.unwrap();
+        store.neighbors(&["mem1"], &scope(), 99).await.unwrap();
         assert!(
             store.calls()[0].0.contains(&format!("*1..{MAX_ENRICHMENT_DEPTH}")),
             "depth clamps to the max",
@@ -269,7 +215,7 @@ mod tests {
             ]),
         ]);
 
-        let ctx = neighbors(&store, &["mem1"], &scope(), 1).await.unwrap();
+        let ctx = store.neighbors(&["mem1"], &scope(), 1).await.unwrap();
 
         assert_eq!(ctx.relationships.len(), 1);
         assert_eq!(ctx.relationships[0].object, "Acme");
@@ -287,7 +233,7 @@ mod tests {
             ("related_name", "Bob"),
         ])]);
 
-        let ctx = neighbors(&store, &["mem1"], &scope(), 1).await.unwrap();
+        let ctx = store.neighbors(&["mem1"], &scope(), 1).await.unwrap();
         assert_eq!(ctx.relationships[0].confidence, 1.0);
     }
 }

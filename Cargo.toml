@@ -11,7 +11,7 @@ members = [
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/mylesberueda/memoir"
 homepage = "https://github.com/mylesberueda/memoir"
-rust-version = "1.85"
+rust-version = "1.97"
 
 [workspace.dependencies]
 color-eyre = { version = "0.6" }

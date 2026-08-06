@@ -51,7 +51,7 @@ impl EntityCatalog for FalkorEntityCatalog {
             .await
             .map_err(|err| ResolveError::Catalog(err.to_string()))?;
 
-        Ok(rows.iter().filter_map(entity_from_row).collect())
+        Ok(rows.iter().filter_map(EntityVector::from_row).collect())
     }
 }
 
@@ -94,47 +94,40 @@ impl EdgeCatalog for FalkorEdgeCatalog {
             .await
             .map_err(|err| EdgeError::Catalog(err.to_string()))?;
 
-        Ok(rows.iter().filter_map(existing_edge_from_row).collect())
+        Ok(rows.iter().filter_map(ExistingEdge::from_row).collect())
     }
 }
 
-/// Parses an `EntityVector` from a `(name, embedding)` result row.
-///
-/// Rows missing either column, or whose embedding is not the JSON array the
-/// commit wrote, are skipped rather than failing the whole read — one malformed
-/// node should not break resolution for the rest of the scope.
-fn entity_from_row(row: &GraphRow) -> Option<EntityVector> {
-    let name = column(row, "name")?.to_string();
-    let embedding_json = column(row, "embedding")?;
-    let embedding: Vec<f32> = serde_json::from_str(embedding_json).ok()?;
-    Some(EntityVector {
-        key: name.clone(),
-        name,
-        embedding,
-    })
+impl EntityVector {
+    /// Parses an entity from a `(name, embedding)` result row.
+    ///
+    /// Rows missing either column, or whose embedding is not the JSON array
+    /// the commit wrote, yield `None` — one malformed node should not break
+    /// resolution for the rest of the scope.
+    fn from_row(row: &GraphRow) -> Option<Self> {
+        let name = row.column("name")?.to_string();
+        Some(Self {
+            key: name.clone(),
+            name,
+            embedding: serde_json::from_str(row.column("embedding")?).ok()?,
+        })
+    }
 }
 
-/// Parses an `ExistingEdge` from a current-edge result row.
-///
-/// `valid_to` is `None` by construction — the query matches only current edges.
-/// Rows missing a column or carrying an unparseable `valid_from` are skipped
-/// rather than failing the read — one malformed edge should not break
-/// resolution for the rest of the scope.
-fn existing_edge_from_row(row: &GraphRow) -> Option<ExistingEdge> {
-    Some(ExistingEdge {
-        subject_key: column(row, "subject")?.to_string(),
-        relation: column(row, "relation")?.to_string(),
-        object_key: column(row, "object")?.to_string(),
-        valid_from: DateTime::parse_from_rfc3339(column(row, "valid_from")?).ok()?,
-        valid_to: None,
-    })
-}
-
-/// Returns the value of the column named `name` in a result row.
-fn column<'a>(row: &'a GraphRow, name: &str) -> Option<&'a str> {
-    row.iter()
-        .find(|(column, _)| column == name)
-        .map(|(_, value)| value.as_str())
+impl ExistingEdge {
+    /// Parses a current edge from a result row.
+    ///
+    /// `valid_to` is `None` by construction — the query matches only current
+    /// edges. A missing column or unparseable `valid_from` yields `None`.
+    fn from_row(row: &GraphRow) -> Option<Self> {
+        Some(Self {
+            subject_key: row.column("subject")?.to_string(),
+            relation: row.column("relation")?.to_string(),
+            object_key: row.column("object")?.to_string(),
+            valid_from: DateTime::parse_from_rfc3339(row.column("valid_from")?).ok()?,
+            valid_to: None,
+        })
+    }
 }
 
 /// Builds the scope parameter map shared by the catalog reads.
@@ -156,7 +149,7 @@ mod tests {
 
     #[test]
     fn should_parse_entity_with_json_embedding() {
-        let parsed = entity_from_row(&row(&[("name", "Alice"), ("embedding", "[0.1,0.2,0.3]")])).unwrap();
+        let parsed = EntityVector::from_row(&row(&[("name", "Alice"), ("embedding", "[0.1,0.2,0.3]")])).unwrap();
         assert_eq!(parsed.name, "Alice");
         assert_eq!(parsed.key, "Alice");
         assert_eq!(parsed.embedding, vec![0.1, 0.2, 0.3]);
@@ -164,17 +157,17 @@ mod tests {
 
     #[test]
     fn should_skip_entity_with_malformed_embedding() {
-        assert!(entity_from_row(&row(&[("name", "Alice"), ("embedding", "not json")])).is_none());
+        assert!(EntityVector::from_row(&row(&[("name", "Alice"), ("embedding", "not json")])).is_none());
     }
 
     #[test]
     fn should_skip_entity_missing_a_column() {
-        assert!(entity_from_row(&row(&[("name", "Alice")])).is_none());
+        assert!(EntityVector::from_row(&row(&[("name", "Alice")])).is_none());
     }
 
     #[test]
     fn should_parse_current_edge_with_identity_tuple() {
-        let parsed = existing_edge_from_row(&row(&[
+        let parsed = ExistingEdge::from_row(&row(&[
             ("subject", "Alice"),
             ("relation", "works at"),
             ("object", "Acme"),
@@ -190,7 +183,7 @@ mod tests {
     #[test]
     fn should_skip_edge_with_unparseable_valid_from() {
         assert!(
-            existing_edge_from_row(&row(&[
+            ExistingEdge::from_row(&row(&[
                 ("subject", "Alice"),
                 ("relation", "works at"),
                 ("object", "Acme"),

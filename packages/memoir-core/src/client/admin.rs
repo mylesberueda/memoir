@@ -207,9 +207,7 @@ impl<'a> IntoFuture for ExtractionStatsBuilder<'a> {
 #[must_use = "inspect_graph() returns a builder that must be awaited"]
 pub struct GraphInspectionBuilder<'a> {
     client: &'a Client,
-    agent_id: Option<String>,
-    org_id: Option<String>,
-    user_id: Option<String>,
+    filter: crate::graph::ScopeFilter,
     limit: usize,
 }
 
@@ -218,28 +216,26 @@ impl<'a> GraphInspectionBuilder<'a> {
     pub(super) fn new(client: &'a Client) -> Self {
         Self {
             client,
-            agent_id: None,
-            org_id: None,
-            user_id: None,
+            filter: crate::graph::ScopeFilter::default(),
             limit: crate::graph::DEFAULT_INSPECTION_LIMIT,
         }
     }
 
     /// Narrows the view to one agent id. Default: all agents.
     pub fn agent(mut self, agent_id: impl Into<String>) -> Self {
-        self.agent_id = Some(agent_id.into());
+        self.filter = self.filter.agent(agent_id);
         self
     }
 
     /// Narrows the view to one org id. Default: all orgs.
     pub fn org(mut self, org_id: impl Into<String>) -> Self {
-        self.org_id = Some(org_id.into());
+        self.filter = self.filter.org(org_id);
         self
     }
 
     /// Narrows the view to one user id. Default: all users.
     pub fn user(mut self, user_id: impl Into<String>) -> Self {
-        self.user_id = Some(user_id.into());
+        self.filter = self.filter.user(user_id);
         self
     }
 
@@ -257,28 +253,20 @@ impl<'a> IntoFuture for GraphInspectionBuilder<'a> {
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let Self {
-                client,
-                agent_id,
-                org_id,
-                user_id,
-                limit,
-            } = self;
+            let Self { client, filter, limit } = self;
 
             let Some(graph) = client.inner.graph.as_deref() else {
                 return Ok(GraphSnapshot::default());
             };
 
-            let snapshot = graph
-                .inspect_scope(agent_id.as_deref(), org_id.as_deref(), user_id.as_deref(), limit)
-                .await?;
+            let snapshot = graph.inspect_scope(&filter, limit).await?;
 
             event!(
                 name: "memoir.admin.inspect_graph",
                 Level::INFO,
-                agent_id = agent_id.as_deref().unwrap_or("*"),
-                org_id = org_id.as_deref().unwrap_or("*"),
-                user_id = user_id.as_deref().unwrap_or("*"),
+                agent_id = filter.agent_id().unwrap_or("*"),
+                org_id = filter.org_id().unwrap_or("*"),
+                user_id = filter.user_id().unwrap_or("*"),
                 nodes = snapshot.nodes.len(),
                 edges = snapshot.edges.len(),
                 truncated = snapshot.truncated,
